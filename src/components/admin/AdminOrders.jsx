@@ -4,33 +4,62 @@ import {
   FiSearch, FiFilter, FiEye, FiCheckCircle, FiXCircle, FiTruck, FiClock, 
   FiUser, FiMapPin, FiPhone, FiMessageCircle, 
   FiPrinter, FiClipboard, FiTrendingUp, FiShoppingBag,
-  FiExternalLink, FiSend, FiLayout, FiMaximize2, FiCalendar, FiCopy, FiCheck
+  FiExternalLink, FiSend, FiLayout, FiMaximize2, FiCalendar, FiCopy, FiCheck,
+  FiCreditCard, FiDollarSign, FiChevronRight, FiAlertCircle, FiArrowDownRight,
+  FiShield, FiRefreshCw, FiShare2
 } from 'react-icons/fi';
 import { sendEmail } from '../../services/emailService';
 
 const STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
 
 const STATUS_COLORS = {
-  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
-  processing: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400',
-  shipped: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400',
-  delivered: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
-  cancelled: 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400',
+  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-300 dark:border-amber-500/20',
+  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-300 dark:border-blue-500/20',
+  shipped: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-500/20',
+  delivered: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/20',
+  cancelled: 'bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-300 dark:border-rose-500/20',
 };
 
+// Helper to identify Payment Category
+export const getPaymentType = (ord) => {
+  if (!ord) return 'prepaid';
+  const method = (ord.payment_method || '').toLowerCase();
+  const pStatus = (ord.payment_status || '').toLowerCase();
+  const hasPlan = !!(ord.installment_plan || ord.shipping_details?.installment_plan || ord.metadata?.installment_plan);
+
+  if (
+    hasPlan ||
+    method.includes('small') ||
+    method.includes('pss') ||
+    method.includes('installment') ||
+    pStatus.includes('pss') ||
+    pStatus.includes('installment')
+  ) {
+    return 'pss';
+  }
+
+  if (
+    method.includes('delivery') ||
+    method.includes('pod') ||
+    method.includes('cod') ||
+    method.includes('cash on delivery') ||
+    method.includes('pay on delivery')
+  ) {
+    return 'pod';
+  }
+
+  return 'prepaid';
+};
+
+// Helper to compute PSS financials
 export const parseOrderFinances = (ord) => {
   if (!ord) return { isPss: false, total: 0, paid: 0, remaining: 0, paidCount: 0, count: 1, isFullyPaid: false, schedule: [] };
   const rawPlan = ord.installment_plan || ord.shipping_details?.installment_plan || ord.metadata?.installment_plan;
   const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
-  const isPss = !!(
-    plan ||
-    (ord.payment_method && ord.payment_method.toLowerCase().includes('small')) ||
-    (ord.payment_method && ord.payment_method.toLowerCase().includes('pss')) ||
-    (ord.payment_status && ord.payment_status.toLowerCase().includes('pss')) ||
-    (ord.payment_status && ord.payment_status.toLowerCase().includes('installment'))
-  );
-
+  
+  const isPss = getPaymentType(ord) === 'pss';
   const total = Number(plan?.total_amount || plan?.totalAmount || ord.total_amount || 0);
+
   if (!isPss) {
     const isPaid = ord.payment_status === 'paid' || ord.status === 'delivered' || ord.status === 'completed';
     return {
@@ -89,17 +118,38 @@ const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  
+  // Primary Payment Type View: 'all', 'pss', 'pod', 'prepaid'
+  const [paymentTypeTab, setPaymentTypeTab] = useState('all');
+  
+  // Secondary Status Filter
+  const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Sub-filter for PSS (all, active, settled)
+  const [pssSubFilter, setPssSubFilter] = useState('all');
+  
+  // Sub-filter for POD (all, pending, collected)
+  const [podSubFilter, setPodSubFilter] = useState('all');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('all'); // all, today, week, month
+  
+  // Selected order details & modal
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [orderItems, setOrderItems] = useState([]);
   const [timeline, setTimeline] = useState([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  
+  // Modal active tab: 'summary', 'items', 'installments', 'logistics', 'timeline'
+  const [modalTab, setModalTab] = useState('summary');
+
+  // Actions state
   const [adminNote, setAdminNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
+  const [newLocationInput, setNewLocationInput] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkMode, setBulkMode] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
@@ -122,7 +172,6 @@ const AdminOrders = () => {
           fetchOrders();
         } else if (payload.eventType === 'UPDATE') {
           setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
-          // Real-time Modal Update
           setSelectedOrder(prev => (prev?.id === payload.new.id ? { ...prev, ...payload.new } : prev));
         }
       })
@@ -141,18 +190,10 @@ const AdminOrders = () => {
     setFetchError(null);
     addLog('Checking session and fetching orders...');
     
-    // Check if we have a Supabase session
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      addLog('Notice: No active Supabase session, using standard access.');
-    } else {
-      addLog(`Authenticated as: ${session.user.email}`);
-    }
-
     try {
       let ordersData = null;
 
-      // 1. Attempt nested query with valid schema columns (photo_url does not exist on drivers)
+      // 1. Attempt clean nested query with valid columns (excluding non-existent photo_url)
       const res = await supabase
         .from('orders')
         .select(`
@@ -166,7 +207,7 @@ const AdminOrders = () => {
       if (!res.error && res.data) {
         ordersData = res.data;
       } else {
-        // 2. Resilient fallback query if nested join fails
+        // 2. Resilient fallback query
         addLog(`Nested query notice: ${res.error?.message}. Using resilient fallback query...`);
         console.warn('Orders nested query notice, using direct fallback:', res.error);
 
@@ -304,7 +345,7 @@ const AdminOrders = () => {
         }
       }
 
-      const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
+      const { error } = await supabase.from('orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
 
       // Log status change
@@ -318,12 +359,17 @@ const AdminOrders = () => {
 
       // Credit vendors if delivered
       if (newStatus === 'delivered') {
-        await supabase.rpc('credit_vendors_on_delivery', { p_order_id: id });
+        await supabase.rpc('credit_vendors_on_delivery', { p_order_id: id }).catch(() => {});
       }
 
-      fetchOrders();
-      
-      // Email Notification (Web Parity)
+      // Update local state immediately
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
+      if (selectedOrder?.id === id) {
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+        fetchOrderDetails(id);
+      }
+
+      // Email Notification
       const orderToNotify = selectedOrder || orders.find(o => o.id === id);
       if (orderToNotify?.user?.email) {
         const templateMap = {
@@ -346,18 +392,144 @@ const AdminOrders = () => {
             customerPhone: orderToNotify.user?.phone || 'N/A',
             trackingNumber: id.slice(0, 8),
             carrier: 'Abu Mafhal Express'
-          });
+          }).catch(() => {});
         }
-      }
-
-      if (selectedOrder?.id === id) {
-        fetchOrderDetails(id);
-        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
       }
     } catch (e) {
       alert('Error updating status: ' + e.message);
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  // Pay On Delivery Verification Action
+  const handleVerifyPodPayment = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          payment_status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('order_status_logs').insert({
+        order_id: orderId,
+        status: selectedOrder?.status || 'delivered',
+        note: '💵 Kuɗin Pay on Delivery (POD) An Karɓa kuma an Tabbatar (Cash Collected & Verified)',
+        changed_by: user?.id
+      });
+
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, payment_status: 'paid' } : o));
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, payment_status: 'paid' }));
+        fetchOrderDetails(orderId);
+      }
+      alert('Kuɗin Pay on Delivery an tabbatar da an karɓa lafiya!');
+    } catch (e) {
+      alert('Error verifying POD payment: ' + e.message);
+    }
+  };
+
+  // Pay Small Small Installment Payment Logging
+  const handleMarkInstallmentPaid = async (order, sliceIndex) => {
+    try {
+      const fin = parseOrderFinances(order);
+      const schedule = [...(fin.schedule || [])];
+      if (!schedule[sliceIndex]) return;
+
+      schedule[sliceIndex] = {
+        ...schedule[sliceIndex],
+        status: 'paid',
+        paid_at: new Date().toISOString()
+      };
+
+      const newPaidCount = schedule.filter(s => s.status === 'paid').length;
+      const newPaidAmount = schedule.filter(s => s.status === 'paid').reduce((sum, s) => sum + Number(s.amount || 0), 0);
+      const newRemaining = Math.max(0, fin.total - newPaidAmount);
+      const isFullySettled = newRemaining <= 0 || newPaidCount >= schedule.length;
+
+      const updatedPlan = {
+        ...fin.plan,
+        schedule,
+        paid_amount: newPaidAmount,
+        remaining_balance: newRemaining,
+        installments_paid: newPaidCount,
+        is_fully_paid: isFullySettled
+      };
+
+      const updatePayload = {
+        installment_plan: updatedPlan,
+        updated_at: new Date().toISOString()
+      };
+      if (isFullySettled) {
+        updatePayload.payment_status = 'paid';
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update(updatePayload)
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('order_status_logs').insert({
+        order_id: order.id,
+        status: order.status,
+        note: `💳 An Tabbatar da Biyan Installment #${sliceIndex + 1} na ₦${Number(schedule[sliceIndex].amount || 0).toLocaleString()} (PSS Contract)`,
+        changed_by: user?.id
+      });
+
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updatePayload } : o));
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(prev => ({ ...prev, ...updatePayload }));
+        fetchOrderDetails(order.id);
+      }
+      alert(`Installment #${sliceIndex + 1} an sanya shi matsayin AN BIYA!`);
+    } catch (e) {
+      alert('Error updating installment: ' + e.message);
+    }
+  };
+
+  // Update Live Checkpoint Location
+  const handleUpdateLocation = async (orderId) => {
+    if (!newLocationInput.trim()) return;
+    setUpdatingLocation(true);
+    try {
+      const loc = newLocationInput.trim();
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          current_location: loc,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('order_status_logs').insert({
+        order_id: orderId,
+        status: selectedOrder?.status || 'in_transit',
+        note: `📍 Sabuwar Tashar Kaya (Live Hub): ${loc}`,
+        changed_by: user?.id
+      });
+
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, current_location: loc } : o));
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, current_location: loc }));
+        fetchOrderDetails(orderId);
+      }
+      setNewLocationInput('');
+      alert(`An sabunta tashar kaya zuwa: ${loc}`);
+    } catch (e) {
+      alert('Error updating location: ' + e.message);
+    } finally {
+      setUpdatingLocation(false);
     }
   };
 
@@ -389,21 +561,20 @@ const AdminOrders = () => {
       const { error } = await supabase.from('orders').update({ 
         driver_id: driverId,
         status: 'shipped',
-        delivery_notes: null
+        delivery_notes: null,
+        updated_at: new Date().toISOString()
       }).eq('id', orderId);
       
       if (error) throw error;
 
-      // Log
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('order_status_logs').insert({
         order_id: orderId,
         status: 'shipped',
-        note: `Driver assigned: ${driver?.name || 'Unknown'}`,
+        note: `Driver assigned: ${driver?.name || 'Courier'}`,
         changed_by: user?.id
       });
 
-      // Update local state immediately
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId, driver, delivery_notes: null, status: 'shipped' } : o));
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(prev => ({ ...prev, driver_id: driverId, driver, delivery_notes: null, status: 'shipped' }));
@@ -411,38 +582,9 @@ const AdminOrders = () => {
       }
 
       fetchOrders();
-
-      // Email Driver Notification
-      if (driver?.email) {
-        sendEmail(driver.email, 'driverAssignment', {
-          id: orderId,
-          driverName: driver.name,
-          customerName: selectedOrder?.user?.full_name || 'Customer',
-          address: typeof selectedOrder?.shipping_address === 'string' 
-            ? selectedOrder.shipping_address 
-            : `${selectedOrder?.shipping_address?.address}, ${selectedOrder?.shipping_address?.city}`,
-          customerPhone: selectedOrder?.user?.phone || 'N/A'
-        });
-      }
+      alert(`Driver assigned: ${driver?.name || 'Courier'}`);
     } catch (e) {
-      alert('Error assigning driver');
-    }
-  };
-
-  const handleDeclineDriverClaim = async (orderId) => {
-    try {
-      const { error } = await supabase.from('orders').update({
-        delivery_notes: null,
-        driver_notes: 'Claim request declined by admin'
-      }).eq('id', orderId);
-      if (error) throw error;
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, delivery_notes: null } : o));
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder(prev => ({ ...prev, delivery_notes: null }));
-      }
-      alert('Driver claim request has been declined.');
-    } catch (e) {
-      alert('Error declining driver request');
+      alert('Error assigning driver: ' + e.message);
     }
   };
 
@@ -454,7 +596,7 @@ const AdminOrders = () => {
       await supabase.from('order_status_logs').insert({
         order_id: selectedOrder.id,
         status: selectedOrder.status,
-        note: `📌 Admin Note: ${adminNote}`,
+        note: `📌 Admin Internal Note: ${adminNote.trim()}`,
         changed_by: user?.id
       });
       setAdminNote('');
@@ -472,6 +614,7 @@ const AdminOrders = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // High-Level Statistics
   const stats = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -486,46 +629,123 @@ const AdminOrders = () => {
     };
 
     const periodOrders = orders.filter(o => filterByDate(new Date(o.created_at)));
-    const totalRevenue = periodOrders.reduce((sum, o) => {
+    
+    let totalRevenue = 0;
+    let pssCount = 0;
+    let pssCollected = 0;
+    let pssRemaining = 0;
+    let podCount = 0;
+    let podCollected = 0;
+    let podPending = 0;
+    let prepaidCount = 0;
+    let prepaidRevenue = 0;
+
+    periodOrders.forEach(o => {
+      const pType = getPaymentType(o);
       const fin = parseOrderFinances(o);
-      return sum + (fin.paid || 0);
-    }, 0);
+
+      if (pType === 'pss') {
+        pssCount++;
+        pssCollected += fin.paid || 0;
+        pssRemaining += fin.remaining || 0;
+        totalRevenue += fin.paid || 0;
+      } else if (pType === 'pod') {
+        podCount++;
+        const amt = Number(o.total_amount || 0);
+        if (o.payment_status === 'paid' || o.status === 'delivered') {
+          podCollected += amt;
+          totalRevenue += amt;
+        } else {
+          podPending += amt;
+        }
+      } else {
+        prepaidCount++;
+        const amt = Number(o.total_amount || 0);
+        prepaidRevenue += amt;
+        totalRevenue += amt;
+      }
+    });
 
     return {
       total: orders.length,
+      periodCount: periodOrders.length,
+      revenue: totalRevenue,
       pending: orders.filter(o => o.status === 'pending' || o.status === 'processing').length,
       delivered: orders.filter(o => o.status === 'delivered').length,
-      revenue: totalRevenue,
-      periodCount: periodOrders.length
+      shipped: orders.filter(o => o.status === 'shipped').length,
+      pss: {
+        count: pssCount,
+        collected: pssCollected,
+        remaining: pssRemaining,
+        totalVolume: pssCollected + pssRemaining
+      },
+      pod: {
+        count: podCount,
+        collected: podCollected,
+        pending: podPending,
+        totalVolume: podCollected + podPending
+      },
+      prepaid: {
+        count: prepaidCount,
+        revenue: prepaidRevenue
+      }
     };
   }, [orders, dateRange]);
 
+  // Main Filtered Orders Logic
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const q = searchTerm.toLowerCase();
+      const pType = getPaymentType(o);
+      const fin = parseOrderFinances(o);
+
+      // 1. Search filter
       const matchesSearch = 
-        o.id.toLowerCase().includes(q) ||
+        !searchTerm.trim() ||
+        o.id?.toLowerCase().includes(q) ||
         o.user?.full_name?.toLowerCase().includes(q) ||
         o.user?.email?.toLowerCase().includes(q) ||
-        o.payment_reference?.toLowerCase().includes(q);
-      const matchesFilter = filter === 'all' || o.status === filter;
-      return matchesSearch && matchesFilter;
-    });
-  }, [orders, searchTerm, filter]);
+        o.user?.phone?.includes(q) ||
+        o.contact_phone?.includes(q) ||
+        o.tracking_number?.toLowerCase().includes(q) ||
+        o.payment_reference?.toLowerCase().includes(q) ||
+        o.driver?.name?.toLowerCase().includes(q);
 
-  const getDriverLevel = (xp) => {
-    if (!xp || xp < 100) return 'Bronze';
-    if (xp < 500) return 'Silver';
-    if (xp < 2000) return 'Gold';
-    return 'Elite';
-  };
+      // 2. Payment Type Tab filter
+      const matchesTypeTab = 
+        paymentTypeTab === 'all' || 
+        pType === paymentTypeTab;
+
+      // 3. Status filter
+      const matchesStatus = 
+        statusFilter === 'all' || 
+        o.status === statusFilter;
+
+      // 4. PSS sub-filter
+      let matchesPssSub = true;
+      if (paymentTypeTab === 'pss') {
+        if (pssSubFilter === 'active') matchesPssSub = !fin.isFullyPaid;
+        else if (pssSubFilter === 'settled') matchesPssSub = fin.isFullyPaid;
+      }
+
+      // 5. POD sub-filter
+      let matchesPodSub = true;
+      if (paymentTypeTab === 'pod') {
+        const isCollected = o.payment_status === 'paid' || o.status === 'delivered';
+        if (podSubFilter === 'pending') matchesPodSub = !isCollected;
+        else if (podSubFilter === 'collected') matchesPodSub = isCollected;
+      }
+
+      return matchesSearch && matchesTypeTab && matchesStatus && matchesPssSub && matchesPodSub;
+    });
+  }, [orders, searchTerm, paymentTypeTab, statusFilter, pssSubFilter, podSubFilter]);
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh]">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-gray-500 font-medium lowercase tracking-widest">Syncing Logistics Terminal...</p>
-        <div className="mt-8 p-4 bg-gray-100 rounded-xl text-[10px] font-mono text-gray-400">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-slate-500 font-bold tracking-wider text-xs">Cibiyar Ododi tana Lodi...</p>
+        <div className="mt-6 p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-mono text-slate-400">
             {debugLog.map((log, i) => <div key={i}>{log}</div>)}
         </div>
       </div>
@@ -534,776 +754,993 @@ const AdminOrders = () => {
 
   if (fetchError) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center">
-        <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center text-rose-500 mb-6">
-            <FiXCircle className="w-10 h-10" />
+      <div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center bg-white rounded-3xl shadow-sm border border-slate-200">
+        <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 mb-4">
+            <FiXCircle className="w-8 h-8" />
         </div>
-        <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Connection Interrupted</h2>
-        <p className="text-gray-500 mt-2 max-w-sm">{fetchError}</p>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight">An Sami Matsalar Hada Sadarwa</h2>
+        <p className="text-slate-500 text-sm mt-1 max-w-md">{fetchError}</p>
         <button 
             onClick={fetchOrders}
-            className="mt-8 px-10 py-4 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-600/30"
+            className="mt-6 px-8 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-2xl font-black uppercase tracking-wider text-xs shadow-md shadow-amber-500/20 transition-all"
         >
-            Re-Initialize Terminal
+            Sake Gwada Lodi (Retry Terminal)
         </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-10 p-4 md:p-8 animate-in fade-in duration-700 bg-gray-50/50 dark:bg-transparent min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-black uppercase tracking-widest">
-            <FiShoppingBag className="w-3.5 h-3.5" /> Direct Sales Terminal
+    <div className="space-y-8 animate-in fade-in duration-500 font-sans">
+      
+      {/* ── TOP HEADER & TERMINAL ACTIONS ── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-full text-xs font-black uppercase tracking-wider mb-2">
+            <FiShoppingBag className="w-3.5 h-3.5" /> Abu Mafhal Logistics Terminal
           </div>
-          <h1 className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">
-            Order <span className="text-indigo-500">Logistics</span>
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+            Gudanar da <span className="text-amber-500">Ododi</span> & Isar da Saƙo
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 font-medium text-lg max-w-xl leading-relaxed">
-            Manage your supply chain, track customer deliveries, and analyze revenue flow in real-time.
+          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">
+            Duba ododin da aka biya kai tsaye, 'yan Pay Small Small (PSS), da 'yan Pay on Delivery (POD) a waje guda.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <button 
             onClick={() => setBulkMode(!bulkMode)}
-            className={`px-6 py-4 rounded-2xl border flex items-center gap-3 transition-all duration-300 font-black uppercase tracking-widest text-xs ${
+            className={`px-5 py-2.5 rounded-xl border flex items-center gap-2 text-xs font-black uppercase tracking-wider transition-all ${
               bulkMode 
-              ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl shadow-indigo-600/30' 
-              : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:shadow-xl'
+              ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-md shadow-amber-500/30' 
+              : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
             }`}
           >
-            <FiLayout className="w-4 h-4" /> {bulkMode ? 'Cancel Bulk' : 'Bulk Edit'}
+            <FiLayout className="w-4 h-4" /> {bulkMode ? 'Kammala Zabi' : 'Zabi Da Dama (Bulk)'}
           </button>
+          
           <button 
             onClick={fetchOrders}
-            className="p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl hover:shadow-xl transition-all"
+            title="Sake Sabuntawa"
+            className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 hover:text-amber-600 hover:bg-slate-100 transition-all"
           >
-            <FiClock className="w-5 h-5 text-indigo-500" />
+            <FiRefreshCw className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Stats Section with Date Pickers (Mobile Parity) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 bg-gray-900 p-8 md:p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700">
-                <FiTrendingUp className="w-64 h-64" />
+      {/* ── KPI METRICS CARDS (FINANCIAL & LOGISTICS PULSE) ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+        {/* Card 1: Gross Orders & Revenue */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-5 sm:p-6 rounded-3xl shadow-sm border border-slate-800 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Jimillar Kudi</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center text-xs font-black">
+              ₦
             </div>
-            <div className="relative z-10 space-y-8">
-                <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Revenue Intelligence</p>
-                    <div className="flex gap-2 p-1 bg-white/10 rounded-xl">
-                        {['all', 'today', 'week', 'month'].map(r => (
-                            <button 
-                                key={r}
-                                onClick={() => setDateRange(r)}
-                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                                    dateRange === r ? 'bg-white text-gray-900 shadow-lg' : 'hover:bg-white/5 opacity-50 hover:opacity-100'
-                                }`}
-                            >
-                                {r}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div>
-                    <h2 className="text-6xl font-black tracking-tighter">₦{stats.revenue.toLocaleString()}</h2>
-                    <p className="mt-4 text-indigo-300 font-bold flex items-center gap-2">
-                        <FiShoppingBag /> {stats.periodCount} orders processed in selected period
-                    </p>
-                </div>
-            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-amber-400">
+              ₦{stats.revenue.toLocaleString()}
+            </h3>
+            <p className="text-xs text-slate-400 font-bold mt-1">
+              Daga ododi {stats.periodCount} a tsarin
+            </p>
+          </div>
         </div>
-        
-        <div className="lg:col-span-4 grid grid-cols-2 gap-6">
-            <MiniStat title="Pending" value={stats.pending} icon={<FiClock />} color="amber" />
-            <MiniStat title="Delivered" value={stats.delivered} icon={<FiCheckCircle />} color="emerald" />
+
+        {/* Card 2: Pay Small Small (PSS) */}
+        <div 
+          onClick={() => setPaymentTypeTab('pss')}
+          className={`p-5 sm:p-6 rounded-3xl cursor-pointer transition-all border flex flex-col justify-between ${
+            paymentTypeTab === 'pss'
+              ? 'bg-amber-500/10 border-amber-500 shadow-md shadow-amber-500/10'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+              Pay Small Small (PSS)
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <FiCreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+              {stats.pss.count} <span className="text-xs font-bold text-slate-400">ododi</span>
+            </h3>
+            <div className="flex items-center justify-between text-xs mt-1">
+              <span className="text-emerald-600 font-bold">₦{stats.pss.collected.toLocaleString()}</span>
+              <span className="text-amber-600 font-bold">Ragowa: ₦{stats.pss.remaining.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Pay on Delivery (POD) */}
+        <div 
+          onClick={() => setPaymentTypeTab('pod')}
+          className={`p-5 sm:p-6 rounded-3xl cursor-pointer transition-all border flex flex-col justify-between ${
+            paymentTypeTab === 'pod'
+              ? 'bg-blue-500/10 border-blue-500 shadow-md shadow-blue-500/10'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-400/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+              Pay On Delivery (POD)
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <FiTruck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+              {stats.pod.count} <span className="text-xs font-bold text-slate-400">ododi</span>
+            </h3>
+            <div className="flex items-center justify-between text-xs mt-1">
+              <span className="text-emerald-600 font-bold">Karɓa: ₦{stats.pod.collected.toLocaleString()}</span>
+              <span className="text-blue-600 font-bold">Jira: ₦{stats.pod.pending.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Fulfillment / Active Deliveries */}
+        <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Isarwa a Hanya</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <FiClock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+              {stats.shipped} <span className="text-xs font-bold text-indigo-500">In-Transit</span>
+            </h3>
+            <p className="text-xs text-slate-400 font-bold mt-1">
+              An isar: <span className="text-emerald-600">{stats.delivered}</span> • Sauran: <span className="text-amber-600">{stats.pending}</span>
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Bulk Action Strip */}
-      {bulkMode && selectedIds.size > 0 && (
-        <div className="bg-indigo-600 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between text-white shadow-2xl animate-in slide-in-from-top-4 duration-500 gap-6">
-          <div className="flex items-center gap-4">
-            <div className="p-4 bg-white/20 rounded-2xl">
-              <FiCheckCircle className="w-6 h-6" />
+      {/* ── DEDICATED PAYMENT CATEGORY TABS (ALL, PSS, POD, PREPAID) ── */}
+      <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
+          {/* Tab 1: All Orders */}
+          <button
+            onClick={() => setPaymentTypeTab('all')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all whitespace-nowrap ${
+              paymentTypeTab === 'all'
+                ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400'
+            }`}
+          >
+            <span>🌟 Duk Ododi</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 font-black">
+              {stats.total}
+            </span>
+          </button>
+
+          {/* Tab 2: Pay Small Small (PSS / Installments) */}
+          <button
+            onClick={() => setPaymentTypeTab('pss')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all whitespace-nowrap ${
+              paymentTypeTab === 'pss'
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-black'
+                : 'text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400'
+            }`}
+          >
+            <FiCreditCard className="w-3.5 h-3.5" />
+            <span>💳 Yan Pay Small Small (PSS)</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-950 text-amber-200 font-black">
+              {stats.pss.count}
+            </span>
+          </button>
+
+          {/* Tab 3: Pay on Delivery (POD) */}
+          <button
+            onClick={() => setPaymentTypeTab('pod')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all whitespace-nowrap ${
+              paymentTypeTab === 'pod'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 font-black'
+                : 'text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400'
+            }`}
+          >
+            <FiTruck className="w-3.5 h-3.5" />
+            <span>🚚 Yan Pay on Delivery (POD)</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-950 text-blue-200 font-black">
+              {stats.pod.count}
+            </span>
+          </button>
+
+          {/* Tab 4: Prepaid / Online */}
+          <button
+            onClick={() => setPaymentTypeTab('prepaid')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all whitespace-nowrap ${
+              paymentTypeTab === 'prepaid'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-black'
+                : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400'
+            }`}
+          >
+            <FiDollarSign className="w-3.5 h-3.5" />
+            <span>⚡ Yan Biyan Kai Tsaye (Prepaid)</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950 text-emerald-200 font-black">
+              {stats.prepaid.count}
+            </span>
+          </button>
+        </div>
+
+        {/* Date Scope Filter */}
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+          {[
+            { id: 'all', label: 'Duk Lokaci' },
+            { id: 'today', label: 'Yau' },
+            { id: 'week', label: 'Wannan Satin' },
+            { id: 'month', label: 'Watan Nan' }
+          ].map(d => (
+            <button
+              key={d.id}
+              onClick={() => setDateRange(d.id)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                dateRange === d.id
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm font-black'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── SPECIAL SUB-FILTER BANNERS (FOR PSS & POD) ── */}
+      {paymentTypeTab === 'pss' && (
+        <div className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+              <FiCreditCard className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-black uppercase tracking-widest text-[10px] opacity-70">Logistics Fleet Managed</p>
-              <p className="text-2xl font-black italic">{selectedIds.size} Target Selected</p>
+              <h4 className="text-sm font-black text-amber-900 dark:text-amber-300">
+                Gudanar da Ododin 'Yan Pay Small Small (Installments BNPL)
+              </h4>
+              <p className="text-xs text-amber-700/80 dark:text-amber-400">
+                Ana nuna ododin da ake biya a sashi-sashi, matakin biya da ragowar kudin da za a karba.
+              </p>
             </div>
           </div>
-          <div className="flex gap-3">
-             <button onClick={() => handleBulkUpdate('delivered')} className="px-8 py-4 bg-white text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Mark Delivered</button>
-             <button onClick={() => handleBulkUpdate('cancelled')} className="px-8 py-4 bg-rose-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Cancel All</button>
-             <button onClick={() => setSelectedIds(new Set())} className="px-8 py-4 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all">Deselect</button>
+          <div className="flex items-center gap-2">
+            {[
+              { id: 'all', label: 'Duk PSS' },
+              { id: 'active', label: 'Masu Ragowar Kudi (Active Debt)' },
+              { id: 'settled', label: 'An Kammala Biya (Settled)' }
+            ].map(sub => (
+              <button
+                key={sub.id}
+                onClick={() => setPssSubFilter(sub.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  pssSubFilter === sub.id
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {sub.label}
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Cancellation Reason Prompt */}
-      {showCancelPrompt && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-           <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl space-y-8 animate-in zoom-in-95">
-                <div className="space-y-4 text-center">
-                    <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto text-rose-500">
-                        <FiXCircle className="w-10 h-10" />
-                    </div>
-                    <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">Cancellation Protocol</h2>
-                    <p className="text-gray-500 font-medium lowercase tracking-widest text-xs">A professional reason is required for synchronization.</p>
-                </div>
-                <textarea 
-                    placeholder="Enter reason for cancellation/refund..."
-                    className="w-full bg-gray-50 dark:bg-white/5 border-2 border-transparent rounded-[2rem] p-6 text-sm font-bold min-h-[120px] outline-none focus:border-rose-500 transition-all"
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                />
-                <div className="flex gap-4">
-                    <button 
-                        onClick={() => { setShowCancelPrompt(false); setCancelReason(''); }}
-                        className="flex-1 py-4 bg-gray-100 dark:bg-white/5 rounded-2xl font-black uppercase tracking-widest text-[10px] text-gray-500"
-                    >
-                        Abort
-                    </button>
-                    <button 
-                        onClick={() => {
-                            handleUpdateStatus(selectedOrder.id, 'cancelled', `Refund/Cancel Reason: ${cancelReason}`);
-                            setShowCancelPrompt(false);
-                            setCancelReason('');
-                        }}
-                        disabled={!cancelReason.trim()}
-                        className="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-rose-500/30 disabled:opacity-50"
-                    >
-                        Confirm Cancellation
-                    </button>
-                </div>
-           </div>
+      {paymentTypeTab === 'pod' && (
+        <div className="p-4 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-transparent border border-blue-500/30 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+              <FiTruck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-blue-900 dark:text-blue-300">
+                Gudanar da Ododin 'Yan Pay on Delivery (POD / Cash on Delivery)
+              </h4>
+              <p className="text-xs text-blue-700/80 dark:text-blue-400">
+                Tabbatar da isar da saƙo da kuma karɓar kuɗin hannu daga mai saye ta hannun direba/courier.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {[
+              { id: 'all', label: 'Duk POD' },
+              { id: 'pending', label: 'Jiran Karɓar Kuɗi (Cash Pending)' },
+              { id: 'collected', label: 'An Karɓi Kuɗi (Cash Collected)' }
+            ].map(sub => (
+              <button
+                key={sub.id}
+                onClick={() => setPodSubFilter(sub.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  podSubFilter === sub.id
+                    ? 'bg-blue-600 text-white font-black shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Filters Area */}
-      <div className="flex flex-col md:flex-row gap-6 items-center justify-between pb-2">
-        <div className="relative w-full md:w-[400px] group">
-            <FiSearch className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors w-5 h-5" />
-            <input 
-              type="text" 
-              placeholder="Search Orders, Customers, Ref..."
-              className="w-full bg-white dark:bg-white/5 border-2 border-transparent dark:border-white/5 rounded-[2rem] py-5 pl-14 pr-6 focus:bg-white focus:border-indigo-500 dark:focus:border-indigo-500 transition-all outline-none shadow-xl shadow-gray-200/50 dark:shadow-none font-bold"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      {/* ── SEARCH & SECONDARY STATUS BAR ── */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        {/* Search Input */}
+        <div className="relative w-full md:w-[380px]">
+          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input 
+            type="text" 
+            placeholder="Nemi Order ID, Suna, Wayar Mai Saye..."
+            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-amber-400 shadow-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        <div className="flex gap-2 p-2 bg-white dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/10 shadow-lg overflow-x-auto w-full md:w-auto overflow-hidden">
-            {['all', ...STATUSES].map(s => (
-              <button 
-                key={s}
-                onClick={() => setFilter(s)}
-                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                  filter === s 
-                  ? 'bg-indigo-600 text-white shadow-lg' 
-                  : 'text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+        {/* Status Pills */}
+        <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto w-full md:w-auto">
+          {['all', ...STATUSES].map(s => (
+            <button 
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                statusFilter === s 
+                ? 'bg-amber-500 text-slate-950 font-black shadow-sm' 
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {s === 'all' ? 'Duk Status' : s}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Orders Grid (Mobile Parity UI) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-        {filteredOrders.map(order => (
-          <OrderCard 
-            key={order.id} 
-            order={order} 
-            bulkMode={bulkMode}
-            isSelected={selectedIds.has(order.id)}
-            onSelect={() => toggleSelect(order.id)}
-            onAnalyze={() => {
-                setSelectedOrder(order);
-                fetchOrderDetails(order.id);
-                setShowModal(true);
-            }}
-            getDriverLevel={getDriverLevel}
-          />
-        ))}
-        {filteredOrders.length === 0 && (
-          <div className="col-span-full py-32 text-center bg-white dark:bg-white/5 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-white/10">
-            <div className="w-24 h-24 bg-gray-50 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <FiShoppingBag className="w-10 h-10 text-gray-300" />
+      {/* ── BULK ACTION STRIP (IF ACTIVE) ── */}
+      {bulkMode && selectedIds.size > 0 && (
+        <div className="bg-slate-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black">
+              {selectedIds.size}
             </div>
-            <h3 className="text-xl font-black text-gray-900 dark:text-white">Strategic Silence</h3>
-            <p className="text-gray-500 font-medium">No orders found matching your search parameters.</p>
+            <div>
+              <p className="text-xs font-black uppercase text-amber-400">An Zabi Ododi</p>
+              <p className="text-sm font-bold text-slate-300">Yi canji a lokaci daya</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => handleBulkUpdate('processing')} 
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold"
+            >
+              Mark Processing
+            </button>
+            <button 
+              onClick={() => handleBulkUpdate('delivered')} 
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+            >
+              Mark Delivered
+            </button>
+            <button 
+              onClick={() => setSelectedIds(new Set())} 
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+            >
+              Deselect
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── ORDERS CARDS / GRID ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {filteredOrders.map(order => {
+          const pType = getPaymentType(order);
+          const fin = parseOrderFinances(order);
+          const isSelected = selectedIds.has(order.id);
+
+          return (
+            <div
+              key={order.id}
+              onClick={() => {
+                if (bulkMode) toggleSelect(order.id);
+                else {
+                  setSelectedOrder(order);
+                  fetchOrderDetails(order.id);
+                  setShowModal(true);
+                }
+              }}
+              className={`bg-white dark:bg-slate-900 rounded-3xl p-6 border transition-all duration-300 hover:shadow-xl cursor-pointer flex flex-col justify-between group ${
+                isSelected 
+                  ? 'border-amber-500 shadow-md ring-2 ring-amber-500/20' 
+                  : 'border-slate-200/90 dark:border-slate-800 hover:border-amber-400/60'
+              }`}
+            >
+              <div>
+                {/* Card Top: Order Number & Badges */}
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">
+                        #{order.id.slice(0, 8).toUpperCase()}
+                      </h3>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); copyToClipboard(order.id); }}
+                        className="text-slate-400 hover:text-slate-700"
+                        title="Kwafi ID"
+                      >
+                        {copiedId === order.id ? <FiCheck className="w-3.5 h-3.5 text-emerald-500" /> : <FiCopy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">
+                      {new Date(order.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1.5">
+                    {/* Status Pill */}
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${STATUS_COLORS[order.status?.toLowerCase()] || 'bg-slate-100 text-slate-700'}`}>
+                      {order.status || 'pending'}
+                    </span>
+
+                    {/* Payment Category Badge */}
+                    {pType === 'pss' ? (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 flex items-center gap-1">
+                        <FiCreditCard className="w-3 h-3" /> PSS BNPL
+                      </span>
+                    ) : pType === 'pod' ? (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300 flex items-center gap-1">
+                        <FiTruck className="w-3 h-3" /> PAY ON DELIVERY
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300 flex items-center gap-1">
+                        <FiCheckCircle className="w-3 h-3" /> PREPAID
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Customer Contact Info */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl mb-4 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-black text-slate-900 dark:text-white truncate">
+                      {order.user?.full_name || 'Customer'}
+                    </p>
+                    {order.user?.phone && (
+                      <span className="text-[10px] font-mono text-slate-500 font-bold">
+                        {order.user.phone}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {order.shipping_address ? (typeof order.shipping_address === 'string' ? order.shipping_address : `${order.shipping_address?.address || ''}, ${order.shipping_address?.city || ''}`) : 'Babu cikakken adireshi'}
+                  </p>
+                </div>
+
+                {/* Specific Presentation for Pay Small Small (PSS) */}
+                {pType === 'pss' && (
+                  <div className="mb-4 p-3.5 bg-amber-50/70 dark:bg-amber-500/5 border border-amber-300/60 dark:border-amber-500/20 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[11px] font-black text-amber-900 dark:text-amber-300">
+                        Ci gaban Biya: {fin.paidCount} / {fin.count} Sashi
+                      </span>
+                      <span className="text-[11px] font-black text-emerald-600">
+                        {Math.round(((fin.paid || 0) / (fin.total || 1)) * 100)}%
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2 bg-amber-200/60 dark:bg-amber-950 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.round(((fin.paid || 0) / (fin.total || 1)) * 100))}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-bold">
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        An Karɓa: ₦{fin.paid?.toLocaleString()}
+                      </span>
+                      <span className="text-amber-800 dark:text-amber-300">
+                        Ragowa: ₦{fin.remaining?.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Specific Presentation for Pay on Delivery (POD) */}
+                {pType === 'pod' && (
+                  <div className="mb-4 p-3.5 bg-blue-50/70 dark:bg-blue-500/5 border border-blue-300/60 dark:border-blue-500/20 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-blue-900 dark:text-blue-300 uppercase tracking-wider">
+                        Matsayin Karɓar Kuɗin Hannu
+                      </p>
+                      <p className={`text-xs font-black mt-0.5 ${
+                        order.payment_status === 'paid' || order.status === 'delivered'
+                          ? 'text-emerald-600'
+                          : 'text-amber-600'
+                      }`}>
+                        {order.payment_status === 'paid' || order.status === 'delivered'
+                          ? '✅ An Karɓi Kuɗin (Collected)'
+                          : '⏳ Jiran Karɓar Kuɗi a Hannun Mai Saye'}
+                      </p>
+                    </div>
+
+                    {!(order.payment_status === 'paid' || order.status === 'delivered') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVerifyPodPayment(order.id);
+                        }}
+                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black"
+                      >
+                        Tabbatar da Kuɗi
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Items Thumbnails */}
+                {order.order_items && order.order_items.length > 0 && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="flex -space-x-3 overflow-hidden">
+                      {order.order_items.slice(0, 3).map((oi, i) => (
+                        <img 
+                          key={i} 
+                          src={oi.product?.images?.[0] || 'https://via.placeholder.com/50'} 
+                          className="w-10 h-10 rounded-xl border-2 border-white dark:border-slate-800 object-cover shadow-sm bg-slate-100"
+                          alt=""
+                        />
+                      ))}
+                    </div>
+                    {order.order_items.length > 3 && (
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-600">
+                        +{order.order_items.length - 3}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Card Footer: Total Amount & Driver Assigned */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-end justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400">Jimillar Kudi</p>
+                  <p className="text-xl font-black text-slate-900 dark:text-white">
+                    ₦{order.total_amount?.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                    {order.payment_method || 'Online'}
+                  </p>
+                </div>
+
+                {order.driver ? (
+                  <div className="text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <p className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                        {order.driver.name}
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold">
+                      {order.driver.vehicle_type || 'Fleet Rider'}
+                    </p>
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-2 py-1 rounded-lg">
+                    Ba a Ba Direba Ba
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredOrders.length === 0 && (
+          <div className="col-span-full py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
+            <FiShoppingBag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <h3 className="text-base font-black text-slate-800 dark:text-slate-200">Babu Ododi a Wannan Rukunin</h3>
+            <p className="text-xs text-slate-400 mt-1">Babu wata oda da ta dace da bincikenku a halin yanzu.</p>
           </div>
         )}
       </div>
 
-      {/* Advanced Details Modal */}
+      {/* ── ADVANCED ORDER INSPECTION MODAL ── */}
       {showModal && selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 backdrop-blur-3xl bg-white/40 dark:bg-black/60 overflow-y-auto">
-          <div className="bg-white dark:bg-[#080808] w-full max-w-7xl min-h-[90vh] rounded-[4rem] border border-gray-100 dark:border-white/10 shadow-2xl flex flex-col md:flex-row overflow-hidden relative animate-in zoom-in-95 duration-500">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
             
-            {/* Main Content Area */}
-            <div className="flex-1 p-8 md:p-14 overflow-y-auto custom-scrollbar space-y-12">
-                <div className="flex flex-col md:flex-row justify-between items-start gap-8">
-                    <div className="space-y-4">
-                        <div className={`inline-flex px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${STATUS_COLORS[selectedOrder.status]}`}>
-                            {selectedOrder.status}
-                        </div>
-                        <h2 className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter uppercase">
-                            Order <span className="text-indigo-500">#{selectedOrder.id.slice(0, 8)}</span>
-                        </h2>
-                        <div className="flex items-center gap-6 text-gray-400 font-bold text-xs uppercase tracking-widest">
-                            <span className="flex items-center gap-2"><FiCalendar className="text-indigo-500"/> {new Date(selectedOrder.created_at).toLocaleDateString()}</span>
-                            <span className="flex items-center gap-2"><FiClock className="text-indigo-500"/> {new Date(selectedOrder.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                        </div>
-                    </div>
-                    <div className="flex gap-4">
-                        <button onClick={() => window.print()} className="p-5 bg-gray-100 dark:bg-white/5 rounded-3xl hover:bg-white dark:hover:bg-white/10 shadow-lg hover:-translate-y-1 transition-all">
-                            <FiPrinter className="w-6 h-6 text-gray-900 dark:text-white" />
-                        </button>
-                        <button onClick={() => setShowModal(false)} className="p-5 bg-gray-100 dark:bg-white/5 rounded-3xl hover:bg-rose-500 hover:text-white shadow-lg hover:-translate-y-1 transition-all">
-                            <FiXCircle className="w-6 h-6" />
-                        </button>
-                    </div>
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/75 dark:bg-slate-850 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                  <FiShoppingBag className="w-5 h-5" />
                 </div>
-
-                {/* Info Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-gray-50 dark:bg-white/5 p-10 rounded-[3rem] space-y-6 border border-gray-100 dark:border-white/5">
-                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Customer Protocol</p>
-                        <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white">{selectedOrder.user?.full_name}</h3>
-                            <p className="text-gray-500 font-bold underline cursor-pointer">{selectedOrder.user?.email}</p>
-                        </div>
-                        <div className="flex gap-4 pt-4">
-                            <a href={`tel:${selectedOrder.user?.phone}`} className="flex-1 py-4 bg-white dark:bg-white/10 rounded-2xl flex items-center justify-center gap-3 font-black uppercase text-[10px] tracking-widest shadow-xl shadow-gray-200/50 dark:shadow-none hover:-translate-y-1 transition-all">
-                                <FiPhone className="text-indigo-500" /> Call
-                            </a>
-                            <a href={`https://wa.me/${selectedOrder.user?.phone?.replace(/\D/g,'')}`} target="_blank" className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl flex items-center justify-center gap-3 font-black uppercase text-[10px] tracking-widest shadow-xl shadow-emerald-500/30 hover:-translate-y-1 transition-all">
-                                <FiMessageCircle /> WhatsApp
-                            </a>
-                        </div>
-                    </div>
-
-                    <div className="bg-gray-50 dark:bg-white/5 p-10 rounded-[3rem] space-y-6 border border-gray-100 dark:border-white/5">
-                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Logistics Target</p>
-                        <p className="text-lg font-bold text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {typeof selectedOrder.shipping_address === 'string' 
-                                ? selectedOrder.shipping_address 
-                                : `${selectedOrder.shipping_address?.address}, ${selectedOrder.shipping_address?.city}, ${selectedOrder.shipping_address?.state}`}
-                        </p>
-                        <a 
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                            typeof selectedOrder.shipping_address === 'string' 
-                            ? selectedOrder.shipping_address 
-                            : `${selectedOrder.shipping_address?.address} ${selectedOrder.shipping_address?.city}`
-                          )}`}
-                          target="_blank"
-                          className="inline-flex py-4 px-10 bg-indigo-600 text-white rounded-2xl items-center gap-3 font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-600/30 hover:-translate-y-1 transition-all"
-                        >
-                          <FiMapPin /> Open Logistics Map
-                        </a>
-                    </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                      Oda #{selectedOrder.id.slice(0, 8).toUpperCase()}
+                    </h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${STATUS_COLORS[selectedOrder.status] || 'bg-slate-100'}`}>
+                      {selectedOrder.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-bold mt-0.5">
+                    {new Date(selectedOrder.created_at).toLocaleString()}
+                  </p>
                 </div>
+              </div>
 
-                {/* Items Section */}
-                <div className="space-y-8">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Inventory Dispatched</h3>
-                    <div className="space-y-4">
-                        {loadingDetails ? (
-                            <div className="animate-pulse space-y-4">
-                                {[1,2].map(i => <div key={i} className="h-24 bg-gray-100 dark:bg-white/5 rounded-3xl" />)}
-                            </div>
-                        ) : orderItems.map((item, id) => (
-                            <div key={id} className="flex items-center gap-8 p-8 bg-gray-50 dark:bg-white/5 rounded-[2.5rem] group hover:border-indigo-500/50 border border-transparent transition-all">
-                                <div className="w-24 h-24 rounded-3xl overflow-hidden shadow-2xl bg-white">
-                                    <img src={item.product?.images?.[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="" />
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">{item.product?.name}</h4>
-                                    <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest mt-2 px-3 py-1 bg-white dark:bg-white/5 inline-block rounded-lg">Qty: {item.quantity}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tracking-tight">₦{item.price?.toLocaleString()}</p>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase mt-1">Net Unit Value</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Driver Fleet Assignment */}
-                <div className="bg-indigo-950 p-8 md:p-12 rounded-[3.5rem] text-white space-y-8 shadow-2xl relative overflow-hidden border border-indigo-800/40">
-                    <div className="absolute top-0 right-0 p-16 opacity-10 pointer-events-none">
-                        <FiTruck className="w-56 h-56" />
-                    </div>
-
-                    {/* Pending Driver Delivery Claim Request Banner */}
-                    {(() => {
-                        let pendingReq = null;
-                        try {
-                            if (selectedOrder.delivery_notes && typeof selectedOrder.delivery_notes === 'string' && selectedOrder.delivery_notes.includes('driver_request')) {
-                                pendingReq = JSON.parse(selectedOrder.delivery_notes);
-                            }
-                        } catch (_) {}
-
-                        if (!pendingReq) return null;
-
-                        return (
-                            <div className="relative z-10 bg-amber-500/20 border-2 border-amber-400 p-6 md:p-8 rounded-3xl shadow-xl backdrop-blur-xl animate-in zoom-in-95">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <span className="w-3.5 h-3.5 rounded-full bg-amber-400 animate-ping shrink-0" />
-                                        <h4 className="font-black text-amber-300 uppercase tracking-widest text-xs sm:text-sm">
-                                            ⚡ Driver Delivery Claim Request
-                                        </h4>
-                                    </div>
-                                    <span className="bg-amber-400 text-amber-950 font-black text-[10px] uppercase px-3.5 py-1 rounded-full w-max shadow-md">
-                                        Action Required
-                                    </span>
-                                </div>
-                                <p className="text-white text-sm mb-3 leading-relaxed">
-                                    Courier <span className="font-black text-amber-300">{pendingReq.driver_name}</span> ({pendingReq.driver_phone || 'Phone on file'}) has requested to pick up and deliver this order.
-                                </p>
-                                <div className="flex flex-wrap items-center gap-3 text-xs text-amber-100/90 mb-6 bg-black/30 p-4 rounded-2xl border border-amber-400/20">
-                                    <span>Vehicle: <strong className="text-white">{pendingReq.vehicle_type} ({pendingReq.vehicle_model || 'Standard'} • {pendingReq.vehicle_number || 'Registered'})</strong></span>
-                                    <span>•</span>
-                                    <span>Rating: <strong className="text-amber-300">★{Number(pendingReq.rating || 5.0).toFixed(1)}</strong></span>
-                                </div>
-                                <div className="flex flex-wrap gap-4">
-                                    <button
-                                        onClick={() => handleAssignDriver(selectedOrder.id, pendingReq.driver_id || pendingReq.driver_user_id)}
-                                        className="bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs uppercase tracking-widest py-3.5 px-8 rounded-2xl transition-all shadow-xl shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                                    >
-                                        Approve & Assign Courier
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeclineDriverClaim(selectedOrder.id)}
-                                        className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-widest py-3.5 px-6 rounded-2xl transition-all border border-white/20 active:scale-95 cursor-pointer"
-                                    >
-                                        Decline Request
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })()}
-
-                    <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-8">
-                        <div className="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center border border-white/20 backdrop-blur-xl shrink-0">
-                            {selectedOrder.driver?.photo_url ? (
-                                <img src={selectedOrder.driver.photo_url} alt="" className="w-full h-full object-cover rounded-[2.5rem]" />
-                            ) : (
-                                <FiTruck className="w-10 h-10 text-indigo-300" />
-                            )}
-                        </div>
-                        <div className="flex-1 space-y-4">
-                            {selectedOrder.driver ? (
-                                <div>
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                        <p className="text-3xl md:text-4xl font-black italic">{selectedOrder.driver.name}</p>
-                                        {(() => {
-                                            const isDriverOnline = (selectedOrder.driver.status === 'active' || selectedOrder.driver.status === 'available' || selectedOrder.driver.is_active);
-                                            return (
-                                                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                                    isDriverOnline
-                                                        ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/50'
-                                                        : 'bg-white/10 text-gray-300 border border-white/20'
-                                                }`}>
-                                                    <span className={`w-2 h-2 rounded-full ${isDriverOnline ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
-                                                    {isDriverOnline ? 'Courier Online' : 'Courier Offline'}
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                    <p className="text-indigo-300 font-black uppercase tracking-[0.18em] text-[10px] mt-2 flex flex-wrap items-center gap-2">
-                                        <span>Fleet Specialist</span>
-                                        <span>•</span>
-                                        <span>{selectedOrder.driver.vehicle_type || 'Motorcycle'}</span>
-                                        <span>•</span>
-                                        <span>Level {getDriverLevel(selectedOrder.driver.xp)}</span>
-                                        <span>•</span>
-                                        <span className="text-amber-300 font-bold">★ {Number(selectedOrder.driver.rating || 5.0).toFixed(1)}</span>
-                                        {selectedOrder.driver.vehicle_number && (
-                                            <>
-                                                <span>•</span>
-                                                <span className="bg-white/15 px-2 py-0.5 rounded text-[9px] font-mono tracking-normal text-white">
-                                                    Plate: {selectedOrder.driver.vehicle_number}
-                                                </span>
-                                            </>
-                                        )}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div>
-                                    <p className="text-indigo-200/80 font-medium text-base md:text-lg leading-relaxed">
-                                        No logistics specialist has been assigned to this delivery yet.
-                                    </p>
-                                    <p className="text-indigo-300/60 text-xs mt-1">Select an active or online courier below to assign immediate dispatch.</p>
-                                </div>
-                            )}
-                            
-                            <div className="pt-2">
-                                <select 
-                                    onChange={(e) => handleAssignDriver(selectedOrder.id, e.target.value)}
-                                    className="w-full md:w-auto bg-white/10 border-2 border-white/20 rounded-2xl px-6 py-4 text-xs md:text-sm font-black uppercase tracking-wider outline-none focus:bg-white focus:text-gray-900 transition-all cursor-pointer shadow-2xl"
-                                    value={selectedOrder.driver_id || ''}
-                                >
-                                    <option value="" disabled className="text-gray-900">
-                                        Assign Fleet Courier (Sorted by Online Status)...
-                                    </option>
-                                    {[...drivers]
-                                        .sort((a, b) => {
-                                            const aOnline = (a.status === 'active' || a.status === 'available' || a.is_active) ? 1 : 0;
-                                            const bOnline = (b.status === 'active' || b.status === 'available' || b.is_active) ? 1 : 0;
-                                            return bOnline - aOnline;
-                                        })
-                                        .map(d => {
-                                            const isOnline = (d.status === 'active' || d.status === 'available' || d.is_active);
-                                            return (
-                                                <option key={d.id} value={d.id} className="text-gray-900">
-                                                    {isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} {d.name} • {d.vehicle_type || 'Vehicle'} (★{Number(d.rating || 5.0).toFixed(1)}) {d.vehicle_number ? `• ${d.vehicle_number}` : ''}
-                                                </option>
-                                            );
-                                        })
-                                    }
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+              <button 
+                onClick={() => setShowModal(false)}
+                className="w-9 h-9 rounded-xl bg-slate-200/60 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+              >
+                <FiXCircle className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Sidebar Inspector Panel */}
-            <div className="w-full md:w-[450px] bg-gray-50/50 dark:bg-black/40 border-l border-gray-100 dark:border-white/5 flex flex-col">
-                <div className="p-10 space-y-10">
-                    <div className="space-y-6">
-                        {(() => {
-                            const selectedFin = parseOrderFinances(selectedOrder);
-                            return (
-                                <>
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Financial Summary</p>
-                                        {selectedFin.isPss && (
-                                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                                                0% Interest BNPL
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="space-y-4">
-                                        <SummaryLine label="Gross Subtotal" value={selectedOrder.subtotal} />
-                                        <SummaryLine label="Logistics Fee" value={selectedOrder.shipping_fee} />
-                                        <SummaryLine label="Promotional Discount" value={selectedOrder.discount_applied} negative />
-                                        <div className="h-px bg-gray-200 dark:bg-white/10 my-6" />
-                                        <div className="flex justify-between items-end">
-                                            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest pb-2">
-                                                {selectedFin.isPss ? 'Total Order Contract' : 'Settlement Total'}
-                                            </span>
-                                            <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">₦{selectedOrder.total_amount?.toLocaleString()}</span>
-                                        </div>
+            {/* Modal Tabs Header */}
+            <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-100 dark:border-slate-800 overflow-x-auto flex-shrink-0">
+              {[
+                { id: 'summary', label: 'Bayanin Saye (Summary)' },
+                { id: 'items', label: `Kayan da aka Saya (${orderItems.length})` },
+                ...(getPaymentType(selectedOrder) === 'pss' ? [{ id: 'installments', label: '💳 Installments Plan' }] : []),
+                { id: 'logistics', label: 'Direba & Logistics' },
+                { id: 'timeline', label: 'Tarihin Sauye-sauye' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setModalTab(t.id)}
+                  className={`px-4 py-2.5 border-b-2 text-xs font-black transition-all whitespace-nowrap ${
+                    modalTab === t.id
+                      ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-                                        {selectedFin.isPss && (
-                                            <div className="mt-4 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3">
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-emerald-700 dark:text-emerald-400 font-bold uppercase tracking-wider text-[10px]">
-                                                        Paid So Far (Collected)
-                                                    </span>
-                                                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                                                        ₦{selectedFin.paid?.toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider text-[10px]">
-                                                        Remaining Debt (Due)
-                                                    </span>
-                                                    <span className="font-black text-amber-600 dark:text-amber-400 text-sm">
-                                                        ₦{selectedFin.remaining?.toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">
-                                                        Installments Status
-                                                    </span>
-                                                    <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                        {selectedFin.paidCount} of {selectedFin.count} Paid ({selectedFin.isFullyPaid ? 'Settled' : 'Active'})
-                                                    </span>
-                                                </div>
-
-                                                {selectedFin.schedule && selectedFin.schedule.length > 0 && (
-                                                    <div className="pt-3 border-t border-amber-500/20 space-y-2">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Installment Schedule</p>
-                                                        {selectedFin.schedule.map((s, idx) => (
-                                                            <div key={idx} className="flex justify-between items-center text-[11px]">
-                                                                <span className="text-gray-600 dark:text-gray-400">
-                                                                    {s.label || `Installment #${s.installment_number || idx + 1}`}
-                                                                </span>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="font-bold text-gray-900 dark:text-white">₦{(s.amount || 0).toLocaleString()}</span>
-                                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
-                                                                        s.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                                                                    }`}>
-                                                                        {s.status === 'paid' ? 'PAID' : 'DUE'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            );
-                        })()}
+            {/* Modal Body Content (Scrollable) */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
+              
+              {/* TAB 1: SUMMARY */}
+              {modalTab === 'summary' && (
+                <div className="space-y-6">
+                  {/* Customer Information & Quick Actions */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 space-y-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Bayanan Mai Saye</p>
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                        {selectedOrder.user?.full_name || 'Customer'}
+                      </h4>
+                      <p className="text-xs text-slate-500 font-bold">{selectedOrder.user?.email || 'N/A'}</p>
+                      <p className="text-xs text-slate-500 font-bold">{selectedOrder.user?.phone || selectedOrder.contact_phone || 'N/A'}</p>
+                      
+                      {/* WhatsApp Call / Chat Action */}
+                      <div className="pt-2 flex items-center gap-2">
+                        {selectedOrder.user?.phone && (
+                          <a 
+                            href={`https://wa.me/234${selectedOrder.user.phone.replace(/^0/, '').replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5"
+                          >
+                            <FiMessageCircle className="w-3.5 h-3.5" /> WhatsApp Mai Saye
+                          </a>
+                        )}
+                        {selectedOrder.user?.phone && (
+                          <a 
+                            href={`tel:${selectedOrder.user.phone}`}
+                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5"
+                          >
+                            <FiPhone className="w-3.5 h-3.5" /> Kira Ta Waya
+                          </a>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="space-y-6">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Security</p>
-                        <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-gray-100 dark:border-white/5 flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] font-black uppercase text-gray-400">Reference ID</p>
-                                <p className="text-sm font-black text-gray-900 dark:text-white mt-1 uppercase leading-none">{selectedOrder.payment_reference || 'N/A'}</p>
-                            </div>
-                            <button 
-                                onClick={() => copyToClipboard(selectedOrder.payment_reference)}
-                                className={`p-4 rounded-2xl transition-all ${copiedId === selectedOrder.payment_reference ? 'bg-emerald-500 text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}
-                            >
-                                {copiedId === selectedOrder.payment_reference ? <FiCheck /> : <FiCopy />}
-                            </button>
-                        </div>
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 space-y-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Adireshi & Isarwa</p>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
+                        {selectedOrder.shipping_address 
+                          ? (typeof selectedOrder.shipping_address === 'string' ? selectedOrder.shipping_address : `${selectedOrder.shipping_address?.address || ''}, ${selectedOrder.shipping_address?.city || ''}, ${selectedOrder.shipping_address?.state || ''}`)
+                          : 'Babu adireshi'}
+                      </p>
+                      {selectedOrder.current_location && (
+                        <p className="text-xs font-bold text-amber-600 flex items-center gap-1 mt-2">
+                          <FiMapPin className="w-3.5 h-3.5" /> Tashar Kaya: {selectedOrder.current_location}
+                        </p>
+                      )}
                     </div>
+                  </div>
 
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocol Operations</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            {STATUSES.map(s => (
-                                <button 
-                                    key={s}
-                                    onClick={() => handleUpdateStatus(selectedOrder.id, s)}
-                                    disabled={updatingStatus || selectedOrder.status === s}
-                                    className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                        selectedOrder.status === s
-                                        ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30'
-                                        : 'bg-white dark:bg-white/5 text-gray-500 border border-gray-100 dark:border-white/5 hover:bg-gray-100 dark:hover:bg-white/10'
-                                    }`}
-                                >
-                                    {s}
-                                </button>
-                            ))}
-                        </div>
+                  {/* Financial Breakdown */}
+                  <div className="p-5 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-xs text-slate-400 font-bold uppercase">Subtotal</span>
+                      <span className="text-xs font-bold">₦{(selectedOrder.subtotal || 0).toLocaleString()}</span>
                     </div>
-                </div>
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-xs text-slate-400 font-bold uppercase">Kudin Isarwa (Shipping)</span>
+                      <span className="text-xs font-bold">₦{(selectedOrder.shipping_fee || 0).toLocaleString()}</span>
+                    </div>
+                    {selectedOrder.discount_applied > 0 && (
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs text-emerald-400 font-bold uppercase">Ragi (Discount)</span>
+                        <span className="text-xs font-bold text-emerald-400">-₦{selectedOrder.discount_applied.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-sm font-black uppercase text-amber-400">Jimillar Kudi</span>
+                      <span className="text-2xl font-black text-amber-400">₦{(selectedOrder.total_amount || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
 
-                <div className="flex-1 bg-white dark:bg-[#0c0c0c] border-t border-gray-100 dark:border-white/5 p-10 space-y-8 overflow-y-auto custom-scrollbar">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Event Timeline</p>
-                    <div className="space-y-10 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100 dark:before:bg-white/5">
-                        {loadingDetails ? (
-                            <div className="space-y-8 pl-8">
-                                {[1,2,3].map(i => <div key={i} className="h-4 bg-gray-100 dark:bg-white/5 rounded-full w-3/4 animate-pulse" />)}
-                            </div>
-                        ) : timeline.map((log, i) => (
-                            <div key={i} className="relative pl-10 group">
-                                <div className={`absolute left-0 top-1 w-4 h-4 rounded-full border-[3px] border-white dark:border-[#0c0c0c] z-10 transition-transform group-hover:scale-125 ${
-                                    log.status === 'delivered' ? 'bg-emerald-500' : 'bg-indigo-500'
-                                }`} />
-                                <div className="space-y-2">
-                                    <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest">{log.status}</p>
-                                    <p className="text-sm text-gray-500 font-medium leading-relaxed">{log.note}</p>
-                                    <div className="flex items-center gap-3 pt-1">
-                                        <p className="text-[9px] font-black text-indigo-500 uppercase">{log.profile?.full_name || 'System Override'}</p>
-                                        <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                                        <p className="text-[9px] text-gray-400 font-bold uppercase">{new Date(log.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    
-                    <div className="pt-6 relative group">
-                        <textarea 
-                          placeholder="Inject administrative internal note..."
-                          className="w-full bg-gray-50 dark:bg-white/5 border-2 border-transparent rounded-3xl p-6 text-sm outline-none focus:border-indigo-500 transition-all font-bold min-h-[140px] resize-none"
-                          value={adminNote}
-                          onChange={(e) => setAdminNote(e.target.value)}
-                        />
-                        <button 
-                           onClick={handleAddNote}
-                           disabled={savingNote || !adminNote.trim()}
-                           className="absolute bottom-6 right-6 p-4 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
+                  {/* Quick Change Status Buttons */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-black uppercase text-slate-400">Canza Matsayin Oda (Update Status)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {STATUSES.map(s => (
+                        <button
+                          key={s}
+                          onClick={() => handleUpdateStatus(selectedOrder.id, s)}
+                          disabled={updatingStatus || selectedOrder.status === s}
+                          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                            selectedOrder.status === s
+                              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          }`}
                         >
-                           <FiSend className="w-5 h-5" />
+                          {s}
                         </button>
+                      ))}
                     </div>
+                  </div>
                 </div>
+              )}
+
+              {/* TAB 2: ITEMS ORDERED */}
+              {modalTab === 'items' && (
+                <div className="space-y-3">
+                  {orderItems.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/60">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={item.product?.images?.[0] || 'https://via.placeholder.com/60'} 
+                          alt="" 
+                          className="w-14 h-14 rounded-xl object-cover bg-white"
+                        />
+                        <div>
+                          <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                            {item.product?.name || 'Product Item'}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                            Yawa: {item.quantity} x ₦{(item.price || 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-slate-900 dark:text-white">
+                          ₦{((item.price || 0) * (item.quantity || 1)).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {orderItems.length === 0 && (
+                    <p className="text-center text-xs text-slate-400 py-8">Babu bayanai game da kayan da aka saya.</p>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: INSTALLMENTS PLAN BREAKDOWN (PSS) */}
+              {modalTab === 'installments' && (
+                <div className="space-y-6">
+                  {(() => {
+                    const fin = parseOrderFinances(selectedOrder);
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="p-4 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl border border-emerald-200">
+                            <p className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-400">An Karɓa (Collected)</p>
+                            <h3 className="text-xl font-black text-emerald-600 mt-1">₦{fin.paid?.toLocaleString()}</h3>
+                          </div>
+                          <div className="p-4 bg-amber-50 dark:bg-amber-500/10 rounded-2xl border border-amber-200">
+                            <p className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-400">Ragowar Bashi (Due)</p>
+                            <h3 className="text-xl font-black text-amber-600 mt-1">₦{fin.remaining?.toLocaleString()}</h3>
+                          </div>
+                          <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200">
+                            <p className="text-[10px] font-black uppercase text-slate-500">Matakin Biya</p>
+                            <h3 className="text-xl font-black text-slate-800 dark:text-white mt-1">
+                              {fin.paidCount} na {fin.count} Sashi
+                            </h3>
+                          </div>
+                        </div>
+
+                        {/* Installment Slices Table */}
+                        <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                          <div className="p-3 bg-slate-100 dark:bg-slate-800 text-[11px] font-black uppercase text-slate-600 dark:text-slate-300">
+                            Jerin Tashoshin Biyan Kuɗi (Installment Schedule)
+                          </div>
+                          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {fin.schedule && fin.schedule.length > 0 ? (
+                              fin.schedule.map((s, idx) => (
+                                <div key={idx} className="p-4 flex items-center justify-between text-xs">
+                                  <div>
+                                    <p className="font-black text-slate-900 dark:text-white">
+                                      {s.label || `Sashi na #${idx + 1}`}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                      Adadin: ₦{Number(s.amount || 0).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                      s.status === 'paid' 
+                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400' 
+                                        : 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400'
+                                    }`}>
+                                      {s.status === 'paid' ? 'AN BIYA' : 'JIRAN BIYA'}
+                                    </span>
+                                    {s.status !== 'paid' && (
+                                      <button
+                                        onClick={() => handleMarkInstallmentPaid(selectedOrder, idx)}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                                      >
+                                        Sanya a Matsayin An Biya
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="p-6 text-center text-xs text-slate-400">Babu jerin installments da aka ayyana a cikin wannan odar.</p>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* TAB 4: LOGISTICS & DRIVER */}
+              {modalTab === 'logistics' && (
+                <div className="space-y-6">
+                  {/* Driver Assignment Dropdown */}
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                    <p className="text-xs font-black uppercase text-slate-700 dark:text-slate-300">
+                      Bada Oda Ga Direba / Dispatch Rider
+                    </p>
+                    <select
+                      value={selectedOrder.driver_id || ''}
+                      onChange={(e) => handleAssignDriver(selectedOrder.id, e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-amber-400 cursor-pointer"
+                    >
+                      <option value="" disabled>Zabi direba daga cikin jerin...</option>
+                      {drivers.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.status === 'active' || d.is_active ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} {d.name} • {d.vehicle_type || 'Vehicle'} (★{Number(d.rating || 5.0).toFixed(1)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Live Checkpoint Station Updater */}
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                    <p className="text-xs font-black uppercase text-slate-700 dark:text-slate-300">
+                      Sabunta Tashar Kaya ta Yanzu (Live Checkpoint Hub)
+                    </p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        placeholder="Misali: Kano Central Sortation Facility..."
+                        value={newLocationInput}
+                        onChange={(e) => setNewLocationInput(e.target.value)}
+                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-amber-400"
+                      />
+                      <button
+                        onClick={() => handleUpdateLocation(selectedOrder.id)}
+                        disabled={updatingLocation || !newLocationInput.trim()}
+                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs disabled:opacity-50"
+                      >
+                        Sabunta
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: TIMELINE & INTERNAL NOTES */}
+              {modalTab === 'timeline' && (
+                <div className="space-y-6">
+                  {/* Status Timeline */}
+                  <div className="space-y-4">
+                    {timeline.map((log, i) => (
+                      <div key={i} className="flex gap-3 text-xs">
+                        <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">{log.note}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {new Date(log.created_at).toLocaleString()} • {log.profile?.full_name || 'Admin'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {timeline.length === 0 && (
+                      <p className="text-xs text-slate-400">Babu wani tarihin sauyi da aka yi wa wannan odar ba tukuna.</p>
+                    )}
+                  </div>
+
+                  {/* Add Internal Admin Note */}
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    <p className="text-xs font-black uppercase text-slate-400">Rubuta Bayanin Cikin Gida (Internal Note)</p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        placeholder="Bayanin gudanarwa ko kira..."
+                        value={adminNote}
+                        onChange={(e) => setAdminNote(e.target.value)}
+                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-amber-400"
+                      />
+                      <button
+                        onClick={handleAddNote}
+                        disabled={savingNote || !adminNote.trim()}
+                        className="px-4 py-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold rounded-xl text-xs disabled:opacity-50"
+                      >
+                        Ajiye
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* ── CANCELLATION PROMPT MODAL ── */}
+      {showCancelPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-black text-rose-600">Soke Wannan Oda</h3>
+            <p className="text-xs text-slate-500 font-medium">Da fatan za a rubuta dalilin soke wannan oda domin a ajiye a tsarin.</p>
+            <textarea
+              placeholder="Rubuta dalilin sokewa anan..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-xs font-bold outline-none focus:border-rose-500 min-h-[100px]"
+            />
+            <div className="flex gap-3">
+              <button 
+                onClick={() => { setShowCancelPrompt(false); setCancelReason(''); }}
+                className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold"
+              >
+                Fasa
+              </button>
+              <button 
+                onClick={() => {
+                  handleUpdateStatus(selectedOrder?.id, 'cancelled', `Dalilin Sokewa: ${cancelReason}`);
+                  setShowCancelPrompt(false);
+                  setCancelReason('');
+                }}
+                disabled={!cancelReason.trim()}
+                className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold disabled:opacity-50"
+              >
+                Tabbatar da Sokewa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
-
-/* ── UI Components ── */
-
-const OrderCard = ({ order, bulkMode, isSelected, onSelect, onAnalyze, getDriverLevel }) => {
-    const status = order.status?.toLowerCase() || 'pending';
-    
-    return (
-        <div 
-            className={`group bg-white dark:bg-white/5 rounded-[3rem] p-8 border-2 transition-all duration-500 cursor-pointer relative flex flex-col h-full hover:shadow-2xl hover:-translate-y-2 ${
-                isSelected ? 'border-indigo-500 shadow-2xl' : 'border-transparent dark:border-white/5 shadow-xl shadow-gray-200/50 dark:shadow-none'
-            }`}
-            onClick={bulkMode ? onSelect : onAnalyze}
-        >
-            {/* Bulk Selection Indicator */}
-            {bulkMode && (
-                <div className={`absolute top-6 right-6 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                    isSelected ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30' : 'bg-gray-100 dark:bg-white/10 text-gray-300'
-                }`}>
-                    {isSelected && <FiCheck className="w-5 h-5" />}
-                </div>
-            )}
-
-            <div className="flex justify-between items-start mb-6">
-                <div>
-                    <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter uppercase whitespace-nowrap">
-                        #{order.id.slice(0, 8)}
-                    </h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                        {new Date(order.created_at).toLocaleDateString()}
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    {order.delivery_notes && typeof order.delivery_notes === 'string' && order.delivery_notes.includes('driver_request') && (
-                        <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-400 text-amber-950 animate-pulse shadow-md">
-                            ⚡ Claim Req
-                        </span>
-                    )}
-                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[status] || 'bg-gray-100'}`}>
-                        {status}
-                    </span>
-                </div>
-            </div>
-
-            <div className="flex-1 space-y-6">
-                <div className="space-y-1">
-                    <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{order.user?.full_name}</p>
-                    <p className="text-[10px] text-gray-500 font-bold lowercase tracking-wider">{order.user?.email}</p>
-                </div>
-
-                {/* Product Thumbnails (Mobile Parity) */}
-                <div className="flex items-center gap-3">
-                    <div className="flex -space-x-4 overflow-hidden">
-                        {order.order_items?.slice(0, 3).map((oi, i) => (
-                            <img 
-                                key={i} 
-                                src={oi.product?.images?.[0] || 'https://via.placeholder.com/50'} 
-                                className="w-14 h-14 rounded-2xl border-4 border-white dark:border-gray-900 object-cover shadow-lg"
-                                alt=""
-                            />
-                        ))}
-                    </div>
-                    {order.order_items?.length > 3 && (
-                        <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg border-4 border-white dark:border-gray-900">
-                            +{order.order_items.length - 3}
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex items-end justify-between border-t border-gray-50 dark:border-white/5 pt-6">
-                    {(() => {
-                        const fin = parseOrderFinances(order);
-                        if (fin.isPss) {
-                            return (
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                                            0% BNPL ({fin.paidCount}/{fin.count} Paid)
-                                        </span>
-                                    </div>
-                                    <div className="flex items-baseline gap-2">
-                                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tighter">
-                                            ₦{fin.paid?.toLocaleString()}
-                                        </p>
-                                        <span className="text-xs font-bold text-gray-400">Paid</span>
-                                        <span className="text-xs font-black text-amber-600 dark:text-amber-400">
-                                            (Due: ₦{fin.remaining?.toLocaleString()})
-                                        </span>
-                                    </div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase opacity-70">
-                                        Total: ₦{fin.total?.toLocaleString()} • {order.payment_method}
-                                    </p>
-                                </div>
-                            );
-                        }
-                        return (
-                            <div>
-                                <p className="text-3xl font-black text-indigo-600 dark:text-indigo-400 tracking-tighter">₦{order.total_amount?.toLocaleString()}</p>
-                                <p className="text-[10px] font-black text-gray-400 uppercase mt-1 opacity-70">{order.payment_method}</p>
-                            </div>
-                        );
-                    })()}
-                    {order.driver && (
-                        <div className="flex items-center gap-3 text-right">
-                            <div>
-                                <div className="flex items-center justify-end gap-1.5">
-                                    <span className={`w-2 h-2 rounded-full ${
-                                        (order.driver.status === 'active' || order.driver.status === 'available' || order.driver.is_active)
-                                            ? 'bg-emerald-500 animate-pulse'
-                                            : 'bg-gray-400'
-                                    }`} />
-                                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{order.driver.name}</p>
-                                </div>
-                                <p className="text-[9px] text-gray-400 font-bold tracking-tighter uppercase whitespace-nowrap">
-                                    {order.driver.vehicle_type || 'Fleet'} • ★{Number(order.driver.rating || 5.0).toFixed(1)}
-                                </p>
-                            </div>
-                            <div className="p-3 bg-indigo-50 rounded-xl dark:bg-white/5">
-                                <FiTruck className="w-5 h-5 text-indigo-500" />
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-            
-            <button className="mt-8 w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-gray-900/10 dark:shadow-none">
-                Analyze Logistics
-            </button>
-        </div>
-    );
-};
-
-const MiniStat = ({ title, value, icon, color }) => {
-    const colors = {
-      blue: 'text-blue-600 bg-blue-500/10',
-      amber: 'text-amber-600 bg-amber-500/10',
-      emerald: 'text-emerald-600 bg-emerald-500/10',
-      indigo: 'text-indigo-600 bg-indigo-500/10',
-    };
-    return (
-        <div className="bg-white dark:bg-white/5 p-8 rounded-[2.5rem] shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-white/10 flex flex-col justify-between group hover:-translate-y-2 transition-transform duration-500">
-            <div className={`p-4 rounded-2xl w-fit ${colors[color]}`}>
-                {React.cloneElement(icon, { className: 'w-6 h-6' })}
-            </div>
-            <div className="mt-6">
-                <p className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter leading-none">{value}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-3">{title}</p>
-            </div>
-        </div>
-    );
-};
-
-const SummaryLine = ({ label, value, negative }) => (
-    <div className="flex justify-between text-xs">
-        <span className="text-gray-500 font-bold uppercase tracking-widest text-[9px]">{label}</span>
-        <span className={`font-black ${negative ? 'text-emerald-500' : 'text-gray-900 dark:text-white'}`}>
-            {negative && '-'}₦{value?.toLocaleString()}
-        </span>
-    </div>
-);
 
 export default AdminOrders;

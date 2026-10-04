@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
     View, Text, TouchableOpacity, ScrollView, Alert, 
-    ActivityIndicator, Image, StatusBar, Platform, RefreshControl, Dimensions, BackHandler 
+    ActivityIndicator, Image, StatusBar, Platform, RefreshControl, Dimensions, BackHandler,
+    Modal, TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -166,6 +167,8 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showAiModal, setShowAiModal] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [sidebarSearch, setSidebarSearch] = useState('');
 
     const [stats, setStats] = useState({
         totalRevenue: 0,
@@ -931,47 +934,67 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     paddingHorizontal: 12,
                     paddingBottom: 8
                 }}>
-                    {/* Left: Home/Back to buyer shop */}
-                    {activeTab === 'overview' ? (
+                    {/* Left: Sidebar Menu Drawer Toggle + Back to Home */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
-                            onPress={handleBackToHome}
+                            onPress={() => setIsSidebarOpen(true)}
                             activeOpacity={0.75}
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 6,
+                                gap: 4,
                                 backgroundColor: 'rgba(217, 167, 58, 0.25)',
-                                paddingHorizontal: 11,
-                                paddingVertical: 6,
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
                                 borderRadius: 10,
-                                borderWidth: 1.5,
+                                borderWidth: 1.2,
                                 borderColor: GOLD
                             }}
                         >
-                            <Ionicons name="arrow-back" size={14} color="#FFFFFF" />
-                            <Ionicons name="storefront" size={13} color={GOLD} />
-                            <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Storefront</Text>
+                            <Ionicons name="menu" size={16} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>Sidebar</Text>
                         </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            onPress={() => setActiveTab('overview')}
-                            activeOpacity={0.7}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                                paddingHorizontal: 9,
-                                paddingVertical: 5,
-                                borderRadius: 9,
-                                borderWidth: 1,
-                                borderColor: 'rgba(255, 255, 255, 0.2)'
-                            }}
-                        >
-                            <Ionicons name="arrow-back" size={13} color="#FFFFFF" />
-                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Back</Text>
-                        </TouchableOpacity>
-                    )}
+
+                        {activeTab === 'overview' ? (
+                            <TouchableOpacity
+                                onPress={handleBackToHome}
+                                activeOpacity={0.75}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 5,
+                                    borderRadius: 9,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255, 255, 255, 0.15)'
+                                }}
+                            >
+                                <Ionicons name="storefront" size={12} color={GOLD} />
+                                <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' }}>Shop</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={() => setActiveTab('overview')}
+                                activeOpacity={0.7}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 5,
+                                    borderRadius: 9,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255, 255, 255, 0.2)'
+                                }}
+                            >
+                                <Ionicons name="arrow-back" size={12} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Home</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
                     {/* Middle: Brand Emblem & Title */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1120,6 +1143,324 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                 visible={showAiModal}
                 onClose={() => setShowAiModal(false)}
             />
+
+            {/* ── MOBILE ADMIN EXECUTIVE SIDEBAR DRAWER ── */}
+            <Modal
+                visible={isSidebarOpen}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsSidebarOpen(false)}
+            >
+                <View style={{ flex: 1, flexDirection: 'row', backgroundColor: 'rgba(5, 10, 20, 0.75)' }}>
+                    {/* Drawer Content Panel */}
+                    <View style={{
+                        width: '84%',
+                        maxWidth: 340,
+                        backgroundColor: '#0A1220',
+                        borderRightWidth: 1.5,
+                        borderRightColor: 'rgba(217, 167, 58, 0.35)',
+                        paddingTop: Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight || 24) + 12,
+                        paddingBottom: 20,
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}>
+                        {/* Drawer Header */}
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <View style={{
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 10,
+                                        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+                                        borderWidth: 1.5,
+                                        borderColor: GOLD,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        overflow: 'hidden'
+                                    }}>
+                                        <Image source={AM_LOGO} style={{ width: 24, height: 24 }} resizeMode="contain" />
+                                    </View>
+                                    <View>
+                                        <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 }}>
+                                            Abu Mafhal <Text style={{ color: GOLD }}>Admin</Text>
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+                                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>
+                                                SUPER ADMIN ACTIVE
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => setIsSidebarOpen(false)}
+                                    activeOpacity={0.7}
+                                    style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 9,
+                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <Ionicons name="close" size={18} color="#CBD5E1" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Sidebar Quick Module Filter Input */}
+                            <View style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 8,
+                                backgroundColor: 'rgba(255,255,255,0.06)',
+                                borderRadius: 10,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                                marginTop: 12,
+                                borderWidth: 1,
+                                borderColor: 'rgba(255,255,255,0.1)'
+                            }}>
+                                <Ionicons name="search" size={14} color="#94A3B8" />
+                                <TextInput
+                                    placeholder="Search 26+ admin modules..."
+                                    placeholderTextColor="#64748B"
+                                    value={sidebarSearch}
+                                    onChangeText={setSidebarSearch}
+                                    style={{ flex: 1, color: '#FFFFFF', fontSize: 12, padding: 0 }}
+                                />
+                                {sidebarSearch.length > 0 && (
+                                    <TouchableOpacity onPress={() => setSidebarSearch('')}>
+                                        <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+
+                        {/* Navigation Module List */}
+                        <ScrollView
+                            style={{ flex: 1 }}
+                            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12, gap: 14 }}
+                            showsVerticalScrollIndicator={false}
+                        >
+                            {/* Overview / Home Dashboard Item */}
+                            {(!sidebarSearch || 'overview dashboard summary'.includes(sidebarSearch.toLowerCase())) && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setActiveTab('overview');
+                                        setIsSidebarOpen(false);
+                                    }}
+                                    activeOpacity={0.75}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 10,
+                                        borderRadius: 12,
+                                        backgroundColor: activeTab === 'overview' ? 'rgba(217, 167, 58, 0.18)' : 'transparent',
+                                        borderWidth: 1,
+                                        borderColor: activeTab === 'overview' ? GOLD : 'transparent'
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <View style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 8,
+                                            backgroundColor: activeTab === 'overview' ? GOLD : 'rgba(255,255,255,0.08)',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}>
+                                            <Ionicons name="grid" size={16} color={activeTab === 'overview' ? NAVY : '#FFFFFF'} />
+                                        </View>
+                                        <View>
+                                            <Text style={{
+                                                fontSize: 13,
+                                                fontWeight: '800',
+                                                color: activeTab === 'overview' ? GOLD : '#FFFFFF'
+                                            }}>
+                                                Dashboard Overview
+                                            </Text>
+                                            <Text style={{ fontSize: 10.5, color: '#64748B' }}>
+                                                KPIs, charts & live orders
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    {activeTab === 'overview' && (
+                                        <Ionicons name="chevron-forward" size={16} color={GOLD} />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Categorized Module Sections */}
+                            {MODULE_SECTIONS.map((sec) => {
+                                const filteredItems = sec.items.filter(item => 
+                                    !sidebarSearch ||
+                                    item.title.toLowerCase().includes(sidebarSearch.toLowerCase()) ||
+                                    item.desc.toLowerCase().includes(sidebarSearch.toLowerCase())
+                                );
+
+                                if (filteredItems.length === 0) return null;
+
+                                return (
+                                    <View key={sec.title} style={{ gap: 4 }}>
+                                        <Text style={{
+                                            fontSize: 10,
+                                            fontWeight: '800',
+                                            color: '#94A3B8',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.8,
+                                            paddingHorizontal: 6,
+                                            marginBottom: 2
+                                        }}>
+                                            {sec.title}
+                                        </Text>
+
+                                        {filteredItems.map((item) => {
+                                            const isActive = activeTab === item.id;
+                                            const isOrders = item.id === 'orders';
+                                            return (
+                                                <TouchableOpacity
+                                                    key={item.id}
+                                                    onPress={() => {
+                                                        setActiveTab(item.id);
+                                                        setIsSidebarOpen(false);
+                                                    }}
+                                                    activeOpacity={0.75}
+                                                    style={{
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        paddingHorizontal: 10,
+                                                        paddingVertical: 9,
+                                                        borderRadius: 11,
+                                                        backgroundColor: isActive ? 'rgba(217, 167, 58, 0.18)' : 'rgba(255,255,255,0.02)',
+                                                        borderWidth: 1,
+                                                        borderColor: isActive ? GOLD : 'rgba(255,255,255,0.05)'
+                                                    }}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                                        <View style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            backgroundColor: isActive ? GOLD : (item.bg || 'rgba(255,255,255,0.08)'),
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}>
+                                                            <Ionicons 
+                                                                name={item.icon || 'folder-outline'} 
+                                                                size={14} 
+                                                                color={isActive ? NAVY : (item.color || '#FFFFFF')} 
+                                                            />
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                                                <Text style={{
+                                                                    fontSize: 12.5,
+                                                                    fontWeight: isActive ? '800' : '600',
+                                                                    color: isActive ? GOLD : '#F1F5F9'
+                                                                }} numberOfLines={1}>
+                                                                    {item.title}
+                                                                </Text>
+                                                                {isOrders && (
+                                                                    <View style={{
+                                                                        backgroundColor: '#3B82F6',
+                                                                        paddingHorizontal: 5,
+                                                                        paddingVertical: 1,
+                                                                        borderRadius: 6
+                                                                    }}>
+                                                                        <Text style={{ fontSize: 8.5, fontWeight: '900', color: 'white' }}>
+                                                                            PSS / POD
+                                                                        </Text>
+                                                                    </View>
+                                                                )}
+                                                            </View>
+                                                            <Text style={{ fontSize: 10, color: '#64748B' }} numberOfLines={1}>
+                                                                {item.desc}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+
+                                                    {isActive && (
+                                                        <Ionicons name="chevron-forward" size={14} color={GOLD} />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                );
+                            })}
+                        </ScrollView>
+
+                        {/* Drawer Bottom Actions */}
+                        <View style={{
+                            paddingHorizontal: 14,
+                            paddingTop: 12,
+                            borderTopWidth: 1,
+                            borderTopColor: 'rgba(255,255,255,0.08)',
+                            gap: 8
+                        }}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setIsSidebarOpen(false);
+                                    handleBackToHome();
+                                }}
+                                activeOpacity={0.75}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 8,
+                                    backgroundColor: 'rgba(217, 167, 58, 0.15)',
+                                    paddingVertical: 10,
+                                    borderRadius: 11,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(217, 167, 58, 0.4)'
+                                }}
+                            >
+                                <Ionicons name="storefront" size={15} color={GOLD} />
+                                <Text style={{ color: GOLD, fontWeight: '800', fontSize: 12 }}>
+                                    Back to Marketplace
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setIsSidebarOpen(false);
+                                    handleLogoutPrompt();
+                                }}
+                                activeOpacity={0.75}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 8,
+                                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                                    paddingVertical: 9,
+                                    borderRadius: 11,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(239, 68, 68, 0.25)'
+                                }}
+                            >
+                                <Ionicons name="log-out-outline" size={15} color="#F87171" />
+                                <Text style={{ color: '#F87171', fontWeight: '700', fontSize: 11.5 }}>
+                                    Sign Out Admin
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Touch Outside to Close Backdrop */}
+                    <TouchableOpacity
+                        style={{ flex: 1 }}
+                        activeOpacity={1}
+                        onPress={() => setIsSidebarOpen(false)}
+                    />
+                </View>
+            </Modal>
         </View>
     );
 };

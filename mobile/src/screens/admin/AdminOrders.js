@@ -52,6 +52,7 @@ export const AdminOrders = ({ navigation, onBack }) => {
 
     // Filters
     const [filter, setFilter] = useState('All');
+    const [paymentTypeTab, setPaymentTypeTab] = useState('all'); // 'all', 'pss', 'pod', 'prepaid'
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('all'); // 'all','today','week','month'
 
@@ -449,6 +450,125 @@ export const AdminOrders = ({ navigation, onBack }) => {
         }
     };
 
+    // ─── Verify Pay on Delivery (POD) Cash Collection ───────────────────────
+    const handleVerifyPodPayment = async (orderId) => {
+        Alert.alert(
+            'Verify Cash on Delivery',
+            'Confirm that the courier or buyer has remitted the full cash amount for this order?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Confirm Cash Received',
+                    onPress: async () => {
+                        setUpdating(true);
+                        try {
+                            const { error } = await supabase.from('orders').update({
+                                payment_status: 'paid',
+                                status: 'delivered',
+                                updated_at: new Date().toISOString()
+                            }).eq('id', orderId);
+
+                            if (!error) {
+                                setOrders(prev => prev.map(o => o.id === orderId ? { ...o, payment_status: 'paid', status: 'delivered' } : o));
+                                if (selectedOrder?.id === orderId) {
+                                    setSelectedOrder(prev => ({ ...prev, payment_status: 'paid', status: 'delivered' }));
+                                }
+                                const { data: { user } } = await supabase.auth.getUser();
+                                await supabase.from('order_status_logs').insert({
+                                    order_id: orderId,
+                                    status: 'delivered',
+                                    note: '💵 POD Cash Verified & Collected by Admin',
+                                    changed_by: user?.id || null
+                                }).catch(() => {});
+
+                                Alert.alert('Success', 'POD Cash successfully verified! Order marked as Delivered & Paid.');
+                            } else {
+                                Alert.alert('Error', error.message || 'Could not verify payment');
+                            }
+                        } catch (e) {
+                            Alert.alert('Error', e.message);
+                        } finally {
+                            setUpdating(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // ─── Mark PSS Installment Paid ──────────────────────────────────────────
+    const handleMarkInstallmentPaid = async (orderId, installmentIndex) => {
+        const currentOrder = selectedOrder?.id === orderId ? selectedOrder : orders.find(o => o.id === orderId);
+        if (!currentOrder) return;
+        const fin = parseOrderFinances(currentOrder);
+        const schedule = [...(fin.schedule || [])];
+        if (!schedule[installmentIndex]) return;
+
+        Alert.alert(
+            'Verify Installment Payment',
+            `Confirm receipt of ₦${(schedule[installmentIndex].amount || 0).toLocaleString()} for ${schedule[installmentIndex].label || `Installment #${installmentIndex + 1}`}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Confirm Paid',
+                    onPress: async () => {
+                        setUpdating(true);
+                        try {
+                            schedule[installmentIndex] = {
+                                ...schedule[installmentIndex],
+                                status: 'paid',
+                                paid_at: new Date().toISOString()
+                            };
+
+                            const paidCount = schedule.filter(s => s.status === 'paid').length;
+                            const paidTotal = schedule.filter(s => s.status === 'paid').reduce((sum, s) => sum + Number(s.amount || 0), 0);
+                            const totalContract = fin.total;
+                            const isFullyPaid = paidCount >= schedule.length || paidTotal >= totalContract;
+
+                            const updatedPlan = {
+                                ...(fin.plan || {}),
+                                schedule,
+                                installments_paid: paidCount,
+                                paid_amount: paidTotal,
+                                remaining_balance: Math.max(0, totalContract - paidTotal),
+                                is_settled: isFullyPaid
+                            };
+
+                            const updatePayload = {
+                                installment_plan: updatedPlan,
+                                payment_status: isFullyPaid ? 'paid' : 'pss_active',
+                                updated_at: new Date().toISOString()
+                            };
+
+                            const { error } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
+                            if (!error) {
+                                setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatePayload } : o));
+                                if (selectedOrder?.id === orderId) {
+                                    setSelectedOrder(prev => ({ ...prev, ...updatePayload }));
+                                }
+                                const { data: { user } } = await supabase.auth.getUser();
+                                await supabase.from('order_status_logs').insert({
+                                    order_id: orderId,
+                                    status: isFullyPaid ? 'paid' : 'pss_active',
+                                    note: `💳 BNPL Installment #${installmentIndex + 1} marked paid (₦${(schedule[installmentIndex].amount || 0).toLocaleString()})`,
+                                    changed_by: user?.id || null
+                                }).catch(() => {});
+
+                                Alert.alert('Installment Verified', `Installment #${installmentIndex + 1} marked as PAID!`);
+                            } else {
+                                Alert.alert('Error', error.message || 'Failed to update installment');
+                            }
+                        } catch (e) {
+                            Alert.alert('Error', e.message);
+                        } finally {
+                            setUpdating(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     // ─── Refund / Cancel ─────────────────────────────────────────────────────
     const openRefundModal = (order) => {
         setRefundOrder(order);
@@ -752,7 +872,24 @@ export const AdminOrders = ({ navigation, onBack }) => {
     const filteredOrders = useMemo(() => {
         const now = new Date();
         let result = orders;
-        // 3. Date Range Filter
+        // 1. Payment Type Filter (All, PSS, POD, Prepaid)
+        if (paymentTypeTab === 'pss') {
+            result = result.filter(o => parseOrderFinances(o).isPss);
+        } else if (paymentTypeTab === 'pod') {
+            result = result.filter(o => {
+                const method = (o.payment_method || '').toLowerCase();
+                return method.includes('delivery') || method.includes('pod') || method.includes('cod');
+            });
+        } else if (paymentTypeTab === 'prepaid') {
+            result = result.filter(o => {
+                const isPss = parseOrderFinances(o).isPss;
+                const method = (o.payment_method || '').toLowerCase();
+                const isPod = method.includes('delivery') || method.includes('pod') || method.includes('cod');
+                return !isPss && !isPod;
+            });
+        }
+
+        // 2. Date Range Filter
         if (dateFilter === 'today') {
             const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             result = result.filter(o => new Date(o.created_at) >= start);
@@ -774,7 +911,7 @@ export const AdminOrders = ({ navigation, onBack }) => {
             );
         }
         return result;
-    }, [orders, filter, searchQuery, dateFilter]);
+    }, [orders, filter, paymentTypeTab, searchQuery, dateFilter]);
 
     // ─── Render Order Card ────────────────────────────────────────────────────
     const renderOrderItem = ({ item }) => {
@@ -825,14 +962,55 @@ export const AdminOrders = ({ navigation, onBack }) => {
                             </Text>
                         </View>
                     </View>
-                ) : (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#64748B' }}>
-                            {item.items_count || '?'} item{item.items_count !== 1 ? 's' : ''} • {item.payment_method || 'N/A'}
-                        </Text>
-                        <Text style={{ fontWeight: '700', color: '#0F172A' }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
-                    </View>
-                )}
+                ) : (() => {
+                    const method = (item.payment_method || '').toLowerCase();
+                    const isPod = method.includes('delivery') || method.includes('pod') || method.includes('cod');
+                    const podCollected = item.payment_status === 'paid' || item.status === 'delivered';
+                    if (isPod) {
+                        return (
+                            <View style={{ marginTop: 6, backgroundColor: '#EFF6FF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <Ionicons name="cash" size={12} color="#2563EB" />
+                                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8' }}>
+                                            PAY ON DELIVERY (POD)
+                                        </Text>
+                                    </View>
+                                    <View style={{
+                                        backgroundColor: podCollected ? '#DCFCE7' : '#FEF3C7',
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 1.5,
+                                        borderRadius: 6
+                                    }}>
+                                        <Text style={{
+                                            fontSize: 9,
+                                            fontWeight: '800',
+                                            color: podCollected ? '#16A34A' : '#D97706'
+                                        }}>
+                                            {podCollected ? 'CASH COLLECTED' : 'PENDING CASH'}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
+                                    <Text style={{ fontSize: 10.5, color: '#1E40AF' }}>
+                                        {item.items_count || '?'} item{item.items_count !== 1 ? 's' : ''} • Cash on Handover
+                                    </Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '900', color: '#0F172A' }}>
+                                        ₦{(item.total_amount || 0).toLocaleString()}
+                                    </Text>
+                                </View>
+                            </View>
+                        );
+                    }
+                    return (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                            <Text style={{ fontSize: 12, color: '#64748B' }}>
+                                {item.items_count || '?'} item{item.items_count !== 1 ? 's' : ''} • {item.payment_method || 'Prepaid / Online'}
+                            </Text>
+                            <Text style={{ fontWeight: '700', color: '#0F172A' }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
+                        </View>
+                    );
+                })()}
 
                 <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                     {new Date(item.created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -976,7 +1154,40 @@ export const AdminOrders = ({ navigation, onBack }) => {
                         </TouchableOpacity>
                     )}
                 </View>
+                {/* Payment Category Filter Tabs (PSS, POD, Prepaid, All) */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+                    {[
+                        { id: 'all', label: '🌟 All Orders' },
+                        { id: 'pss', label: '💳 Pay Small Small (PSS)' },
+                        { id: 'pod', label: '🚚 Pay on Delivery (POD)' },
+                        { id: 'prepaid', label: '⚡ Prepaid / Online' }
+                    ].map(t => (
+                        <TouchableOpacity
+                            key={t.id}
+                            onPress={() => setPaymentTypeTab(t.id)}
+                            style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                borderRadius: 10,
+                                marginRight: 8,
+                                backgroundColor: paymentTypeTab === t.id ? '#0E1A2E' : '#FFFFFF',
+                                borderWidth: 1,
+                                borderColor: paymentTypeTab === t.id ? '#D9A73A' : '#E2E8F0'
+                            }}
+                        >
+                            <Text style={{
+                                color: paymentTypeTab === t.id ? '#D9A73A' : '#475569',
+                                fontSize: 11,
+                                fontWeight: paymentTypeTab === t.id ? '900' : '700'
+                            }}>
+                                {t.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Status Chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                     {['All', ...STATUSES].map(f => (
                         <TouchableOpacity
                             key={f}
@@ -1175,6 +1386,24 @@ export const AdminOrders = ({ navigation, onBack }) => {
                                                                     <Text style={{ fontSize: 9.5, fontWeight: '800', color: inst.status === 'paid' ? '#16A34A' : '#D97706' }}>
                                                                         {inst.status === 'paid' ? 'PAID' : 'PENDING'}
                                                                     </Text>
+                                                                    {inst.status !== 'paid' && (
+                                                                        <TouchableOpacity
+                                                                            onPress={() => handleMarkInstallmentPaid(order.id, idx)}
+                                                                            style={{
+                                                                                backgroundColor: '#0E1A2E',
+                                                                                paddingHorizontal: 8,
+                                                                                paddingVertical: 3,
+                                                                                borderRadius: 6,
+                                                                                borderWidth: 1,
+                                                                                borderColor: '#D9A73A',
+                                                                                marginTop: 4
+                                                                            }}
+                                                                        >
+                                                                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#D9A73A' }}>
+                                                                                Mark Paid
+                                                                            </Text>
+                                                                        </TouchableOpacity>
+                                                                    )}
                                                                 </View>
                                                             </View>
                                                         ))}
@@ -1182,6 +1411,66 @@ export const AdminOrders = ({ navigation, onBack }) => {
                                                 )}
                                             </View>
                                         )}
+
+                                        {/* Pay on Delivery (POD) Cash Verification Section */}
+                                        {(() => {
+                                            const isPod = (order.payment_method || '').toLowerCase().includes('delivery') ||
+                                                          (order.payment_method || '').toLowerCase().includes('pod') ||
+                                                          (order.payment_method || '').toLowerCase().includes('cod');
+                                            const isPodPaid = order.payment_status === 'paid' || order.status === 'delivered';
+                                            if (!isPod) return null;
+
+                                            return (
+                                                <View style={{ marginTop: 12, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BFDBFE', gap: 8 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                            <Ionicons name="cash" size={16} color="#2563EB" />
+                                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF' }}>
+                                                                Pay on Delivery (POD) Verification
+                                                            </Text>
+                                                        </View>
+                                                        <View style={{
+                                                            backgroundColor: isPodPaid ? '#DCFCE7' : '#FEF3C7',
+                                                            paddingHorizontal: 8,
+                                                            paddingVertical: 3,
+                                                            borderRadius: 8
+                                                        }}>
+                                                            <Text style={{ fontSize: 10, fontWeight: '800', color: isPodPaid ? '#16A34A' : '#D97706' }}>
+                                                                {isPodPaid ? 'COLLECTED' : 'PENDING CASH'}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <Text style={{ fontSize: 12, color: '#475569' }}>Cash Due Upon Doorstep Handover:</Text>
+                                                        <Text style={{ fontSize: 15, fontWeight: '900', color: '#0F172A' }}>
+                                                            ₦{(order.total_amount || 0).toLocaleString()}
+                                                        </Text>
+                                                    </View>
+
+                                                    {!isPodPaid && (
+                                                        <TouchableOpacity
+                                                            onPress={() => handleVerifyPodPayment(order.id)}
+                                                            style={{
+                                                                backgroundColor: '#16A34A',
+                                                                flexDirection: 'row',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: 6,
+                                                                paddingVertical: 10,
+                                                                borderRadius: 10,
+                                                                marginTop: 4
+                                                            }}
+                                                        >
+                                                            <Ionicons name="checkmark-circle" size={16} color="white" />
+                                                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>
+                                                                Verify Cash Collected & Complete Order
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                            );
+                                        })()}
                                     </View>
 
                                     {/* ─ Order Items ─ */}
