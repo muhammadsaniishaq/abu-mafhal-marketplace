@@ -53,6 +53,15 @@ const DANGER = '#EF4444';
 const AMBER = '#F59E0B';
 const BLUE = '#2563EB';
 
+// ─── Complete Nigerian States & FCT Registry (36 States + Abuja FCT) ───
+export const NIGERIAN_STATES = [
+    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
+    'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT (Abuja)', 'Gombe',
+    'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
+    'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
+    'Taraba', 'Yobe', 'Zamfara'
+];
+
 // ─── 100% Real Security PIN Generator (Synced with Customer Track Order Screen) ───
 export function generateSecurityPin(orderId) {
     if (!orderId) return '4829';
@@ -206,6 +215,11 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const [guarantorName, setGuarantorName] = useState('');
     const [guarantorPhone, setGuarantorPhone] = useState('');
     const [cargoCapabilities, setCargoCapabilities] = useState('');
+    const [plateStateSearch, setPlateStateSearch] = useState('');
+    const [roadworthinessCert, setRoadworthinessCert] = useState('');
+    const [roadworthinessExpiry, setRoadworthinessExpiry] = useState('');
+    const [deliverySpeedTiers, setDeliverySpeedTiers] = useState('');
+    const [dailyTargetDeliveries, setDailyTargetDeliveries] = useState('');
     const [savingProfile, setSavingProfile] = useState(false);
     const [modalActiveSection, setModalActiveSection] = useState('all'); // 'all' | 'vehicle' | 'license' | 'experience' | 'zones' | 'guarantor'
     const [selectedMapOrder, setSelectedMapOrder] = useState(null);
@@ -501,6 +515,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 setGuarantorName(merged.guarantor_name || localCache.guarantor_name || meta.guarantor_name || '');
                 setGuarantorPhone(merged.guarantor_phone || localCache.guarantor_phone || meta.guarantor_phone || '');
                 setCargoCapabilities(merged.cargo_capabilities || localCache.cargo_capabilities || meta.cargo_capabilities || '');
+                setRoadworthinessCert(merged.roadworthiness_cert || localCache.roadworthiness_cert || meta.roadworthiness_cert || '');
+                setRoadworthinessExpiry(merged.roadworthiness_expiry || localCache.roadworthiness_expiry || meta.roadworthiness_expiry || '');
+                setDeliverySpeedTiers(merged.delivery_speed_tiers || localCache.delivery_speed_tiers || meta.delivery_speed_tiers || '');
+                setDailyTargetDeliveries(merged.daily_target_deliveries || localCache.daily_target_deliveries || meta.daily_target_deliveries || '');
             } else {
                 const newDriver = {
                     user_id: userId,
@@ -553,6 +571,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 setGuarantorName(fallbackMerged.guarantor_name || '');
                 setGuarantorPhone(fallbackMerged.guarantor_phone || '');
                 setCargoCapabilities(fallbackMerged.cargo_capabilities || '');
+                setRoadworthinessCert(fallbackMerged.roadworthiness_cert || '');
+                setRoadworthinessExpiry(fallbackMerged.roadworthiness_expiry || '');
+                setDeliverySpeedTiers(fallbackMerged.delivery_speed_tiers || '');
+                setDailyTargetDeliveries(fallbackMerged.daily_target_deliveries || '');
             }
         } catch (e) {
             console.log('Driver Record Fetch Error:', e);
@@ -1089,6 +1111,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             guarantor_name: guarantorName,
             guarantor_phone: guarantorPhone,
             cargo_capabilities: cargoCapabilities,
+            roadworthiness_cert: roadworthinessCert,
+            roadworthiness_expiry: roadworthinessExpiry,
+            delivery_speed_tiers: deliverySpeedTiers,
+            daily_target_deliveries: dailyTargetDeliveries,
             updated_at: new Date().toISOString()
         };
 
@@ -2542,11 +2568,29 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             </View>
 
                             {/* Accepted Cargo / Package Types */}
-                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: BORDER_COLOR }}>
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: BORDER_COLOR }}>
                                 <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE, letterSpacing: 0.5, marginBottom: 4 }}>ACCEPTED CARGO & PACKAGE TYPES</Text>
                                 <Text style={[styles.credValue, !(driverProfile?.cargo_capabilities || cargoCapabilities) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
                                     {driverProfile?.cargo_capabilities || cargoCapabilities || 'Ba a zaba ba (Not Specified)'}
                                 </Text>
+                            </View>
+
+                            {/* Roadworthiness & Delivery Speed Services */}
+                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '800', color: TEXT_SUBTLE, letterSpacing: 0.5, marginBottom: 3 }}>ROADWORTHINESS CERT.</Text>
+                                    <Text style={[styles.credValue, { fontSize: 11.5 }, !(driverProfile?.roadworthiness_cert || roadworthinessCert) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {(driverProfile?.roadworthiness_cert || roadworthinessCert)
+                                            ? `${driverProfile?.roadworthiness_cert || roadworthinessCert}${(driverProfile?.roadworthiness_expiry || roadworthinessExpiry) ? ` (${driverProfile?.roadworthiness_expiry || roadworthinessExpiry})` : ''}`
+                                            : 'Ba a saita ba'}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '800', color: TEXT_SUBTLE, letterSpacing: 0.5, marginBottom: 3 }}>DELIVERY SPEED TIERS</Text>
+                                    <Text style={[styles.credValue, { fontSize: 11.5 }, !(driverProfile?.delivery_speed_tiers || deliverySpeedTiers) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]} numberOfLines={2}>
+                                        {driverProfile?.delivery_speed_tiers || deliverySpeedTiers || 'Standard'}
+                                    </Text>
+                                </View>
                             </View>
 
                             {/* Nigerian Plate Tag */}
@@ -2639,6 +2683,19 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     <Text style={styles.credLabel}>PREVIOUS LOGISTICS HUBS</Text>
                                     <Text style={[styles.credValue, !(driverProfile?.previous_logistics || previousLogistics) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]} numberOfLines={2}>
                                         {driverProfile?.previous_logistics || previousLogistics || 'Babu (None recorded)'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Daily Delivery Target */}
+                            <View style={[styles.credRow, { borderBottomWidth: 0, paddingBottom: 2 }]}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="flag" size={15} color={GOLD} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>DAILY DELIVERY TARGET (BURIN RANA)</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.daily_target_deliveries || dailyTargetDeliveries) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.daily_target_deliveries || dailyTargetDeliveries || 'Ba a saita ba (Not Set)'}
                                     </Text>
                                 </View>
                             </View>
@@ -3518,27 +3575,87 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         </View>
                                     </View>
 
-                                    <Text style={styles.inputFieldLabel}>Issuing State (Plate Registration)</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
-                                        {['Kano', 'Abuja FCT', 'Lagos', 'Kaduna', 'Katsina', 'Jigawa', 'Bauchi', 'Sokoto', 'Plateau'].map(st => (
-                                            <TouchableOpacity
-                                                key={st}
-                                                onPress={() => setPlateState(st)}
-                                                style={{
-                                                    paddingHorizontal: 11,
-                                                    paddingVertical: 6,
-                                                    borderRadius: 8,
-                                                    backgroundColor: plateState === st ? '#EFF6FF' : '#FFFFFF',
-                                                    borderWidth: 1,
-                                                    borderColor: plateState === st ? BLUE : BORDER_COLOR
-                                                }}
-                                            >
-                                                <Text style={{ fontSize: 11, fontWeight: '700', color: plateState === st ? BLUE : TEXT_DARK }}>{st}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
+                                    {/* Issuing State: All 36 States + FCT */}
+                                    <View style={{ marginTop: 6, marginBottom: 4 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text style={styles.inputFieldLabel}>Issuing State (Plate Registration — Duk Jihohin Nijeriya 36 + FCT)</Text>
+                                            {plateState ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                                    <Ionicons name="checkmark-circle" size={12} color={BLUE} />
+                                                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: BLUE }}>{plateState}</Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
 
-                                    <Text style={styles.inputFieldLabel}>Vehicle Color</Text>
+                                        {/* Quick Pick Top States */}
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
+                                            {['Kano', 'FCT (Abuja)', 'Lagos', 'Kaduna', 'Katsina', 'Jigawa', 'Bauchi', 'Sokoto', 'Plateau', 'Rivers', 'Oyo', 'Borno'].map(st => (
+                                                <TouchableOpacity
+                                                    key={st}
+                                                    onPress={() => setPlateState(st)}
+                                                    style={{
+                                                        paddingHorizontal: 11,
+                                                        paddingVertical: 6,
+                                                        borderRadius: 8,
+                                                        backgroundColor: plateState === st ? '#EFF6FF' : '#FFFFFF',
+                                                        borderWidth: 1,
+                                                        borderColor: plateState === st ? BLUE : BORDER_COLOR
+                                                    }}
+                                                >
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: plateState === st ? BLUE : TEXT_DARK }}>{st}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+
+                                        {/* Search All 36 States + FCT */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: BORDER_COLOR, paddingHorizontal: 10, marginTop: 4, marginBottom: 8 }}>
+                                            <Ionicons name="search" size={14} color={TEXT_MUTED} />
+                                            <TextInput
+                                                style={{ flex: 1, paddingVertical: 7, paddingHorizontal: 8, fontSize: 12, color: TEXT_DARK }}
+                                                value={plateStateSearch}
+                                                onChangeText={setPlateStateSearch}
+                                                placeholder="Nemo Jiha / Search all 36 States & FCT..."
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                            {plateStateSearch.length > 0 && (
+                                                <TouchableOpacity onPress={() => setPlateStateSearch('')}>
+                                                    <Ionicons name="close-circle" size={16} color={TEXT_MUTED} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+
+                                        {/* Full 36 States Grid */}
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, maxHeight: 150, overflow: 'scroll', paddingBottom: 6 }}>
+                                            {NIGERIAN_STATES
+                                                .filter(st => !plateStateSearch || st.toLowerCase().includes(plateStateSearch.toLowerCase()))
+                                                .map(st => {
+                                                    const isSelected = plateState === st;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={st}
+                                                            onPress={() => {
+                                                                setPlateState(st);
+                                                                setPlateStateSearch('');
+                                                            }}
+                                                            style={{
+                                                                paddingHorizontal: 10,
+                                                                paddingVertical: 6,
+                                                                borderRadius: 8,
+                                                                backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                                                                borderWidth: 1,
+                                                                borderColor: isSelected ? BLUE : '#E2E8F0'
+                                                            }}
+                                                        >
+                                                            <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? BLUE : TEXT_DARK }}>
+                                                                {isSelected ? '✓ ' : ''}{st}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                        </View>
+                                    </View>
+
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 6 }]}>Vehicle Color</Text>
                                     <TextInput
                                         style={styles.textInputModern}
                                         value={vColor}
@@ -3600,6 +3717,31 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         ))}
                                     </ScrollView>
 
+                                    {/* Roadworthiness Certificate & Expiry */}
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Roadworthiness Cert. No.</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={roadworthinessCert}
+                                                onChangeText={setRoadworthinessCert}
+                                                placeholder="e.g. RW-2026-KMC-99"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                                autoCapitalize="characters"
+                                            />
+                                        </View>
+                                        <View style={{ width: 130 }}>
+                                            <Text style={styles.inputFieldLabel}>Cert. Expiry</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={roadworthinessExpiry}
+                                                onChangeText={setRoadworthinessExpiry}
+                                                placeholder="e.g. 11/2026"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                    </View>
+
                                     {/* Accepted Cargo Types */}
                                     <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Accepted Cargo & Package Handling Types</Text>
                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
@@ -3629,6 +3771,41 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                                 >
                                                     <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? BLUE : TEXT_DARK }}>
                                                         {isSelected ? '✓ ' : '+ '}{item}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+
+                                    {/* Delivery Speed & Service Capabilities */}
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Delivery Speed & Service Capabilities</Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                                        {[
+                                            'Standard Delivery (A Rana Daya)',
+                                            'Express / Rush (Gaggawa)',
+                                            'Fragile & High-Value Care',
+                                            'Inter-State Long Distance'
+                                        ].map(tier => {
+                                            const list = deliverySpeedTiers ? deliverySpeedTiers.split(', ').filter(Boolean) : [];
+                                            const isSelected = list.includes(tier);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={tier}
+                                                    onPress={() => {
+                                                        const updated = isSelected ? list.filter(x => x !== tier) : [...list, tier];
+                                                        setDeliverySpeedTiers(updated.join(', '));
+                                                    }}
+                                                    style={{
+                                                        paddingHorizontal: 10,
+                                                        paddingVertical: 6,
+                                                        borderRadius: 8,
+                                                        backgroundColor: isSelected ? '#FEF3C7' : '#FFFFFF',
+                                                        borderWidth: 1,
+                                                        borderColor: isSelected ? GOLD : BORDER_COLOR
+                                                    }}
+                                                >
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? '#92400E' : TEXT_DARK }}>
+                                                        {isSelected ? '✓ ' : '+ '}{tier}
                                                     </Text>
                                                 </TouchableOpacity>
                                             );
@@ -3774,6 +3951,27 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         placeholder="e.g. DHL Kano Central, GIG Logistics, Abu Mafhal Fast"
                                         placeholderTextColor={TEXT_SUBTLE}
                                     />
+
+                                    {/* Daily Delivery Target */}
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Daily Delivery Target (Burin Aiki na Rana)</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
+                                        {['5 Deliveries', '8 Deliveries', '10 Deliveries', '15 Deliveries', '20 Deliveries', '25+ Deliveries'].map(tgt => (
+                                            <TouchableOpacity
+                                                key={tgt}
+                                                onPress={() => setDailyTargetDeliveries(tgt)}
+                                                style={{
+                                                    paddingHorizontal: 11,
+                                                    paddingVertical: 6,
+                                                    borderRadius: 8,
+                                                    backgroundColor: dailyTargetDeliveries === tgt ? '#FEF3C7' : '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: dailyTargetDeliveries === tgt ? GOLD : BORDER_COLOR
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 11, fontWeight: '700', color: dailyTargetDeliveries === tgt ? '#92400E' : TEXT_DARK }}>{tgt}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
                                 </View>
                             )}
 
