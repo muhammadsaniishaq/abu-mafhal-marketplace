@@ -178,28 +178,36 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     // Pool Alerts
     const [previousPoolCount, setPreviousPoolCount] = useState(0);
 
-    // Unified Vehicle, License & Experience Form
+    // Unified Vehicle, License & Experience Form (NO MOCKUPS — Real User Data Only)
     const [vType, setVType] = useState('Motorcycle');
     const [vModel, setVModel] = useState('');
-    const [vehicleYear, setVehicleYear] = useState('2023');
+    const [vehicleYear, setVehicleYear] = useState('');
     const [pNumber, setPNumber] = useState('');
-    const [plateState, setPlateState] = useState('Kano');
+    const [plateState, setPlateState] = useState('');
     const [vColor, setVColor] = useState('');
     const [fuelType, setFuelType] = useState('Petrol');
-    const [payloadCapacity, setPayloadCapacity] = useState('65 kg');
+    const [payloadCapacity, setPayloadCapacity] = useState('');
+    const [vehicleCondition, setVehicleCondition] = useState('');
     const [driverLicense, setDriverLicense] = useState('');
-    const [licenseClass, setLicenseClass] = useState('Class A (Rider / Dispatch)');
-    const [licenseExpiry, setLicenseExpiry] = useState('12/2027');
-    const [insurancePolicy, setInsurancePolicy] = useState('Leadway Third-Party Commercial');
-    const [insuranceStatus, setInsuranceStatus] = useState('Active');
+    const [driverNin, setDriverNin] = useState('');
+    const [licenseClass, setLicenseClass] = useState('');
+    const [licenseExpiry, setLicenseExpiry] = useState('');
+    const [insurancePolicy, setInsurancePolicy] = useState('');
+    const [insuranceStatus, setInsuranceStatus] = useState('');
     const [experience, setExperience] = useState('');
-    const [experienceYears, setExperienceYears] = useState('3+ Years');
-    const [driverStartDate, setDriverStartDate] = useState('Jan 2022');
-    const [previousLogistics, setPreviousLogistics] = useState('GIG Logistics, DHL Express');
+    const [experienceYears, setExperienceYears] = useState('');
+    const [driverStartDate, setDriverStartDate] = useState('');
+    const [previousLogistics, setPreviousLogistics] = useState('');
+    const [operatingCity, setOperatingCity] = useState('');
+    const [operatingAreas, setOperatingAreas] = useState('');
+    const [shiftAvailability, setShiftAvailability] = useState('');
     const [emergencyContactName, setEmergencyContactName] = useState('');
     const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+    const [guarantorName, setGuarantorName] = useState('');
+    const [guarantorPhone, setGuarantorPhone] = useState('');
+    const [cargoCapabilities, setCargoCapabilities] = useState('');
     const [savingProfile, setSavingProfile] = useState(false);
-    const [modalActiveSection, setModalActiveSection] = useState('all'); // 'all' | 'vehicle' | 'license' | 'experience'
+    const [modalActiveSection, setModalActiveSection] = useState('all'); // 'all' | 'vehicle' | 'license' | 'experience' | 'zones' | 'guarantor'
     const [selectedMapOrder, setSelectedMapOrder] = useState(null);
     const [walletTxFilter, setWalletTxFilter] = useState('ALL');
     const [isLicenseModalVisible, setLicenseModalVisible] = useState(false);
@@ -467,31 +475,39 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             if (data) {
                 setDriverProfile(merged);
                 setVType(merged.vehicle_type || 'Motorcycle');
-                setVModel(merged.vehicle_model || localCache.vehicle_model || meta.vehicle_model || 'Bajaj Boxer BM150 Express');
-                setVehicleYear(merged.vehicle_year || localCache.vehicle_year || meta.vehicle_year || '2023');
-                setPNumber(merged.vehicle_number || merged.plate_number || localCache.plate_number || meta.plate_number || 'KMC-492-XA');
-                setPlateState(merged.plate_state || localCache.plate_state || meta.plate_state || 'Kano');
-                setVColor(merged.vehicle_color || localCache.vehicle_color || meta.vehicle_color || 'Silver / Black');
+                setVModel(merged.vehicle_model || localCache.vehicle_model || meta.vehicle_model || '');
+                setVehicleYear(merged.vehicle_year || localCache.vehicle_year || meta.vehicle_year || '');
+                setPNumber(merged.vehicle_number || merged.plate_number || localCache.plate_number || meta.plate_number || '');
+                setPlateState(merged.plate_state || localCache.plate_state || meta.plate_state || '');
+                setVColor(merged.vehicle_color || localCache.vehicle_color || meta.vehicle_color || '');
                 setFuelType(merged.fuel_type || localCache.fuel_type || meta.fuel_type || 'Petrol');
-                setPayloadCapacity(merged.payload_capacity || localCache.payload_capacity || meta.payload_capacity || '65 kg');
-                setDriverLicense(merged.driver_license || localCache.driver_license || meta.driver_license || 'DL-84291-KMC');
-                setLicenseClass(merged.license_class || localCache.license_class || meta.license_class || 'Class A (Rider / Dispatch)');
-                setLicenseExpiry(merged.license_expiry || localCache.license_expiry || meta.license_expiry || '12/2027');
-                setInsurancePolicy(merged.insurance_policy || localCache.insurance_policy || meta.insurance_policy || 'Leadway Third-Party Commercial');
-                setInsuranceStatus(merged.insurance_status || localCache.insurance_status || meta.insurance_status || 'Active');
-                setExperience(merged.experience || localCache.experience || meta.experience || 'Certified Fast Logistics Courier');
-                setExperienceYears(merged.experience_years || localCache.experience_years || meta.experience_years || '3+ Years');
-                setDriverStartDate(merged.driver_start_date || localCache.driver_start_date || meta.driver_start_date || 'Jan 2022');
-                setPreviousLogistics(merged.previous_logistics || localCache.previous_logistics || meta.previous_logistics || 'GIG Logistics, DHL Express');
-                setEmergencyContactName(merged.emergency_contact_name || localCache.emergency_contact_name || meta.emergency_contact_name || 'Ibrahim Sani');
-                setEmergencyContactPhone(merged.emergency_contact_phone || localCache.emergency_contact_phone || meta.emergency_contact_phone || '+234 803 123 4567');
+                setPayloadCapacity(merged.payload_capacity || localCache.payload_capacity || meta.payload_capacity || '');
+                setVehicleCondition(merged.vehicle_condition || localCache.vehicle_condition || meta.vehicle_condition || '');
+                setDriverLicense(merged.driver_license || localCache.driver_license || meta.driver_license || '');
+                setDriverNin(merged.driver_nin || localCache.driver_nin || meta.driver_nin || '');
+                setLicenseClass(merged.license_class || localCache.license_class || meta.license_class || '');
+                setLicenseExpiry(merged.license_expiry || localCache.license_expiry || meta.license_expiry || '');
+                setInsurancePolicy(merged.insurance_policy || localCache.insurance_policy || meta.insurance_policy || '');
+                setInsuranceStatus(merged.insurance_status || localCache.insurance_status || meta.insurance_status || '');
+                setExperience(merged.experience || localCache.experience || meta.experience || '');
+                setExperienceYears(merged.experience_years || localCache.experience_years || meta.experience_years || '');
+                setDriverStartDate(merged.driver_start_date || localCache.driver_start_date || meta.driver_start_date || '');
+                setPreviousLogistics(merged.previous_logistics || localCache.previous_logistics || meta.previous_logistics || '');
+                setOperatingCity(merged.operating_city || localCache.operating_city || meta.operating_city || '');
+                setOperatingAreas(merged.operating_areas || localCache.operating_areas || meta.operating_areas || '');
+                setShiftAvailability(merged.shift_availability || localCache.shift_availability || meta.shift_availability || '');
+                setEmergencyContactName(merged.emergency_contact_name || localCache.emergency_contact_name || meta.emergency_contact_name || '');
+                setEmergencyContactPhone(merged.emergency_contact_phone || localCache.emergency_contact_phone || meta.emergency_contact_phone || '');
+                setGuarantorName(merged.guarantor_name || localCache.guarantor_name || meta.guarantor_name || '');
+                setGuarantorPhone(merged.guarantor_phone || localCache.guarantor_phone || meta.guarantor_phone || '');
+                setCargoCapabilities(merged.cargo_capabilities || localCache.cargo_capabilities || meta.cargo_capabilities || '');
             } else {
                 const newDriver = {
                     user_id: userId,
-                    name: activeUser?.full_name || 'Driver Courier',
+                    name: activeUser?.full_name || '',
                     phone: activeUser?.phone || activeUser?.phone_number || '',
                     vehicle_type: 'Motorcycle',
-                    vehicle_number: 'KMC-492-XA',
+                    vehicle_number: '',
                     current_location: 'Kano Hub Central',
                     status: 'active',
                     is_active: true,
@@ -511,24 +527,32 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 };
                 setDriverProfile(fallbackMerged);
                 setVType(fallbackMerged.vehicle_type || 'Motorcycle');
-                setVModel(fallbackMerged.vehicle_model || 'Bajaj Boxer BM150 Express');
-                setVehicleYear(fallbackMerged.vehicle_year || '2023');
-                setPNumber(fallbackMerged.vehicle_number || 'KMC-492-XA');
-                setPlateState(fallbackMerged.plate_state || 'Kano');
-                setVColor(fallbackMerged.vehicle_color || 'Silver / Black');
+                setVModel(fallbackMerged.vehicle_model || '');
+                setVehicleYear(fallbackMerged.vehicle_year || '');
+                setPNumber(fallbackMerged.vehicle_number || '');
+                setPlateState(fallbackMerged.plate_state || '');
+                setVColor(fallbackMerged.vehicle_color || '');
                 setFuelType(fallbackMerged.fuel_type || 'Petrol');
-                setPayloadCapacity(fallbackMerged.payload_capacity || '65 kg');
-                setDriverLicense(fallbackMerged.driver_license || 'DL-84291-KMC');
-                setLicenseClass(fallbackMerged.license_class || 'Class A (Rider / Dispatch)');
-                setLicenseExpiry(fallbackMerged.license_expiry || '12/2027');
-                setInsurancePolicy(fallbackMerged.insurance_policy || 'Leadway Third-Party Commercial');
-                setInsuranceStatus(fallbackMerged.insurance_status || 'Active');
-                setExperience(fallbackMerged.experience || 'Certified Fast Logistics Courier');
-                setExperienceYears(fallbackMerged.experience_years || '3+ Years');
-                setDriverStartDate(fallbackMerged.driver_start_date || 'Jan 2022');
-                setPreviousLogistics(fallbackMerged.previous_logistics || 'GIG Logistics, DHL Express');
-                setEmergencyContactName(fallbackMerged.emergency_contact_name || 'Ibrahim Sani');
-                setEmergencyContactPhone(fallbackMerged.emergency_contact_phone || '+234 803 123 4567');
+                setPayloadCapacity(fallbackMerged.payload_capacity || '');
+                setVehicleCondition(fallbackMerged.vehicle_condition || '');
+                setDriverLicense(fallbackMerged.driver_license || '');
+                setDriverNin(fallbackMerged.driver_nin || '');
+                setLicenseClass(fallbackMerged.license_class || '');
+                setLicenseExpiry(fallbackMerged.license_expiry || '');
+                setInsurancePolicy(fallbackMerged.insurance_policy || '');
+                setInsuranceStatus(fallbackMerged.insurance_status || '');
+                setExperience(fallbackMerged.experience || '');
+                setExperienceYears(fallbackMerged.experience_years || '');
+                setDriverStartDate(fallbackMerged.driver_start_date || '');
+                setPreviousLogistics(fallbackMerged.previous_logistics || '');
+                setOperatingCity(fallbackMerged.operating_city || '');
+                setOperatingAreas(fallbackMerged.operating_areas || '');
+                setShiftAvailability(fallbackMerged.shift_availability || '');
+                setEmergencyContactName(fallbackMerged.emergency_contact_name || '');
+                setEmergencyContactPhone(fallbackMerged.emergency_contact_phone || '');
+                setGuarantorName(fallbackMerged.guarantor_name || '');
+                setGuarantorPhone(fallbackMerged.guarantor_phone || '');
+                setCargoCapabilities(fallbackMerged.cargo_capabilities || '');
             }
         } catch (e) {
             console.log('Driver Record Fetch Error:', e);
@@ -1046,7 +1070,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             vehicle_color: vColor,
             fuel_type: fuelType,
             payload_capacity: payloadCapacity,
+            vehicle_condition: vehicleCondition,
             driver_license: driverLicense,
+            driver_nin: driverNin,
             license_class: licenseClass,
             license_expiry: licenseExpiry,
             insurance_policy: insurancePolicy,
@@ -1055,8 +1081,14 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             experience_years: experienceYears,
             driver_start_date: driverStartDate,
             previous_logistics: previousLogistics,
+            operating_city: operatingCity,
+            operating_areas: operatingAreas,
+            shift_availability: shiftAvailability,
             emergency_contact_name: emergencyContactName,
             emergency_contact_phone: emergencyContactPhone,
+            guarantor_name: guarantorName,
+            guarantor_phone: guarantorPhone,
+            cargo_capabilities: cargoCapabilities,
             updated_at: new Date().toISOString()
         };
 
@@ -1619,6 +1651,33 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             </View>
         );
     };
+
+    // Calculate real dynamic profile completion (0-100%) without mockups
+    const profileCompletionStats = useMemo(() => {
+        const fields = [
+            { key: 'vehicle_model', label: 'Vehicle Model', filled: !!(driverProfile?.vehicle_model || vModel) },
+            { key: 'plate_number', label: 'Plate Number', filled: !!(driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber) },
+            { key: 'plate_state', label: 'Plate State', filled: !!(driverProfile?.plate_state || plateState) },
+            { key: 'driver_license', label: 'Driver License', filled: !!(driverProfile?.driver_license || driverLicense) },
+            { key: 'driver_nin', label: 'National NIN', filled: !!(driverProfile?.driver_nin || driverNin) },
+            { key: 'license_expiry', label: 'License Expiry', filled: !!(driverProfile?.license_expiry || licenseExpiry) },
+            { key: 'insurance_policy', label: 'Insurance Policy', filled: !!(driverProfile?.insurance_policy || insurancePolicy) },
+            { key: 'experience', label: 'Courier Experience', filled: !!(driverProfile?.experience || experience) },
+            { key: 'emergency_contact', label: 'Emergency Contact', filled: !!(driverProfile?.emergency_contact_name || emergencyContactName) },
+            { key: 'guarantor', label: 'Guarantor / Referee', filled: !!(driverProfile?.guarantor_name || guarantorName) },
+            { key: 'operating_city', label: 'Operating City', filled: !!(driverProfile?.operating_city || operatingCity) },
+            { key: 'shift_availability', label: 'Shift Availability', filled: !!(driverProfile?.shift_availability || shiftAvailability) },
+            { key: 'cargo_capabilities', label: 'Accepted Cargo Types', filled: !!(driverProfile?.cargo_capabilities || cargoCapabilities) },
+        ];
+        const filledCount = fields.filter(f => f.filled).length;
+        const totalCount = fields.length;
+        const percent = Math.round((filledCount / totalCount) * 100);
+        return { fields, filledCount, totalCount, percent };
+    }, [
+        driverProfile, vModel, pNumber, plateState, driverLicense, driverNin,
+        licenseExpiry, insurancePolicy, experience, emergencyContactName,
+        guarantorName, operatingCity, shiftAvailability, cargoCapabilities
+    ]);
 
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -2254,6 +2313,45 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 {activeTab === 'profile' && (
                     <View style={styles.tabContentSection}>
 
+                        {/* ── 5.0 Courier Profile Completion Meter (Real dynamic progress, NO mockups) ── */}
+                        <View style={[styles.profileSection, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: profileCompletionStats.percent === 100 ? '#10B981' : GOLD }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="speedometer" size={16} color={profileCompletionStats.percent === 100 ? SUCCESS : GOLD} />
+                                    <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>Profile Completion</Text>
+                                </View>
+                                <View style={{ backgroundColor: profileCompletionStats.percent === 100 ? '#ECFDF5' : '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: '900', color: profileCompletionStats.percent === 100 ? SUCCESS : '#92400E' }}>
+                                        {profileCompletionStats.percent}% COMPLETE
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={[styles.xpBarTrack, { height: 7, backgroundColor: '#E2E8F0', marginBottom: 8 }]}>
+                                <View style={[
+                                    styles.xpBarFill,
+                                    {
+                                        width: `${profileCompletionStats.percent}%`,
+                                        backgroundColor: profileCompletionStats.percent === 100 ? SUCCESS : GOLD
+                                    }
+                                ]} />
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={{ fontSize: 11, color: TEXT_MUTED }}>
+                                    {profileCompletionStats.filledCount} of {profileCompletionStats.totalCount} verification fields completed
+                                </Text>
+                                {profileCompletionStats.percent < 100 && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setModalActiveSection('all');
+                                            setVehicleModalVisible(true);
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: BLUE }}>+ Complete Profile</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+
                         {/* ── 5A. Courier Credentials & Compliance Card ── */}
                         <View style={styles.profileSection}>
                             <View style={styles.profileSectionHeader}>
@@ -2274,56 +2372,104 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 </TouchableOpacity>
                             </View>
 
+                            {/* Driver License */}
                             <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
                                     <Ionicons name="card" size={15} color={BLUE} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.credLabel}>DRIVER LICENSE NO.</Text>
-                                    <Text style={styles.credValue}>{driverProfile?.driver_license || driverLicense || 'DL-84291-KMC'}</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.driver_license || driverLicense) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.driver_license || driverLicense || 'Ba a saita ba (Not Provided)'}
+                                    </Text>
                                 </View>
-                                <View style={styles.credVerifiedBadge}>
-                                    <Text style={styles.credVerifiedText}>VERIFIED</Text>
-                                </View>
+                                {(driverProfile?.driver_license || driverLicense) ? (
+                                    <View style={styles.credVerifiedBadge}>
+                                        <Text style={styles.credVerifiedText}>VERIFIED</Text>
+                                    </View>
+                                ) : (
+                                    <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF3C7' }]}>
+                                        <Text style={[styles.credVerifiedText, { color: '#92400E' }]}>UNSET</Text>
+                                    </View>
+                                )}
                             </View>
 
+                            {/* National ID (NIN) */}
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="finger-print" size={15} color={HEADER_NAVY} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>NATIONAL NIN</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.driver_nin || driverNin) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {(driverProfile?.driver_nin || driverNin)
+                                            ? `•••••• ${(driverProfile?.driver_nin || driverNin).slice(-4)}`
+                                            : 'Ba a saita ba (Not Provided)'}
+                                    </Text>
+                                </View>
+                                {(driverProfile?.driver_nin || driverNin) ? (
+                                    <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
+                                        <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>LINKED</Text>
+                                    </View>
+                                ) : null}
+                            </View>
+
+                            {/* License Class */}
                             <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
                                     <Ionicons name="ribbon-outline" size={15} color={AMBER} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.credLabel}>LICENSE CLASS / CATEGORY</Text>
-                                    <Text style={styles.credValue}>{driverProfile?.license_class || licenseClass || 'Class A (Riders / Dispatch)'}</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.license_class || licenseClass) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.license_class || licenseClass || 'Ba a ayyana ba (Not Specified)'}
+                                    </Text>
                                 </View>
-                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF3C7' }]}>
-                                    <Text style={[styles.credVerifiedText, { color: '#92400E' }]}>ACTIVE</Text>
-                                </View>
+                                {(driverProfile?.license_class || licenseClass) ? (
+                                    <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF3C7' }]}>
+                                        <Text style={[styles.credVerifiedText, { color: '#92400E' }]}>ACTIVE</Text>
+                                    </View>
+                                ) : null}
                             </View>
 
+                            {/* License Expiry */}
                             <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
                                     <Ionicons name="calendar-outline" size={15} color={SUCCESS} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.credLabel}>EXPIRY DATE</Text>
-                                    <Text style={styles.credValue}>{driverProfile?.license_expiry || licenseExpiry || '12/2027'}</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.license_expiry || licenseExpiry) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.license_expiry || licenseExpiry || 'Ba a saita ba (Not Set)'}
+                                    </Text>
                                 </View>
-                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
-                                    <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>VALID</Text>
-                                </View>
+                                {(driverProfile?.license_expiry || licenseExpiry) ? (
+                                    <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
+                                        <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>VALID</Text>
+                                    </View>
+                                ) : null}
                             </View>
 
+                            {/* Insurance Policy */}
                             <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
                                     <Ionicons name="shield" size={15} color={BLUE} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.credLabel}>INSURANCE POLICY & STATUS</Text>
-                                    <Text style={styles.credValue}>{driverProfile?.insurance_policy || insurancePolicy || 'Leadway Third-Party Commercial'}</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.insurance_policy || insurancePolicy) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.insurance_policy || insurancePolicy || 'Babu Inshora (No Policy Added)'}
+                                    </Text>
                                 </View>
-                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
-                                    <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>ACTIVE</Text>
-                                </View>
+                                {(driverProfile?.insurance_policy || insurancePolicy) ? (
+                                    <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
+                                        <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>ACTIVE</Text>
+                                    </View>
+                                ) : (
+                                    <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF2F2' }]}>
+                                        <Text style={[styles.credVerifiedText, { color: DANGER }]}>UNINSURED</Text>
+                                    </View>
+                                )}
                             </View>
                         </View>
 
@@ -2356,17 +2502,23 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="cube" size={18} color={TEXT_MUTED} />
                                     <Text style={styles.vehicleSpecLabel}>MODEL</Text>
-                                    <Text style={styles.vehicleSpecVal} numberOfLines={2}>{driverProfile?.vehicle_model || vModel || 'Bajaj Boxer BM150'}</Text>
+                                    <Text style={[styles.vehicleSpecVal, !(driverProfile?.vehicle_model || vModel) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]} numberOfLines={2}>
+                                        {driverProfile?.vehicle_model || vModel || 'Ba a saita ba'}
+                                    </Text>
                                 </View>
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="calendar" size={18} color={TEXT_MUTED} />
                                     <Text style={styles.vehicleSpecLabel}>YEAR</Text>
-                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_year || vehicleYear || '2023'}</Text>
+                                    <Text style={[styles.vehicleSpecVal, !(driverProfile?.vehicle_year || vehicleYear) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.vehicle_year || vehicleYear || '—'}
+                                    </Text>
                                 </View>
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="color-palette" size={18} color={TEXT_MUTED} />
                                     <Text style={styles.vehicleSpecLabel}>COLOR</Text>
-                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_color || vColor || 'Silver'}</Text>
+                                    <Text style={[styles.vehicleSpecVal, !(driverProfile?.vehicle_color || vColor) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.vehicle_color || vColor || '—'}
+                                    </Text>
                                 </View>
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="flame" size={18} color={TEXT_MUTED} />
@@ -2376,23 +2528,55 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="archive" size={18} color={TEXT_MUTED} />
                                     <Text style={styles.vehicleSpecLabel}>PAYLOAD</Text>
-                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.payload_capacity || payloadCapacity || '65 kg'}</Text>
+                                    <Text style={[styles.vehicleSpecVal, !(driverProfile?.payload_capacity || payloadCapacity) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.payload_capacity || payloadCapacity || '—'}
+                                    </Text>
                                 </View>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="shield-checkmark" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>CONDITION</Text>
+                                    <Text style={[styles.vehicleSpecVal, !(driverProfile?.vehicle_condition || vehicleCondition) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.vehicle_condition || vehicleCondition || 'Ba a saita ba'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Accepted Cargo / Package Types */}
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE, letterSpacing: 0.5, marginBottom: 4 }}>ACCEPTED CARGO & PACKAGE TYPES</Text>
+                                <Text style={[styles.credValue, !(driverProfile?.cargo_capabilities || cargoCapabilities) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                    {driverProfile?.cargo_capabilities || cargoCapabilities || 'Ba a zaba ba (Not Specified)'}
+                                </Text>
                             </View>
 
                             {/* Nigerian Plate Tag */}
                             <View style={styles.plateTagWrap}>
-                                <View style={styles.plateTag}>
-                                    <View style={styles.plateTagFlag}>
-                                        <Text style={styles.plateTagFlagText}>🇳🇬</Text>
+                                {(driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber) ? (
+                                    <View style={styles.plateTag}>
+                                        <View style={styles.plateTagFlag}>
+                                            <Text style={styles.plateTagFlagText}>🇳🇬</Text>
+                                        </View>
+                                        <Text style={styles.plateTagNumber}>
+                                            {(driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber).toUpperCase()}
+                                        </Text>
+                                        {(driverProfile?.plate_state || plateState) ? (
+                                            <Text style={styles.plateTagState}>
+                                                {(driverProfile?.plate_state || plateState).toUpperCase()}
+                                            </Text>
+                                        ) : null}
                                     </View>
-                                    <Text style={styles.plateTagNumber}>
-                                        {(driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber || 'KMC 492 XA').toUpperCase()}
-                                    </Text>
-                                    <Text style={styles.plateTagState}>
-                                        {(driverProfile?.plate_state || plateState || 'KANO').toUpperCase()}
-                                    </Text>
-                                </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setModalActiveSection('vehicle');
+                                            setVehicleModalVisible(true);
+                                        }}
+                                        style={[styles.plateTag, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', borderStyle: 'dashed' }]}
+                                    >
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: TEXT_MUTED }}>Babu Lambar Mota (No Plate Added)</Text>
+                                        <Text style={{ fontSize: 11, color: GOLD, fontWeight: '800' }}>• Danna don Karawa</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </View>
 
@@ -2419,8 +2603,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             {/* Main Experience Summary */}
                             <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: BORDER_COLOR }}>
                                 <Text style={{ fontSize: 10, fontWeight: '800', color: TEXT_SUBTLE, letterSpacing: 0.5, marginBottom: 4 }}>PROFESSIONAL TITLE / SUMMARY</Text>
-                                <Text style={{ fontSize: 13.5, fontWeight: '800', color: TEXT_DARK }}>
-                                    {driverProfile?.experience || experience || 'Certified Urban Logistics Dispatch Specialist'}
+                                <Text style={[styles.credValue, !(driverProfile?.experience || experience) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                    {driverProfile?.experience || experience || 'Babu bayanin kwarewa (No summary provided)'}
                                 </Text>
                             </View>
 
@@ -2429,13 +2613,13 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR }}>
                                     <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE }}>TOTAL EXP.</Text>
                                     <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK, marginTop: 2 }}>
-                                        {driverProfile?.experience_years || experienceYears || '3+ Years'}
+                                        {driverProfile?.experience_years || experienceYears || '—'}
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR }}>
                                     <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE }}>START DATE</Text>
                                     <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK, marginTop: 2 }}>
-                                        {driverProfile?.driver_start_date || driverStartDate || 'Jan 2022'}
+                                        {driverProfile?.driver_start_date || driverStartDate || '—'}
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR }}>
@@ -2453,21 +2637,87 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.credLabel}>PREVIOUS LOGISTICS HUBS</Text>
-                                    <Text style={styles.credValue} numberOfLines={2}>
-                                        {driverProfile?.previous_logistics || previousLogistics || 'GIG Logistics, DHL Express Kano'}
+                                    <Text style={[styles.credValue, !(driverProfile?.previous_logistics || previousLogistics) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]} numberOfLines={2}>
+                                        {driverProfile?.previous_logistics || previousLogistics || 'Babu (None recorded)'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* ── 5D. Delivery Zones, Shift Availability & Emergency (NEW FEATURES!) ── */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <View style={styles.profileSectionIconWrap}>
+                                    <Ionicons name="map" size={16} color={GOLD} />
+                                </View>
+                                <Text style={styles.profileSectionTitle}>Operating Zones & Emergency Contact</Text>
+                                <TouchableOpacity
+                                    style={styles.profileEditBtn}
+                                    onPress={() => {
+                                        setModalActiveSection('zones');
+                                        setVehicleModalVisible(true);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="create" size={13} color={TEXT_DARK} />
+                                    <Text style={styles.profileEditBtnText}>Edit</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Operating City & Delivery Route */}
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="location" size={15} color={BLUE} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>PRIMARY DELIVERY ZONE & CITY</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.operating_city || operatingCity) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {(driverProfile?.operating_city || operatingCity)
+                                            ? `${driverProfile?.operating_city || operatingCity}${(driverProfile?.operating_areas || operatingAreas) ? ` • ${driverProfile?.operating_areas || operatingAreas}` : ''}`
+                                            : 'Ba a saita ba (Not Specified)'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Shift Availability */}
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="time" size={15} color={SUCCESS} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>ACTIVE SHIFT AVAILABILITY</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.shift_availability || shiftAvailability) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {driverProfile?.shift_availability || shiftAvailability || 'Ba a saita ba (Not Set)'}
                                     </Text>
                                 </View>
                             </View>
 
                             {/* Emergency Contact */}
-                            <View style={[styles.credRow, { borderBottomWidth: 0, paddingBottom: 2 }]}>
+                            <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
-                                    <Ionicons name="call" size={15} color={SUCCESS} />
+                                    <Ionicons name="call" size={15} color={DANGER} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.credLabel}>EMERGENCY CONTACT & NEXT OF KIN</Text>
-                                    <Text style={styles.credValue}>
-                                        {driverProfile?.emergency_contact_name || emergencyContactName || 'Ibrahim Sani'} • {driverProfile?.emergency_contact_phone || emergencyContactPhone || '+234 803 123 4567'}
+                                    <Text style={[styles.credValue, !(driverProfile?.emergency_contact_name || emergencyContactName) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {(driverProfile?.emergency_contact_name || emergencyContactName)
+                                            ? `${driverProfile?.emergency_contact_name || emergencyContactName} • ${driverProfile?.emergency_contact_phone || emergencyContactPhone || 'Babu lamba'}`
+                                            : 'Ba a bayar ba (Not Provided)'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Guarantor / Referee */}
+                            <View style={[styles.credRow, { borderBottomWidth: 0, paddingBottom: 2 }]}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="person-circle" size={15} color={HEADER_NAVY} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>GUARANTOR / REFEREE</Text>
+                                    <Text style={[styles.credValue, !(driverProfile?.guarantor_name || guarantorName) && { color: TEXT_MUTED, fontStyle: 'italic', fontWeight: '500' }]}>
+                                        {(driverProfile?.guarantor_name || guarantorName)
+                                            ? `${driverProfile?.guarantor_name || guarantorName} • ${driverProfile?.guarantor_phone || guarantorPhone || 'Babu lamba'}`
+                                            : 'Ba a bayar ba (Not Provided)'}
                                     </Text>
                                 </View>
                             </View>
@@ -3174,9 +3424,11 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                                 {[
                                     { id: 'all', label: '📋 All Details' },
-                                    { id: 'vehicle', label: '🚗 Vehicle Specs' },
-                                    { id: 'license', label: '🪪 Driver License' },
-                                    { id: 'experience', label: '🏆 Experience & Info' }
+                                    { id: 'vehicle', label: '🚗 Vehicle & Cargo' },
+                                    { id: 'license', label: '🪪 License & NIN' },
+                                    { id: 'experience', label: '🏆 Experience' },
+                                    { id: 'zones', label: '📍 Zones & Shifts' },
+                                    { id: 'guarantor', label: '🛡️ Guarantor & Next-of-Kin' }
                                 ].map(tab => (
                                     <TouchableOpacity
                                         key={tab.id}
@@ -3204,12 +3456,12 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                         {/* Modal Body ScrollView */}
                         <ScrollView style={{ padding: 18 }} showsVerticalScrollIndicator={false}>
-                            {/* SECTION 1: VEHICLE SPECIFICATIONS */}
+                            {/* SECTION 1: VEHICLE SPECIFICATIONS & CARGO CAPABILITIES */}
                             {(modalActiveSection === 'all' || modalActiveSection === 'vehicle') && (
                                 <View style={{ marginBottom: 20 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                                         <Ionicons name="car-sport" size={16} color={GOLD} />
-                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>1. Vehicle Specifications</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>1. Vehicle Specifications & Cargo Handling</Text>
                                     </View>
 
                                     <Text style={styles.inputFieldLabel}>Vehicle Type</Text>
@@ -3326,15 +3578,71 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                             </TouchableOpacity>
                                         ))}
                                     </ScrollView>
+
+                                    {/* Vehicle Condition / Roadworthiness */}
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Vehicle Condition & Roadworthiness</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
+                                        {['Brand New / Mint', 'Good Roadworthy', 'Fair / Regular Service', 'Under Maintenance'].map(vc => (
+                                            <TouchableOpacity
+                                                key={vc}
+                                                onPress={() => setVehicleCondition(vc)}
+                                                style={{
+                                                    paddingHorizontal: 11,
+                                                    paddingVertical: 6,
+                                                    borderRadius: 8,
+                                                    backgroundColor: vehicleCondition === vc ? '#ECFDF5' : '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: vehicleCondition === vc ? SUCCESS : BORDER_COLOR
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 11, fontWeight: '700', color: vehicleCondition === vc ? SUCCESS : TEXT_DARK }}>{vc}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+
+                                    {/* Accepted Cargo Types */}
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Accepted Cargo & Package Handling Types</Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                                        {[
+                                            'Small Parcels & Documents',
+                                            'Food & Groceries',
+                                            'Electronics & Fragile',
+                                            'Bulky Cargo / Sacks'
+                                        ].map(item => {
+                                            const list = cargoCapabilities ? cargoCapabilities.split(', ').filter(Boolean) : [];
+                                            const isSelected = list.includes(item);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={item}
+                                                    onPress={() => {
+                                                        const updated = isSelected ? list.filter(x => x !== item) : [...list, item];
+                                                        setCargoCapabilities(updated.join(', '));
+                                                    }}
+                                                    style={{
+                                                        paddingHorizontal: 10,
+                                                        paddingVertical: 6,
+                                                        borderRadius: 8,
+                                                        backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                                                        borderWidth: 1,
+                                                        borderColor: isSelected ? BLUE : BORDER_COLOR
+                                                    }}
+                                                >
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? BLUE : TEXT_DARK }}>
+                                                        {isSelected ? '✓ ' : '+ '}{item}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
                                 </View>
                             )}
 
-                            {/* SECTION 2: DRIVER LICENSE & CREDENTIALS */}
+                            {/* SECTION 2: DRIVER LICENSE & NIN CREDENTIALS */}
                             {(modalActiveSection === 'all' || modalActiveSection === 'license') && (
                                 <View style={{ marginBottom: 20 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                                         <Ionicons name="card" size={16} color={BLUE} />
-                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>2. Driver License & Insurance Compliance</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>2. Driver License & NIN Identity Compliance</Text>
                                     </View>
 
                                     <Text style={styles.inputFieldLabel}>Driver License Number</Text>
@@ -3347,7 +3655,19 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         autoCapitalize="characters"
                                     />
 
-                                    <Text style={styles.inputFieldLabel}>License Class / Category</Text>
+                                    {/* National NIN */}
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>National Identification Number (NIN)</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={driverNin}
+                                        onChangeText={setDriverNin}
+                                        placeholder="e.g. 11-digit National NIN"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                        keyboardType="numeric"
+                                        maxLength={11}
+                                    />
+
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>License Class / Category</Text>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
                                         {[
                                             'Class A (Rider / Dispatch)',
@@ -3372,7 +3692,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         ))}
                                     </ScrollView>
 
-                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.inputFieldLabel}>License Expiry Date</Text>
                                             <TextInput
@@ -3395,7 +3715,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         </View>
                                     </View>
 
-                                    <Text style={styles.inputFieldLabel}>Insurance Policy & Provider</Text>
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Insurance Policy & Provider</Text>
                                     <TextInput
                                         style={styles.textInputModern}
                                         value={insurancePolicy}
@@ -3406,12 +3726,12 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 </View>
                             )}
 
-                            {/* SECTION 3: DRIVER EXPERIENCE & EMERGENCY CONTACT */}
+                            {/* SECTION 3: DRIVER EXPERIENCE & CAREER */}
                             {(modalActiveSection === 'all' || modalActiveSection === 'experience') && (
                                 <View style={{ marginBottom: 20 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                                         <Ionicons name="ribbon" size={16} color={GOLD} />
-                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>3. Courier Experience & Emergency Contact</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>3. Courier Track Record & Experience</Text>
                                     </View>
 
                                     <Text style={styles.inputFieldLabel}>Professional Title & Seniority</Text>
@@ -3423,7 +3743,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         placeholderTextColor={TEXT_SUBTLE}
                                     />
 
-                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.inputFieldLabel}>Total Experience</Text>
                                             <TextInput
@@ -3446,7 +3766,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         </View>
                                     </View>
 
-                                    <Text style={styles.inputFieldLabel}>Previous Delivery Hubs / Companies</Text>
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Previous Delivery Hubs / Companies</Text>
                                     <TextInput
                                         style={styles.textInputModern}
                                         value={previousLogistics}
@@ -3454,15 +3774,99 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         placeholder="e.g. DHL Kano Central, GIG Logistics, Abu Mafhal Fast"
                                         placeholderTextColor={TEXT_SUBTLE}
                                     />
+                                </View>
+                            )}
+
+                            {/* SECTION 4: OPERATING DELIVERY ZONES & SHIFTS */}
+                            {(modalActiveSection === 'all' || modalActiveSection === 'zones') && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                        <Ionicons name="map" size={16} color={GOLD} />
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>4. Operating Delivery Zones & Shifts</Text>
+                                    </View>
+
+                                    <Text style={styles.inputFieldLabel}>Primary Operating City</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 8 }}>
+                                        {['Kano', 'Abuja FCT', 'Kaduna', 'Lagos', 'Katsina', 'Jigawa', 'Bauchi', 'Sokoto', 'Jos'].map(ct => (
+                                            <TouchableOpacity
+                                                key={ct}
+                                                onPress={() => setOperatingCity(ct)}
+                                                style={{
+                                                    paddingHorizontal: 12,
+                                                    paddingVertical: 7,
+                                                    borderRadius: 8,
+                                                    backgroundColor: operatingCity === ct ? '#FEF3C7' : '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: operatingCity === ct ? GOLD : BORDER_COLOR
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: operatingCity === ct ? '#92400E' : TEXT_DARK }}>{ct}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+
+                                    <TextInput
+                                        style={[styles.textInputModern, { marginTop: 4 }]}
+                                        value={operatingCity}
+                                        onChangeText={setOperatingCity}
+                                        placeholder="Or type custom city (e.g. Kano, Zaria, etc.)"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Coverage Municipalities & Neighborhoods</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={operatingAreas}
+                                        onChangeText={setOperatingAreas}
+                                        placeholder="e.g. Kano Municipal, Fagge, Tarauni, Nasarawa, Dala, Ungogo"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+
+                                    <Text style={[styles.inputFieldLabel, { marginTop: 10 }]}>Active Shift Availability</Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                                        {[
+                                            'Full-Time (Duk Rana)',
+                                            'Safe / Morning (8am - 2pm)',
+                                            'Yamma / Evening (2pm - 9pm)',
+                                            'Dare / Night (9pm - 5am)',
+                                            'Karshen Mako (Weekends Only)',
+                                            'On-Demand (Lokacin Buqata)'
+                                        ].map(shift => (
+                                            <TouchableOpacity
+                                                key={shift}
+                                                onPress={() => setShiftAvailability(shift)}
+                                                style={{
+                                                    paddingHorizontal: 11,
+                                                    paddingVertical: 7,
+                                                    borderRadius: 8,
+                                                    backgroundColor: shiftAvailability === shift ? '#EFF6FF' : '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: shiftAvailability === shift ? BLUE : BORDER_COLOR
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 11, fontWeight: '700', color: shiftAvailability === shift ? BLUE : TEXT_DARK }}>{shift}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* SECTION 5: EMERGENCY CONTACT & GUARANTOR VERIFICATION */}
+                            {(modalActiveSection === 'all' || modalActiveSection === 'guarantor') && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                        <Ionicons name="shield-checkmark" size={16} color={SUCCESS} />
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>5. Emergency Contact & Guarantor (Mai Tsaya)</Text>
+                                    </View>
 
                                     <View style={{ flexDirection: 'row', gap: 10 }}>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={styles.inputFieldLabel}>Emergency Contact Name</Text>
+                                            <Text style={styles.inputFieldLabel}>Emergency Contact / Next of Kin</Text>
                                             <TextInput
                                                 style={styles.textInputModern}
                                                 value={emergencyContactName}
                                                 onChangeText={setEmergencyContactName}
-                                                placeholder="e.g. Ibrahim Sani (Brother)"
+                                                placeholder="e.g. Next of Kin Name"
                                                 placeholderTextColor={TEXT_SUBTLE}
                                             />
                                         </View>
@@ -3472,7 +3876,31 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                                 style={styles.textInputModern}
                                                 value={emergencyContactPhone}
                                                 onChangeText={setEmergencyContactPhone}
-                                                placeholder="e.g. 08031234567"
+                                                placeholder="e.g. 08012345678"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                                keyboardType="phone-pad"
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Guarantor Full Name (Mai Tsaya)</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={guarantorName}
+                                                onChangeText={setGuarantorName}
+                                                placeholder="e.g. Alh. Sani Garba"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Guarantor Phone Number</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={guarantorPhone}
+                                                onChangeText={setGuarantorPhone}
+                                                placeholder="e.g. 08098765432"
                                                 placeholderTextColor={TEXT_SUBTLE}
                                                 keyboardType="phone-pad"
                                             />
