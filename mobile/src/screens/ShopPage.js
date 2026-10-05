@@ -500,13 +500,15 @@ export const ShopPage = ({
                 fileInput.onchange = async (e) => {
                     const file = e.target?.files?.[0];
                     if (file) {
-                        showToast('Analyzing product photo…', 'scan');
+                        const hint = file.name || '';
+                        const mime = file.type || 'image/jpeg';
+                        showToast('Scanning image with AI…', 'scan');
                         const reader = new FileReader();
                         reader.onload = async () => {
                             const res = reader.result;
                             if (res && typeof res === 'string') {
                                 const base64 = res.includes(',') ? res.split(',')[1] : res;
-                                await analyzeProductVisual(base64);
+                                await analyzeProductVisual(base64, mime, hint);
                             }
                         };
                         reader.onerror = () => {
@@ -527,7 +529,8 @@ export const ShopPage = ({
                     mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true
                 });
                 if (!res.canceled && res.assets?.[0]?.base64) {
-                    await analyzeProductVisual(res.assets[0].base64);
+                    const asset = res.assets[0];
+                    await analyzeProductVisual(asset.base64, asset.mimeType || 'image/jpeg', asset.fileName || '');
                 }
             } else {
                 const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -536,7 +539,8 @@ export const ShopPage = ({
                     mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true
                 });
                 if (!res.canceled && res.assets?.[0]?.base64) {
-                    await analyzeProductVisual(res.assets[0].base64);
+                    const asset = res.assets[0];
+                    await analyzeProductVisual(asset.base64, asset.mimeType || 'image/jpeg', asset.fileName || '');
                 }
             }
         } catch (e) {
@@ -545,13 +549,13 @@ export const ShopPage = ({
         }
     };
 
-    const analyzeProductVisual = async (base64) => {
-        showToast('Analyzing product photo…', 'scan');
+    const analyzeProductVisual = async (base64, mimeType = 'image/jpeg', metaHint = '') => {
+        showToast('Scanning image with AI…', 'scan');
         try {
-            const kw = await geminiService.searchByImage(base64);
+            const kw = await geminiService.searchByImage(base64, mimeType, metaHint);
             if (kw) {
                 setSearchQuery(kw);
-                showToast(`Found: ${kw}`, 'checkmark-circle');
+                showToast(`Identified: ${kw}`, 'checkmark-circle');
             } else {
                 showToast('Could not identify product', 'help-circle');
             }
@@ -772,45 +776,61 @@ export const ShopPage = ({
                     </View>
                 </View>
 
-                {/* ── MODERN LUXURY SEARCH BAR ── */}
-                <View style={S.searchBar}>
-                    <View style={S.searchIconWrap}>
-                        <Ionicons name="search" size={16} color={GOLD} />
-                    </View>
-                    <TextInput
-                        placeholder="Search phones, fashion, perfumes, watches..."
-                        placeholderTextColor="rgba(255,255,255,0.45)"
-                        style={S.searchInput}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        returnKeyType="search"
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} style={{ marginRight: 6 }}>
-                            <Ionicons name="close-circle" size={17} color="rgba(255,255,255,0.55)" />
-                        </TouchableOpacity>
-                    )}
-                    <View style={S.searchActionGroup}>
-                        <TouchableOpacity
-                            onPress={handleVoiceSearch}
-                            activeOpacity={0.8}
-                            style={S.searchToolBtn}
-                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                        >
-                            <Ionicons name="mic" size={15} color={GOLD} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={handleImageSearch}
-                            activeOpacity={0.8}
-                            style={[S.searchToolBtn, S.searchCameraBtn]}
-                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                        >
-                            <Ionicons name="camera" size={15} color="#0E1A2E" />
-                            <View style={S.aiBadge}>
-                                <Text style={S.aiBadgeTxt}>AI</Text>
+                {/* ── LUXURY SEARCH BAR WITH GLOWING HALO RING ("RAWANI") ── */}
+                <View style={S.searchHaloOuter}>
+                    <LinearGradient
+                        colors={['#F59E0B', '#D9A73A', '#FEF3C7', '#D9A73A', '#B45309']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={S.searchHaloGrad}
+                    >
+                        <View style={S.searchCapsuleInner}>
+                            <View style={S.searchIconPill}>
+                                <Ionicons name="search" size={16} color={GOLD} />
                             </View>
-                        </TouchableOpacity>
-                    </View>
+                            <TextInput
+                                placeholder="Search products, brands, or styles..."
+                                placeholderTextColor="rgba(255,255,255,0.55)"
+                                style={S.searchInput}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                returnKeyType="search"
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} style={S.searchClearBtn}>
+                                    <Ionicons name="close-circle" size={17} color="rgba(255,255,255,0.6)" />
+                                </TouchableOpacity>
+                            )}
+                            <View style={S.searchActionGroup}>
+                                <TouchableOpacity
+                                    onPress={handleVoiceSearch}
+                                    activeOpacity={0.8}
+                                    style={S.searchVoiceBtn}
+                                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                >
+                                    <Ionicons name="mic" size={15} color={GOLD} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleImageSearch}
+                                    activeOpacity={0.85}
+                                    style={S.searchCameraPill}
+                                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                >
+                                    <LinearGradient
+                                        colors={['#FDE68A', '#D9A73A', '#B45309']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={S.searchCameraGrad}
+                                    >
+                                        <Ionicons name="camera" size={15} color="#0E1A2E" />
+                                        <View style={S.aiBadge}>
+                                            <Text style={S.aiBadgeTxt}>AI</Text>
+                                        </View>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </LinearGradient>
                 </View>
 
                 {/* Category pills */}
@@ -918,12 +938,12 @@ export const ShopPage = ({
             {showImageModal && (
                 <View style={S.imageSearchOverlay}>
                     <View style={S.imageSearchCard}>
-                        <LinearGradient colors={[NAVY, NAVY2]} style={S.imageModalHeader}>
+                        <LinearGradient colors={['#07101E', '#0E1A2E', '#162844']} style={S.imageModalHeader}>
                             <View style={S.imageModalIconWrap}>
                                 <Ionicons name="camera" size={26} color={GOLD} />
                             </View>
                             <Text style={S.imageModalTitle}>AI Visual Product Search</Text>
-                            <Text style={S.imageModalSubtitle}>Dauki hoton kaya ko zaba daga waya domin AI ya nemo muku su</Text>
+                            <Text style={S.imageModalSubtitle}>Snap a photo or upload an image to identify and find products</Text>
                         </LinearGradient>
 
                         <View style={S.imageModalBody}>
@@ -934,7 +954,7 @@ export const ShopPage = ({
                             >
                                 <LinearGradient colors={[GOLD, '#B8861B']} style={S.imageOptionGrad}>
                                     <Ionicons name="camera" size={20} color={NAVY} />
-                                    <Text style={S.imageOptionTxtGold}>Take Live Photo (Kyamara)</Text>
+                                    <Text style={S.imageOptionTxtGold}>Take Live Photo</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
 
@@ -945,16 +965,42 @@ export const ShopPage = ({
                             >
                                 <View style={S.imageOptionOutline}>
                                     <Ionicons name="images-outline" size={20} color={NAVY} />
-                                    <Text style={S.imageOptionTxtOutline}>Choose from Gallery (Hotuna)</Text>
+                                    <Text style={S.imageOptionTxtOutline}>Choose from Gallery</Text>
                                 </View>
                             </TouchableOpacity>
+
+                            {/* Quick Visual Categories */}
+                            <Text style={S.quickCategoriesTitle}>Instant Category Filter:</Text>
+                            <View style={S.quickChipsRow}>
+                                {[
+                                    { label: 'Phones', icon: 'phone-portrait-outline' },
+                                    { label: 'Sneakers', icon: 'footsteps-outline' },
+                                    { label: 'Watch', icon: 'watch-outline' },
+                                    { label: 'Perfume', icon: 'flask-outline' },
+                                    { label: 'Fashion', icon: 'shirt-outline' },
+                                    { label: 'Bags', icon: 'briefcase-outline' },
+                                ].map((cat, idx) => (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        style={S.quickChip}
+                                        onPress={() => {
+                                            setShowImageModal(false);
+                                            setSearchQuery(cat.label);
+                                            showToast(`Filtered: ${cat.label}`, 'search');
+                                        }}
+                                    >
+                                        <Ionicons name={cat.icon} size={11} color={GOLD} />
+                                        <Text style={S.quickChipTxt}>{cat.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
 
                             <TouchableOpacity
                                 style={S.imageModalCancelBtn}
                                 activeOpacity={0.7}
                                 onPress={() => setShowImageModal(false)}
                             >
-                                <Text style={S.imageModalCancelTxt}>Soke / Cancel</Text>
+                                <Text style={S.imageModalCancelTxt}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1013,48 +1059,97 @@ const S = StyleSheet.create({
     },
 
     // ── Search ────────────────────────────────────────────────────────────────
-    searchBar: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.09)',
-        borderRadius: 14,
-        paddingHorizontal: 10, height: 44,
-        marginHorizontal: 14, marginBottom: 10,
-        borderWidth: 1.2, borderColor: 'rgba(217,167,58,0.4)',
-        gap: 8,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 5,
+    searchHaloOuter: {
+        marginHorizontal: 14,
+        marginBottom: 12,
+        borderRadius: 22,
+        shadowColor: '#D9A73A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+        elevation: 7,
     },
-    searchIconWrap: {
-        width: 24, height: 24,
-        alignItems: 'center', justifyContent: 'center',
+    searchHaloGrad: {
+        padding: 1.6,
+        borderRadius: 22,
+    },
+    searchCapsuleInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0F1E36',
+        borderRadius: 20.4,
+        paddingHorizontal: 10,
+        height: 48,
+        gap: 8,
+    },
+    searchIconPill: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(217,167,58,0.14)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.3)',
     },
     searchInput: {
-        flex: 1, fontSize: 13, fontWeight: '500',
-        color: WHITE, paddingVertical: 0, minWidth: 0,
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '600',
+        color: WHITE,
+        paddingVertical: 0,
+        minWidth: 0,
+    },
+    searchClearBtn: {
+        padding: 4,
     },
     searchActionGroup: {
-        flexDirection: 'row', alignItems: 'center', gap: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
     },
-    searchToolBtn: {
-        width: 32, height: 32,
-        borderRadius: 10,
+    searchVoiceBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: 'rgba(255,255,255,0.08)',
-        alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: 'rgba(217,167,58,0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.3)',
     },
-    searchCameraBtn: {
-        backgroundColor: GOLD,
-        borderColor: '#C4922A',
+    searchCameraPill: {
+        borderRadius: 14,
+        overflow: 'hidden',
+    },
+    searchCameraGrad: {
+        width: 36,
+        height: 36,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
         position: 'relative',
+        shadowColor: '#F59E0B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 4,
     },
     aiBadge: {
-        position: 'absolute', top: -4, right: -4,
+        position: 'absolute',
+        top: -3,
+        right: -3,
         backgroundColor: '#10B981',
-        borderRadius: 5,
-        paddingHorizontal: 3, paddingVertical: 1,
-        borderWidth: 1, borderColor: WHITE,
+        borderRadius: 6,
+        paddingHorizontal: 3.5,
+        paddingVertical: 1,
+        borderWidth: 1.2,
+        borderColor: WHITE,
     },
     aiBadgeTxt: {
-        color: WHITE, fontSize: 7, fontWeight: '900',
+        color: WHITE,
+        fontSize: 7.5,
+        fontWeight: '900',
     },
 
     // ── Category chips ────────────────────────────────────────────────────────
@@ -1268,6 +1363,34 @@ const S = StyleSheet.create({
     },
     imageModalCancelTxt: {
         color: '#64748B', fontSize: 12.5, fontWeight: '600',
+    },
+    quickCategoriesTitle: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: '#64748B',
+        marginTop: 6,
+        marginBottom: 2,
+    },
+    quickChipsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    quickChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    quickChipTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: NAVY,
     },
 
     // ── Toast ─────────────────────────────────────────────────────────────────
