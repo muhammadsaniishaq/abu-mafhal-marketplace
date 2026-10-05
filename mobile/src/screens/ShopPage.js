@@ -838,28 +838,25 @@ export const ShopPage = ({
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} style={{ marginRight: 6 }}>
-                            <Ionicons name="close-circle" size={17} color="#94A3B8" />
+                            <Ionicons name="close" size={18} color="#94A3B8" />
                         </TouchableOpacity>
                     )}
                     <View style={S.searchActionsRow}>
                         <TouchableOpacity
                             onPress={handleVoiceSearch}
-                            activeOpacity={0.75}
-                            style={S.searchActionBtn}
-                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            style={S.searchActionIconBtn}
                         >
-                            <Ionicons name="mic-outline" size={16} color="#475569" />
+                            <Ionicons name="mic-outline" size={18} color="#64748B" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={handleImageSearch}
-                            activeOpacity={0.75}
-                            style={[S.searchActionBtn, S.cameraActionBtn]}
-                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            style={S.searchActionIconBtn}
                         >
-                            <Ionicons name="camera-outline" size={16} color="#0284C7" />
-                            <View style={S.aiMicroBadge}>
-                                <Text style={S.aiMicroBadgeTxt}>AI</Text>
-                            </View>
+                            <Ionicons name="camera-outline" size={18} color="#0284C7" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1205,37 +1202,12 @@ const S = StyleSheet.create({
     searchActionsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
     },
-    searchActionBtn: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+    searchActionIconBtn: {
+        padding: 4,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    cameraActionBtn: {
-        backgroundColor: '#F0F9FF',
-        borderWidth: 1,
-        borderColor: '#BAE6FD',
-        position: 'relative',
-    },
-    aiMicroBadge: {
-        position: 'absolute',
-        top: -4,
-        right: -4,
-        backgroundColor: '#10B981',
-        borderRadius: 5,
-        paddingHorizontal: 3,
-        paddingVertical: 0.5,
-    },
-    aiMicroBadgeTxt: {
-        color: WHITE,
-        fontSize: 6.5,
-        fontWeight: '900',
     },
 
     // ── Category chips ────────────────────────────────────────────────────────

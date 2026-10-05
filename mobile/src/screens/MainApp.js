@@ -244,7 +244,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: 8,
+                            gap: 7,
                             paddingVertical: 9,
                             paddingHorizontal: 15,
                             borderRadius: 22,
@@ -255,12 +255,6 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 }}>
                             Ask AI
                         </Text>
-                        <View style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: '#10B981',
-                        }} />
                     </View>
                 </TouchableOpacity>
             )}
