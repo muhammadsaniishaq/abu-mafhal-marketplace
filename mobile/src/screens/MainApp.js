@@ -223,70 +223,45 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                 )}
             </View>
 
-            {/* ── LUXURY MODERNIZED AI ASSISTANT (VISIBLE ONLY ON HOME SCREEN) ── */}
+            {/* ── MINIMAL SLEEK MODERN AI ASSISTANT (NO RAWANI / NO STATIC NAVY) ── */}
             {activeTab === 'home' && (
                 <TouchableOpacity
-                    activeOpacity={0.88}
+                    activeOpacity={0.85}
                     onPress={() => setShowAI(true)}
                     style={{
                         position: 'absolute',
-                        bottom: 80,
+                        bottom: 78,
                         right: 16,
                         zIndex: 999,
-                        shadowColor: '#0E1A2E',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.35,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.18,
                         shadowRadius: 10,
-                        elevation: 8,
+                        elevation: 7,
                     }}
                 >
-                    <LinearGradient
-                        colors={['#0E1A2E', '#1A2942']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
+                    <View
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: 7,
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 24,
-                            borderWidth: 1.5,
-                            borderColor: '#D9A73A',
+                            gap: 8,
+                            paddingVertical: 9,
+                            paddingHorizontal: 15,
+                            borderRadius: 22,
+                            backgroundColor: '#0F172A',
                         }}
                     >
+                        <Ionicons name="sparkles" size={15} color="#38BDF8" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 }}>
+                            Ask AI
+                        </Text>
                         <View style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 14,
-                            backgroundColor: 'rgba(217, 167, 58, 0.18)',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 1,
-                            borderColor: '#D9A73A',
-                        }}>
-                            <Ionicons name="sparkles" size={15} color="#D9A73A" />
-                        </View>
-                        <View style={{ marginRight: 2 }}>
-                            <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.3 }}>
-                                Ask AI
-                            </Text>
-                            <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#D9A73A', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                                Assistant
-                            </Text>
-                        </View>
-                        <View style={{
-                            width: 7,
-                            height: 7,
-                            borderRadius: 3.5,
+                            width: 6,
+                            height: 6,
+                            borderRadius: 3,
                             backgroundColor: '#10B981',
-                            shadowColor: '#10B981',
-                            shadowOffset: { width: 0, height: 0 },
-                            shadowOpacity: 0.9,
-                            shadowRadius: 3,
-                            elevation: 2,
                         }} />
-                    </LinearGradient>
+                    </View>
                 </TouchableOpacity>
             )}
 
