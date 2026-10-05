@@ -604,13 +604,13 @@ export const ShopPage = ({
             await new Promise(r => setTimeout(r, 700));
 
             const finalMatches = matches.length > 0 ? matches : allProducts;
-            const primaryMatch = matches.length > 0 ? matches[0] : (allProducts.find(p => (p.name || '').toLowerCase().includes('takalmi')) || allProducts[0] || {});
-            const displayName = primaryMatch.name || (detectedLabel === 'Takalmi' ? 'Nike Air Jordan 4 Retro Sneakers (Takalmi)' : detectedLabel === 'Samsung Galaxy' ? 'Samsung Galaxy S21 5G' : 'iPhone 18 Pro Max');
+            const primaryMatch = matches.length > 0 ? matches[0] : (allProducts[0] || {});
+            const displayName = primaryMatch.name || `${detectedLabel} (Store Catalog)`;
 
             setVerifiedResult({
                 label: detectedLabel,
                 displayName: displayName,
-                category: primaryMatch.category || (detectedLabel === 'Takalmi' ? 'Shoes & Footwear' : 'Electronics'),
+                category: primaryMatch.category || 'Products',
                 confidence: '99.4%',
                 matchedCount: matches.length > 0 ? matches.length : allProducts.length,
                 matchedProducts: finalMatches
@@ -618,11 +618,11 @@ export const ShopPage = ({
             setVerifyingImage(false);
         } catch (err) {
             console.log('Image verification error:', err);
-            const fallbackMatch = allProducts.find(p => (p.name || '').toLowerCase().includes('takalmi')) || allProducts[0] || {};
+            const fallbackMatch = allProducts[0] || {};
             setVerifiedResult({
-                label: 'Takalmi',
-                displayName: fallbackMatch.name || 'Nike Air Jordan 4 Retro Sneakers (Takalmi)',
-                category: fallbackMatch.category || 'Shoes & Footwear',
+                label: 'Products',
+                displayName: fallbackMatch.name || 'Store Catalog Products',
+                category: fallbackMatch.category || 'All Products',
                 confidence: '98.5%',
                 matchedCount: allProducts.length,
                 matchedProducts: allProducts
@@ -1136,12 +1136,12 @@ export const ShopPage = ({
                                     </Text>
                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                                         {[
-                                            { label: 'Takalmi', name: 'Nike Air Jordan 4 Retro Sneakers (Takalmi)', icon: '👟' },
-                                            { label: 'iPhone', name: 'iPhone 18 Pro Max', icon: '📱' },
-                                            { label: 'Samsung Galaxy', name: 'Samsung Galaxy S21 5G', icon: '📲' },
-                                            { label: 'Shadda', name: 'Premium Royal Shadda & Kaftan', icon: '👕' },
-                                            { label: 'Turare', name: 'Arabian Royal Oud Perfume', icon: '🧴' },
-                                            { label: 'Agogo', name: 'Rolex Submariner Gold Watch', icon: '⌚' },
+                                            { label: 'Takalmi', name: 'Takalmi (Footwear / Shoes)', icon: '👟' },
+                                            { label: 'iPhone', name: 'iPhone Series', icon: '📱' },
+                                            { label: 'Samsung Galaxy', name: 'Samsung Galaxy Series', icon: '📲' },
+                                            { label: 'Shadda', name: 'Fashion & Kaftan (Shadda)', icon: '👕' },
+                                            { label: 'Turare', name: 'Perfumes & Fragrances', icon: '🧴' },
+                                            { label: 'Agogo', name: 'Watches & Accessories', icon: '⌚' },
                                         ].map(item => {
                                             const isSelected = verifiedResult.label === item.label;
                                             return (
