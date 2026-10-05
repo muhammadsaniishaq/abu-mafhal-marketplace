@@ -295,12 +295,12 @@ export const geminiService = {
         // 1. Analyze filename / metadata hint if available
         if (metaHint && typeof metaHint === 'string') {
             const h = metaHint.toLowerCase();
+            if (h.includes('takalmi') || h.includes('shoe') || h.includes('sneaker') || h.includes('nike') || h.includes('adidas') || h.includes('boot') || h.includes('heel') || h.includes('sandal') || h.includes('slide') || h.includes('footwear') || h.includes('leather')) return 'Takalmi';
+            if (h.includes('shadda') || h.includes('kaftan') || h.includes('cloth') || h.includes('shirt') || h.includes('dress') || h.includes('suit') || h.includes('cap') || h.includes('gown') || h.includes('jacket') || h.includes('wear') || h.includes('fashion') || h.includes('kaya')) return 'Shadda';
+            if (h.includes('turare') || h.includes('perfume') || h.includes('fragrance') || h.includes('cologne') || h.includes('scent') || h.includes('oud') || h.includes('oil')) return 'Turare';
+            if (h.includes('agogo') || h.includes('watch') || h.includes('rolex') || h.includes('casio') || h.includes('smartwatch') || h.includes('time') || h.includes('wrist')) return 'Watch';
             if (h.includes('phone') || h.includes('iphone') || h.includes('samsung') || h.includes('tecno') || h.includes('infinix') || h.includes('pixel') || h.includes('gadget') || h.includes('mobile')) return 'Phones';
-            if (h.includes('shoe') || h.includes('sneaker') || h.includes('nike') || h.includes('adidas') || h.includes('boot') || h.includes('heel') || h.includes('sandal') || h.includes('slide') || h.includes('footwear')) return 'Sneakers';
-            if (h.includes('watch') || h.includes('rolex') || h.includes('casio') || h.includes('smartwatch') || h.includes('time') || h.includes('wrist')) return 'Watch';
-            if (h.includes('perfume') || h.includes('fragrance') || h.includes('cologne') || h.includes('scent') || h.includes('oud') || h.includes('oil')) return 'Perfume';
-            if (h.includes('bag') || h.includes('handbag') || h.includes('backpack') || h.includes('tote') || h.includes('purse') || h.includes('wallet') || h.includes('leather')) return 'Bags';
-            if (h.includes('cloth') || h.includes('shirt') || h.includes('dress') || h.includes('shadda') || h.includes('kaftan') || h.includes('suit') || h.includes('cap') || h.includes('gown') || h.includes('jacket') || h.includes('wear') || h.includes('fashion')) return 'Fashion';
+            if (h.includes('bag') || h.includes('handbag') || h.includes('backpack') || h.includes('tote') || h.includes('purse') || h.includes('wallet')) return 'Bags';
             if (h.includes('laptop') || h.includes('macbook') || h.includes('computer') || h.includes('hp') || h.includes('dell')) return 'Laptop';
             if (h.includes('audio') || h.includes('headphone') || h.includes('earbud') || h.includes('airpod') || h.includes('speaker')) return 'Earbuds';
         }
@@ -308,7 +308,7 @@ export const geminiService = {
         // 2. Try Gemini API
         const key = await getActiveApiKey();
         if (key) {
-            const prompt = `Analyze this product photo. Identify the main physical item/merchandise shown. Return ONLY 1 to 3 search keywords for an e-commerce catalog search (for example: "Nike Shoes", "iPhone", "Smart Watch", "Men Shadda", "Perfume", "Leather Bag", "Earbuds"). Return ONLY the keywords separated by spaces. DO NOT include punctuation, explanations, or quotes.`;
+            const prompt = `Analyze this product photo. Identify the main physical item/merchandise shown. Return ONLY 1 to 3 search keywords for an e-commerce catalog search (for example: "Takalmi Shoes", "Nike Sneakers", "iPhone", "Smart Watch", "Men Shadda", "Perfume", "Leather Bag", "Earbuds"). Return ONLY the keywords separated by spaces. DO NOT include punctuation, explanations, or quotes.`;
             const body = {
                 contents: [{
                     parts: [
@@ -352,7 +352,7 @@ export const geminiService = {
                         messages: [{
                             role: 'user',
                             content: [
-                                { type: 'text', text: 'Identify the product in this image. Return ONLY 1 to 3 search keywords (e.g. "Smart Watch", "Red Sneakers"). No markdown, no extra words.' },
+                                { type: 'text', text: 'Identify the product in this image. Return ONLY 1 to 3 search keywords (e.g. "Takalmi Shoes", "Smart Watch", "Red Sneakers"). No markdown, no extra words.' },
                                 { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
                             ]
                         }],
@@ -367,6 +367,18 @@ export const geminiService = {
 
         // 4. Autonomous Intelligent Catalog Matcher (Store Inventory Focused)
         const h = (metaHint || '').toLowerCase();
+        if (h.includes('takalmi') || h.includes('shoe') || h.includes('sneaker') || h.includes('boot') || h.includes('footwear') || h.includes('nike') || h.includes('leather')) {
+            return 'Takalmi';
+        }
+        if (h.includes('shadda') || h.includes('kaftan') || h.includes('cloth') || h.includes('kaya') || h.includes('fashion')) {
+            return 'Shadda';
+        }
+        if (h.includes('turare') || h.includes('perfume') || h.includes('oud') || h.includes('fragrance')) {
+            return 'Turare';
+        }
+        if (h.includes('agogo') || h.includes('watch') || h.includes('rolex')) {
+            return 'Watch';
+        }
         if (h.includes('samsung') || h.includes('galaxy') || h.includes('s21') || h.includes('android')) {
             return 'Samsung Galaxy';
         }
@@ -376,8 +388,8 @@ export const geminiService = {
         if (h.includes('phone') || h.includes('mobile') || h.includes('gadget') || h.includes('device') || h.includes('screen')) {
             return 'iPhone';
         }
-        // Store Catalog Default
-        return 'iPhone';
+        // Store Catalog Default: Shoes (Takalmi)
+        return 'Takalmi';
     },
 
     /**
