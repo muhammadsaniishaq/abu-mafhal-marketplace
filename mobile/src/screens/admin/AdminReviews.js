@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { reviewsService } from '../../services/reviewsService';
 
 const NAVY = '#0E1A2E';
 const DEEP_NAVY = '#1E293B';
@@ -14,39 +15,14 @@ export const AdminReviews = () => {
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [statusFilter, setStatusFilter] = useState('pending'); // pending, approved, rejected
+    const [statusFilter, setStatusFilter] = useState('all'); // all, pending, approved, rejected
     const [typeFilter, setTypeFilter] = useState('all'); // all, product, driver
 
     const fetchReviews = useCallback(async () => {
         try {
             setLoading(true);
-            let query = supabase
-                .from('reviews')
-                .select(`
-                    *,
-                    profiles(full_name, email, username),
-                    drivers(name),
-                    products(name)
-                `)
-                .order('created_at', { ascending: false })
-                .limit(100);
-
-            if (statusFilter !== 'all') {
-                query = query.eq('status', statusFilter);
-            }
-
-            if (typeFilter !== 'all') {
-                query = query.eq('review_type', typeFilter);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                console.error("Fetch Reviews Error:", error.message);
-                Alert.alert('Error', 'Failed to load reviews: ' + error.message);
-            } else {
-                setReviews(data || []);
-            }
+            const data = await reviewsService.fetchAdminReviews({ statusFilter, typeFilter });
+            setReviews(data || []);
         } catch (err) {
             console.error("Fetch Reviews Crash:", err);
             Alert.alert('Network Error', 'Unable to connect to reviews service.');
@@ -66,12 +42,16 @@ export const AdminReviews = () => {
     };
 
     const handleAction = async (id, status) => {
-        const { error } = await supabase.from('reviews').update({ status }).eq('id', id);
-        if (!error) {
+        try {
+            await reviewsService.updateReviewStatus(id, status);
             Alert.alert('Updated', `Review status has been changed to "${status.toUpperCase()}".`);
-            setReviews(prev => prev.filter(r => r.id !== id));
-        } else {
-            Alert.alert('Error', error.message);
+            if (statusFilter !== 'all') {
+                setReviews(prev => prev.filter(r => r.id !== id));
+            } else {
+                setReviews(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+            }
+        } catch (error) {
+            Alert.alert('Error', error.message || 'Failed to update review status');
         }
     };
 
@@ -82,11 +62,12 @@ export const AdminReviews = () => {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: async () => {
-                    const { error } = await supabase.from('reviews').delete().eq('id', id);
-                    if (!error) {
+                    try {
+                        await reviewsService.deleteReview(id);
                         setReviews(prev => prev.filter(r => r.id !== id));
-                    } else {
-                        Alert.alert('Error', error.message);
+                        Alert.alert('Deleted', 'Review deleted successfully.');
+                    } catch (error) {
+                        Alert.alert('Error', error.message || 'Failed to delete review');
                     }
                 }
             }
@@ -220,6 +201,7 @@ export const AdminReviews = () => {
                 {/* Status Filter */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     {[
+                        { id: 'all', label: 'All' },
                         { id: 'pending', label: 'Pending' },
                         { id: 'approved', label: 'Approved' },
                         { id: 'rejected', label: 'Rejected' }

@@ -975,10 +975,10 @@ export const LandingPage = ({
                                     <View style={styles.productRatingRow}>
                                         <Ionicons name="star" size={11} color="#F59E0B" />
                                         <Text style={styles.productRatingText}>
-                                            {product.rating ? Number(product.rating).toFixed(1) : '4.8'}
+                                            {product.rating ? Number(product.rating).toFixed(1) : 'New'}
                                         </Text>
                                         <Text style={styles.productReviewsCount}>
-                                            ({product.reviews_count || 45})
+                                            ({product.reviews_count || product.reviews || 0})
                                         </Text>
                                         <Text style={styles.verifiedMerchantTag}>• Verified</Text>
                                     </View>

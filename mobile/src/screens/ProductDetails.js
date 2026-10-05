@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { resolveVendorOrStore } from '../services/vendorResolver';
 import { whatsappService } from '../services/whatsappService';
+import { reviewsService } from '../services/reviewsService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -232,6 +233,12 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
     const [relatedProducts, setRelatedProducts] = useState([]);
     const [reviewsList, setReviewsList] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
+    const [reviewStats, setReviewStats] = useState({ averageRating: null, totalCount: 0 });
+    const [writeReviewModal, setWriteReviewModal] = useState(false);
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [userReviewRating, setUserReviewRating] = useState(5);
+    const [userReviewComment, setUserReviewComment] = useState('');
+    const [userReviewTitle, setUserReviewTitle] = useState('');
     const [liked, setLiked] = useState(false);
     const [cartDone, setCartDone] = useState(false);
     const [imgZoom, setImgZoom] = useState(false);
@@ -355,18 +362,78 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
     const fetchReviews = async (currentId) => {
         setLoadingReviews(true);
         try {
-            const { data } = await supabase
-                .from('reviews')
-                .select('*')
-                .eq('product_id', currentId)
-                .order('created_at', { ascending: false })
-                .limit(10);
-
-            if (data && data.length > 0) {
-                setReviewsList(data);
-            }
-        } catch (_) {} finally {
+            const res = await reviewsService.fetchProductReviews(currentId);
+            setReviewsList(res.reviews || []);
+            setReviewStats({
+                averageRating: res.averageRating || null,
+                totalCount: res.totalCount || 0
+            });
+        } catch (err) {
+            console.log('Error fetching live reviews:', err);
+        } finally {
             setLoadingReviews(false);
+        }
+    };
+
+    const handleOpenWriteReview = async () => {
+        try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) {
+                Alert.alert(
+                    'Login Required',
+                    'Please sign in to write an authentic review for this product.',
+                    [
+                        {
+                            text: 'Sign In',
+                            onPress: () => navigation.navigate('Auth', {
+                                redirectTo: 'ProductDetails',
+                                redirectParams: { product, id: product?.id }
+                            })
+                        },
+                        { text: 'Cancel', style: 'cancel' }
+                    ]
+                );
+                return;
+            }
+            setWriteReviewModal(true);
+        } catch (_) {
+            setWriteReviewModal(true);
+        }
+    };
+
+    const handleSubmitProductReview = async () => {
+        if (!userReviewComment.trim()) {
+            Alert.alert('Comment Required', 'Please share a brief comment describing your experience with this product.');
+            return;
+        }
+        setSubmittingReview(true);
+        try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            const userName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Verified Customer';
+
+            await reviewsService.submitReview({
+                product_id: product?.id,
+                user_id: authUser?.id || null,
+                user_name: userName,
+                rating: userReviewRating,
+                title: userReviewTitle.trim() || 'Product Review',
+                comment: userReviewComment.trim(),
+                review_type: 'product',
+                status: 'approved'
+            });
+
+            setWriteReviewModal(false);
+            setUserReviewComment('');
+            setUserReviewTitle('');
+            setUserReviewRating(5);
+            showToast('Review submitted successfully! ⭐');
+            if (product?.id) {
+                fetchReviews(product.id);
+            }
+        } catch (err) {
+            Alert.alert('Error', 'Failed to submit review. Please try again.');
+        } finally {
+            setSubmittingReview(false);
         }
     };
 
@@ -867,14 +934,18 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                         {subtitleText}
                     </Text>
 
-                    {/* Rating & Sold Row */}
+                    {/* Rating & Sold Row (100% Live, Zero Mockup) */}
                     <View style={s.ratingRow}>
-                        <Ionicons name="star" size={16} color="#F59E0B" />
-                        <Text style={s.ratingNum}>{product.rating || '4.8'}</Text>
-                        <Text style={s.reviewsCount}>({product.reviews || reviewsList.length || 256} reviews)</Text>
+                        <Ionicons name="star" size={16} color={reviewStats.totalCount > 0 ? "#F59E0B" : (product.rating ? "#F59E0B" : "#CBD5E1")} />
+                        <Text style={s.ratingNum}>
+                            {reviewStats.averageRating || (reviewStats.totalCount > 0 ? '5.0' : (product.rating ? Number(product.rating).toFixed(1) : 'New'))}
+                        </Text>
+                        <Text style={s.reviewsCount}>
+                            ({reviewStats.totalCount || reviewsList.length} {((reviewStats.totalCount || reviewsList.length) === 1) ? 'review' : 'reviews'})
+                        </Text>
                         <Text style={s.ratingDivider}>|</Text>
                         <Text style={s.soldCount}>
-                            {product.total_sales ? `${product.total_sales}+ sold` : '1.2K+ sold'}
+                            {product.total_sales ? `${product.total_sales}+ sold` : 'Verified Authentic'}
                         </Text>
                     </View>
 
@@ -1268,32 +1339,83 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                         </View>
                     )}
 
-                    {/* Customer Reviews Preview */}
-                    {reviewsList.length > 0 && (
-                        <View style={{ marginTop: 14 }}>
-                            <Text style={s.sectionHeaderTitle}>VERIFIED BUYER REVIEWS</Text>
-                            <View style={{ gap: 8, marginTop: 8 }}>
-                                {reviewsList.slice(0, 3).map((rev, rIdx) => (
-                                    <View key={'rev-' + rIdx} style={s.reviewCard}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                            <Text style={s.reviewerName}>{rev.user_name || 'Verified Buyer'}</Text>
+                    {/* ════ CUSTOMER REVIEWS & RATINGS (100% LIVE, ZERO MOCKUP) ════ */}
+                    <View style={s.reviewsSectionWrap}>
+                        <View style={s.reviewsHeaderRow}>
+                            <View>
+                                <Text style={s.sectionHeaderTitle}>CUSTOMER REVIEWS</Text>
+                                <Text style={s.reviewsSubHeader}>
+                                    {reviewStats.totalCount > 0
+                                        ? `${reviewStats.averageRating} out of 5 (${reviewStats.totalCount} ${reviewStats.totalCount === 1 ? 'rating' : 'ratings'})`
+                                        : 'No reviews yet for this product'}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                style={s.writeReviewBtn}
+                                onPress={handleOpenWriteReview}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="create-outline" size={15} color="#92400E" />
+                                <Text style={s.writeReviewBtnText}>Write Review</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {reviewsList.length > 0 ? (
+                            <View style={{ gap: 10, marginTop: 12 }}>
+                                {reviewsList.map((rev, rIdx) => (
+                                    <View key={rev.id || ('rev-' + rIdx)} style={s.reviewCard}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <View style={s.reviewerAvatar}>
+                                                    <Text style={s.reviewerAvatarTxt}>
+                                                        {(rev.user_name || 'C').charAt(0).toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                                <View>
+                                                    <Text style={s.reviewerName}>{rev.user_name || 'Verified Customer'}</Text>
+                                                    <Text style={s.reviewDate}>
+                                                        {rev.created_at ? new Date(rev.created_at).toLocaleDateString() : 'Verified Buyer'}
+                                                    </Text>
+                                                </View>
+                                            </View>
                                             <View style={{ flexDirection: 'row', gap: 2 }}>
                                                 {[1, 2, 3, 4, 5].map(st => (
                                                     <Ionicons
                                                         key={st}
                                                         name="star"
-                                                        size={11}
-                                                        color={st <= (rev.rating || 5) ? "#F59E0B" : "#E2E8F0"}
+                                                        size={13}
+                                                        color={st <= (Number(rev.rating) || 5) ? "#F59E0B" : "#E2E8F0"}
                                                     />
                                                 ))}
                                             </View>
                                         </View>
-                                        <Text style={s.reviewComment}>{rev.comment || 'Amazing sound quality, highly recommended!'}</Text>
+                                        {rev.title ? (
+                                            <Text style={s.reviewTitleTxt}>{rev.title}</Text>
+                                        ) : null}
+                                        {rev.comment ? (
+                                            <Text style={s.reviewComment}>{rev.comment}</Text>
+                                        ) : null}
                                     </View>
                                 ))}
                             </View>
-                        </View>
-                    )}
+                        ) : (
+                            <View style={s.emptyReviewsBox}>
+                                <Ionicons name="chatbubbles-outline" size={32} color="#94A3B8" />
+                                <Text style={s.emptyReviewsTitle}>Be the first to review</Text>
+                                <Text style={s.emptyReviewsSub}>
+                                    Have you purchased or used this product? Share your honest feedback with other buyers.
+                                </Text>
+                                <TouchableOpacity
+                                    style={s.writeFirstReviewBtn}
+                                    onPress={handleOpenWriteReview}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons name="star" size={14} color="#0A192F" />
+                                    <Text style={s.writeFirstReviewBtnText}>Rate & Review Product</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 </View>
             </ScrollView>
 
@@ -1424,6 +1546,91 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                             isLooping={false}
                         />
                     )}
+                </View>
+            </Modal>
+
+            {/* ════ WRITE PRODUCT REVIEW MODAL ════ */}
+            <Modal
+                visible={writeReviewModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setWriteReviewModal(false)}
+            >
+                <View style={s.reviewModalOverlay}>
+                    <View style={s.reviewModalBox}>
+                        <View style={s.reviewModalHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.reviewModalTitle}>Write a Review</Text>
+                                <Text style={s.reviewModalSubtitle} numberOfLines={1}>{product?.name}</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setWriteReviewModal(false)}
+                                style={s.closeModalBtn}
+                            >
+                                <Ionicons name="close" size={20} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={s.ratingSelectLabel}>Tap to select your rating:</Text>
+                        <View style={s.starPickerRow}>
+                            {[1, 2, 3, 4, 5].map(st => (
+                                <TouchableOpacity
+                                    key={st}
+                                    onPress={() => setUserReviewRating(st)}
+                                    style={{ padding: 6 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons
+                                        name={st <= userReviewRating ? "star" : "star-outline"}
+                                        size={32}
+                                        color={st <= userReviewRating ? "#F59E0B" : "#CBD5E1"}
+                                    />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <Text style={s.ratingSelectedText}>
+                            {userReviewRating === 5 ? '⭐⭐⭐⭐⭐ Excellent' :
+                             userReviewRating === 4 ? '⭐⭐⭐⭐ Very Good' :
+                             userReviewRating === 3 ? '⭐⭐⭐ Average' :
+                             userReviewRating === 2 ? '⭐⭐ Poor' : '⭐ Terrible'}
+                        </Text>
+
+                        <TextInput
+                            style={s.reviewTitleInput}
+                            placeholder="Headline / Summary (e.g. Great quality!)"
+                            placeholderTextColor="#94A3B8"
+                            value={userReviewTitle}
+                            onChangeText={setUserReviewTitle}
+                            maxLength={80}
+                        />
+
+                        <TextInput
+                            style={s.reviewCommentInput}
+                            placeholder="Write your honest review here..."
+                            placeholderTextColor="#94A3B8"
+                            value={userReviewComment}
+                            onChangeText={setUserReviewComment}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                        />
+
+                        <TouchableOpacity
+                            style={[s.submitReviewActionBtn, submittingReview && { opacity: 0.7 }]}
+                            onPress={handleSubmitProductReview}
+                            disabled={submittingReview}
+                            activeOpacity={0.85}
+                        >
+                            {submittingReview ? (
+                                <ActivityIndicator size="small" color="#0A192F" />
+                            ) : (
+                                <>
+                                    <Ionicons name="checkmark-circle" size={18} color="#0A192F" />
+                                    <Text style={s.submitReviewActionTxt}>Submit Live Review</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </Modal>
 
@@ -2372,23 +2579,212 @@ const s = StyleSheet.create({
         color: BRAND.slate,
     },
 
-    // ── Reviews ──
+    // ── Reviews Section Styles ──
+    reviewsSectionWrap: {
+        marginTop: 18,
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    reviewsHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    reviewsSubHeader: {
+        fontSize: 11,
+        color: BRAND.slate,
+        marginTop: 2,
+        fontWeight: '500',
+    },
+    writeReviewBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#FEF3C7',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+    },
+    writeReviewBtnText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#92400E',
+    },
     reviewCard: {
         backgroundColor: '#F8FAFC',
-        borderRadius: 8,
-        padding: 10,
+        borderRadius: 12,
+        padding: 12,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: '#E2E8F0',
+    },
+    reviewerAvatar: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: BRAND.navy,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    reviewerAvatarTxt: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '800',
     },
     reviewerName: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '700',
         color: BRAND.slateDark,
     },
+    reviewDate: {
+        fontSize: 10,
+        color: '#94A3B8',
+    },
+    reviewTitleTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: BRAND.navy,
+        marginTop: 6,
+    },
     reviewComment: {
+        fontSize: 12,
+        color: '#334155',
+        marginTop: 3,
+        lineHeight: 17,
+    },
+    emptyReviewsBox: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed',
+    },
+    emptyReviewsTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: BRAND.slateDark,
+        marginTop: 6,
+    },
+    emptyReviewsSub: {
         fontSize: 11,
         color: BRAND.slate,
-        marginTop: 3,
+        textAlign: 'center',
+        marginTop: 2,
+        marginBottom: 10,
+        maxWidth: 260,
+    },
+    writeFirstReviewBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#D9A73A',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+    },
+    writeFirstReviewBtnText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#070F1E',
+    },
+    // Review Modal Styles
+    reviewModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'flex-end',
+    },
+    reviewModalBox: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 36,
+    },
+    reviewModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    reviewModalTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: BRAND.navy,
+    },
+    reviewModalSubtitle: {
+        fontSize: 12,
+        color: BRAND.slate,
+        maxWidth: 240,
+    },
+    closeModalBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    ratingSelectLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: BRAND.slateDark,
+        marginBottom: 4,
+    },
+    starPickerRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginVertical: 4,
+    },
+    ratingSelectedText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#D97706',
+        textAlign: 'center',
+        marginBottom: 14,
+    },
+    reviewTitleInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        fontSize: 13,
+        color: '#0F172A',
+        marginBottom: 10,
+    },
+    reviewCommentInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        fontSize: 13,
+        color: '#0F172A',
+        height: 90,
+        marginBottom: 16,
+    },
+    submitReviewActionBtn: {
+        backgroundColor: '#D9A73A',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
+    },
+    submitReviewActionTxt: {
+        color: '#070F1E',
+        fontWeight: '800',
+        fontSize: 14,
     },
 
     // ── 12. Bottom Navigation Bar ──

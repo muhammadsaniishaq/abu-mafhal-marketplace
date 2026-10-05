@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { useAppSettings } from '../context/AppSettingsContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { whatsappService } from '../services/whatsappService';
+import { reviewsService } from '../services/reviewsService';
 
 const STATUS_CFG = {
     pending: { color: '#D97706', bg: '#FEF3C7', icon: 'time-outline', label: 'Pending' },
@@ -407,7 +408,8 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             console.log("Uploaded photos:", uploadedUrls.length);
 
             const reviewData = {
-                user_id: user.id || user.sub,
+                user_id: user?.id || user?.sub,
+                user_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Verified Customer',
                 product_id: isDriver ? null : reviewModal.item?.product_id,
                 driver_id: isDriver ? reviewModal.order?.driver_id : null,
                 order_id: reviewModal.order?.id,
@@ -416,22 +418,18 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                 title: reviewTitle.trim() || (isDriver ? 'Driver Review' : 'Product Review'),
                 comment: reviewText.trim(),
                 images: uploadedUrls,
-                status: 'pending' // Explicitly set status to ensure visibility
+                status: 'approved'
             };
 
-            const { data, error } = await supabase.from('reviews').insert(reviewData).select();
-            if (error) {
-                console.error("Supabase Insert Error:", error);
-                throw error;
-            }
-            console.log("Review submitted successfully! Inserted ID:", data?.[0]?.id);
+            await reviewsService.submitReview(reviewData);
+            console.log("Review submitted successfully via reviewsService!");
 
             setReviewModal(null);
             setReviewText('');
             setReviewTitle('');
             setRating(5);
             setReviewImages([]);
-            Alert.alert('Thank you!', 'Your review has been submitted.');
+            Alert.alert('Review Submitted!', isDriver ? 'Thank you for rating your delivery driver!' : 'Thank you for your product review!');
         } catch (e) {
             console.error('Review Error:', e);
             Alert.alert('Error', 'Could not submit review. Please try again.');
