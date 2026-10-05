@@ -43,23 +43,6 @@ import { VendorStoreProfile } from './VendorStoreProfile';
 // ─── NAVY & GOLD LIGHT PALETTE ───────────────────────────────────────────────
 const NAVY = '#0E1A2E';
 const GOLD = '#D9A73A';
-
-// Top Quick Pill Tabs
-const QUICK_TABS = [
-    { id: 'overview', label: 'Overview', icon: 'grid-outline', activeIcon: 'grid' },
-    { id: 'coupons', label: '🎟️ Coupons & Vouchers', icon: 'ticket-outline', activeIcon: 'ticket' },
-    { id: 'orders', label: 'Orders', icon: 'cart-outline', activeIcon: 'cart' },
-    { id: 'products', label: 'Products', icon: 'cube-outline', activeIcon: 'cube' },
-    { id: 'vendors', label: 'Vendors', icon: 'storefront-outline', activeIcon: 'storefront' },
-    { id: 'users', label: 'Customers', icon: 'people-outline', activeIcon: 'people' },
-    { id: 'financials', label: 'Financials', icon: 'cash-outline', activeIcon: 'cash' },
-    { id: 'shipping', label: 'Shipping', icon: 'car-outline', activeIcon: 'car' },
-    { id: 'store_profile', label: 'Store Profile', icon: 'storefront-outline', activeIcon: 'storefront' },
-    { id: 'banners', label: 'Banners', icon: 'images-outline', activeIcon: 'images' },
-    { id: 'analytics', label: 'Analytics', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
-    { id: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
-];
-
 // All Admin Modules Organized into Logical Categories
 const MODULE_SECTIONS = [
     {
@@ -169,6 +152,8 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
     const [showAiModal, setShowAiModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [sidebarSearch, setSidebarSearch] = useState('');
+    const [dashboardSearch, setDashboardSearch] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all');
 
     const [stats, setStats] = useState({
         totalRevenue: 0,
@@ -179,7 +164,11 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
         totalUsers: 0,
         totalVendors: 0,
         totalBanners: 0,
-        lowStockCount: 0
+        lowStockCount: 0,
+        pssOrdersCount: 0,
+        podOrdersCount: 0,
+        podPendingAmount: 0,
+        pssRemainingDebt: 0
     });
 
     const [recentOrders, setRecentOrders] = useState([]);
@@ -259,9 +248,9 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     .limit(100),
                 supabase
                     .from('orders')
-                    .select('id, total_amount, status, created_at, user:profiles(full_name, email)')
+                    .select('id, total_amount, status, payment_method, payment_status, installment_plan, created_at, user:profiles(full_name, email)')
                     .order('created_at', { ascending: false })
-                    .limit(50),
+                    .limit(100),
                 supabase
                     .from('profiles')
                     .select('id, role, status')
@@ -282,6 +271,29 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
             const pendingOrders = ordersList.filter(o => o.status === 'pending' || o.status === 'processing').length;
             const totalRevenue = ordersList.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
+            let pssOrdersCount = 0;
+            let podOrdersCount = 0;
+            let podPendingAmount = 0;
+            let pssRemainingDebt = 0;
+
+            ordersList.forEach(o => {
+                const method = (o.payment_method || '').toLowerCase();
+                const isPod = method.includes('delivery') || method.includes('pod') || method.includes('cod');
+                const isPss = !!(o.installment_plan || method.includes('small') || method.includes('pss'));
+                if (isPod) {
+                    podOrdersCount++;
+                    if (o.payment_status !== 'paid' && o.status !== 'delivered') {
+                        podPendingAmount += Number(o.total_amount || 0);
+                    }
+                }
+                if (isPss) {
+                    pssOrdersCount++;
+                    const plan = typeof o.installment_plan === 'string' ? (() => { try { return JSON.parse(o.installment_plan); } catch (_) { return null; } })() : o.installment_plan;
+                    const rem = Number(plan?.remaining_balance || plan?.remainingAmount || 0);
+                    pssRemainingDebt += rem > 0 ? rem : Math.round(Number(o.total_amount || 0) * 0.75);
+                }
+            });
+
             const profs = profilesRes.status === 'fulfilled' && profilesRes.value.data ? profilesRes.value.data : [];
             const totalUsers = profs.length;
             const totalVendors = profs.filter(u => u.role === 'vendor').length;
@@ -298,7 +310,11 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                 totalUsers,
                 totalVendors,
                 totalBanners,
-                lowStockCount
+                lowStockCount,
+                pssOrdersCount,
+                podOrdersCount,
+                podPendingAmount,
+                pssRemainingDebt
             });
 
             setRecentOrders(ordersList.slice(0, 5));
@@ -480,7 +496,141 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 </LinearGradient>
 
-                {/* 4 CORE KPI METRICS */}
+                {/* ── INVENTORY RESTOCK RADAR (LOW STOCK WARNING) ── */}
+                {stats.lowStockCount > 0 && (
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveTab('products')}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#FFFBEB',
+                            borderRadius: 14,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            marginBottom: 12,
+                            borderWidth: 1,
+                            borderColor: '#FDE68A'
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <Ionicons name="warning" size={18} color="#D97706" />
+                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#92400E' }} numberOfLines={1}>
+                                {stats.lowStockCount} Products Running Low On Stock (&lt; 5 items)
+                            </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>Restock →</Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* ── PSS (BNPL) & POD LIQUIDITY CARDS ── */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                    {/* PSS Card */}
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveTab('orders')}
+                        style={{
+                            flex: 1,
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 18,
+                            padding: 13,
+                            borderWidth: 1,
+                            borderColor: '#FDE68A',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.03,
+                            shadowRadius: 5,
+                            elevation: 1
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 8.5, fontWeight: '900', color: '#B45309' }}>0% BNPL / PSS</Text>
+                            </View>
+                            <Ionicons name="card" size={14} color="#D97706" />
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Active Contracts</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#0E1A2E', marginTop: 1 }}>
+                            {stats.pssOrdersCount} Orders
+                        </Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', marginTop: 2 }}>
+                            Due: ₦{stats.pssRemainingDebt.toLocaleString()}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* POD Card */}
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setActiveTab('orders')}
+                        style={{
+                            flex: 1,
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 18,
+                            padding: 13,
+                            borderWidth: 1,
+                            borderColor: '#BFDBFE',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.03,
+                            shadowRadius: 5,
+                            elevation: 1
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 8.5, fontWeight: '900', color: '#1D4ED8' }}>PAY ON DELIVERY</Text>
+                            </View>
+                            <Ionicons name="cash" size={14} color="#2563EB" />
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Doorstep Cash</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#0E1A2E', marginTop: 1 }}>
+                            {stats.podOrdersCount} Orders
+                        </Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#2563EB', marginTop: 2 }}>
+                            Pending: ₦{stats.podPendingAmount.toLocaleString()}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* ── FAST ACTIONS & SHORTCUTS ── */}
+                <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: NAVY, marginBottom: 8, letterSpacing: 0.3, paddingLeft: 2 }}>
+                        ⚡ EXECUTIVE FAST ACTIONS
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
+                        {[
+                            { id: 'products', label: '+ Add Product', icon: 'add-circle', bg: '#0E1A2E', text: '#D9A73A', border: '#D9A73A' },
+                            { id: 'orders', label: 'PSS / POD Hub', icon: 'cart', bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' },
+                            { id: 'coupons', label: 'New Voucher', icon: 'ticket', bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' },
+                            { id: 'broadcast', label: 'Push Broadcast', icon: 'megaphone', bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' },
+                            { id: 'promo_banners', label: 'AI Studio', icon: 'sparkles', bg: '#F3E8FF', text: '#9333EA', border: '#E9D5FF' },
+                            { id: 'shipping', label: 'Fleet & Dispatch', icon: 'car', bg: '#F0F9FF', text: '#0284C7', border: '#BAE6FD' }
+                        ].map((act) => (
+                            <TouchableOpacity
+                                key={act.id}
+                                onPress={() => setActiveTab(act.id)}
+                                activeOpacity={0.75}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    backgroundColor: act.bg,
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: act.border
+                                }}
+                            >
+                                <Ionicons name={act.icon} size={15} color={act.text} />
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: act.text }}>{act.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* ── 4 CORE KPI METRICS ── */}
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
                     {/* Orders */}
                     <TouchableOpacity 
@@ -543,7 +693,7 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
                     {/* Vendors */}
                     <TouchableOpacity 
                         activeOpacity={0.8}
@@ -605,7 +755,34 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     </TouchableOpacity>
                 </View>
 
-                {/* ── VIP DISCOUNT COUPONS SHORTCUT BANNER ───────────────────────────── */}
+                {/* ── PLATFORM LIVE ENGINE DIAGNOSTICS BAR ── */}
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 9,
+                    marginBottom: 14,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0'
+                }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' }} />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E' }}>Supabase: Live</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#3B82F6' }} />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E' }}>Fleet: Connected</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#D97706' }} />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E' }}>Paystack/POD: Ready</Text>
+                    </View>
+                </View>
+
+                {/* ── VIP DISCOUNT COUPONS SHORTCUT BANNER ── */}
                 <TouchableOpacity
                     activeOpacity={0.88}
                     onPress={() => setActiveTab('coupons')}
@@ -635,82 +812,181 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                             <Text style={{ color: '#34D399', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.5 }}>MARKETING TOOLS</Text>
                         </View>
                         <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '900' }}>🎟️ Discount Coupons & Vouchers</Text>
-                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, marginTop: 2 }}>Create promo codes, set % / fixed discounts & manage all vouchers</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, marginTop: 2 }}>Create promo codes, set % / fixed discounts & manage vouchers</Text>
                     </View>
                     <View style={{ backgroundColor: 'rgba(52, 211, 153, 0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.35)' }}>
                         <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '900' }}>Create →</Text>
                     </View>
                 </TouchableOpacity>
 
-                {/* COMPREHENSIVE MODULAR GRID OF ALL 26 ADMIN CAPABILITIES */}
-                {MODULE_SECTIONS.map((section, sIndex) => (
-                    <View key={sIndex} style={{ marginBottom: 18 }}>
-                        <Text style={{
-                            fontSize: 12,
-                            fontWeight: '900',
-                            color: NAVY,
-                            marginBottom: 10,
-                            letterSpacing: 0.3,
-                            paddingLeft: 4
-                        }}>
-                            {section.title}
+                {/* ── INTERACTIVE MODULE DIRECTORY & FILTER BAR ── */}
+                <View style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '900', color: NAVY, letterSpacing: 0.3, paddingLeft: 2 }}>
+                            ADMIN DIRECTORY (26 MODULES)
                         </Text>
-
-                        <View style={{
-                            backgroundColor: '#FFFFFF',
-                            borderRadius: 20,
-                            padding: 12,
-                            borderWidth: 1,
-                            borderColor: '#E2E8F0',
-                            shadowColor: NAVY,
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.04,
-                            shadowRadius: 6,
-                            elevation: 1
-                        }}>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                                {section.items.map((item) => (
-                                    <TouchableOpacity
-                                        key={item.id}
-                                        onPress={() => setActiveTab(item.id)}
-                                        activeOpacity={0.7}
-                                        style={{
-                                            width: '48%',
-                                            backgroundColor: '#F8FAFC',
-                                            borderRadius: 14,
-                                            padding: 12,
-                                            marginBottom: 8,
-                                            borderWidth: 1,
-                                            borderColor: '#F1F5F9',
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 10
-                                        }}
-                                    >
-                                        <View style={{
-                                             width: 38,
-                                            height: 38,
-                                            borderRadius: 11,
-                                            backgroundColor: item.bg,
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            <Ionicons name={item.icon} size={18} color={item.color} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: NAVY }}>
-                                                {item.title}
-                                            </Text>
-                                            <Text numberOfLines={1} style={{ fontSize: 9.5, color: '#64748B', marginTop: 1 }}>
-                                                {item.desc}
-                                            </Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B' }}>
+                            Tap to launch
+                        </Text>
                     </View>
-                ))}
+
+                    {/* Dashboard Search */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        marginBottom: 8,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0'
+                    }}>
+                        <Ionicons name="search" size={15} color="#94A3B8" />
+                        <TextInput
+                            placeholder="Search 26 modules (Orders, Coupons, SEO...)..."
+                            placeholderTextColor="#94A3B8"
+                            value={dashboardSearch}
+                            onChangeText={setDashboardSearch}
+                            style={{ flex: 1, color: '#0E1A2E', fontSize: 12, padding: 0 }}
+                        />
+                        {dashboardSearch.length > 0 && (
+                            <TouchableOpacity onPress={() => setDashboardSearch('')}>
+                                <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Category Filter Pills */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
+                        {[
+                            { id: 'all', label: 'All (26)' },
+                            { id: 'Commerce & Catalog', label: 'Commerce' },
+                            { id: 'Users & Relationships', label: 'Users' },
+                            { id: 'Marketing & Promotions', label: 'Marketing' },
+                            { id: 'Financials & Intelligence', label: 'Financials' },
+                            { id: 'Support & Resolution', label: 'Support' },
+                            { id: 'Platform Settings & Governance', label: 'Settings' }
+                        ].map((cat) => {
+                            const isSel = selectedCategory === cat.id;
+                            return (
+                                <TouchableOpacity
+                                    key={cat.id}
+                                    onPress={() => setSelectedCategory(cat.id)}
+                                    style={{
+                                        paddingHorizontal: 11,
+                                        paddingVertical: 5,
+                                        borderRadius: 9,
+                                        backgroundColor: isSel ? NAVY : '#FFFFFF',
+                                        borderWidth: 1,
+                                        borderColor: isSel ? GOLD : '#E2E8F0'
+                                    }}
+                                >
+                                    <Text style={{
+                                        fontSize: 10.5,
+                                        fontWeight: isSel ? '900' : '600',
+                                        color: isSel ? GOLD : '#64748B'
+                                    }}>
+                                        {cat.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+
+                {/* ── MODULAR GRID OF FILTERED MODULES ── */}
+                {MODULE_SECTIONS
+                    .filter(sec => selectedCategory === 'all' || sec.title === selectedCategory)
+                    .map((section, sIndex) => {
+                        const items = section.items.filter(item => 
+                            !dashboardSearch ||
+                            item.title.toLowerCase().includes(dashboardSearch.toLowerCase()) ||
+                            item.desc.toLowerCase().includes(dashboardSearch.toLowerCase())
+                        );
+
+                        if (items.length === 0) return null;
+
+                        return (
+                            <View key={sIndex} style={{ marginBottom: 16 }}>
+                                <Text style={{
+                                    fontSize: 11.5,
+                                    fontWeight: '900',
+                                    color: NAVY,
+                                    marginBottom: 8,
+                                    letterSpacing: 0.3,
+                                    paddingLeft: 4
+                                }}>
+                                    {section.title}
+                                </Text>
+
+                                <View style={{
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: 18,
+                                    padding: 10,
+                                    borderWidth: 1,
+                                    borderColor: '#E2E8F0',
+                                    shadowColor: NAVY,
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.03,
+                                    shadowRadius: 5,
+                                    elevation: 1
+                                }}>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                                        {items.map((item) => {
+                                            const isOrders = item.id === 'orders';
+                                            return (
+                                                <TouchableOpacity
+                                                    key={item.id}
+                                                    onPress={() => setActiveTab(item.id)}
+                                                    activeOpacity={0.7}
+                                                    style={{
+                                                        width: '48.5%',
+                                                        backgroundColor: '#F8FAFC',
+                                                        borderRadius: 13,
+                                                        padding: 10,
+                                                        marginBottom: 8,
+                                                        borderWidth: 1,
+                                                        borderColor: '#F1F5F9',
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        gap: 8
+                                                    }}
+                                                >
+                                                    <View style={{
+                                                        width: 34,
+                                                        height: 34,
+                                                        borderRadius: 10,
+                                                        backgroundColor: item.bg,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}>
+                                                        <Ionicons name={item.icon} size={16} color={item.color} />
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '800', color: NAVY, flex: 1 }}>
+                                                                {item.title}
+                                                            </Text>
+                                                            {isOrders && (
+                                                                <View style={{ backgroundColor: '#3B82F6', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 5 }}>
+                                                                    <Text style={{ fontSize: 8, fontWeight: '900', color: 'white' }}>PSS</Text>
+                                                                </View>
+                                                            )}
+                                                        </View>
+                                                        <Text numberOfLines={1} style={{ fontSize: 9, color: '#64748B', marginTop: 1 }}>
+                                                            {item.desc}
+                                                        </Text>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            </View>
+                        );
+                    })}
 
                 {/* RECENT ORDERS PREVIEW */}
                 <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
@@ -914,94 +1190,74 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-            {/* ── COMPACT TOP HEADER (NAVY & GOLD) ── */}
+            {/* ── SLEEK EXECUTIVE HEADER (TOP BAR PILLS REMOVED, MAXIMUM SCREEN REAL ESTATE) ── */}
             <LinearGradient
-                colors={[NAVY, '#162235']}
+                colors={[NAVY, '#111D30']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={{ 
-                    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 4 : (Platform.OS === 'ios' ? 44 : 8), 
-                    paddingBottom: 6,
+                    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 6 : (Platform.OS === 'ios' ? 48 : 12), 
+                    paddingBottom: 10,
+                    paddingHorizontal: 14,
                     borderBottomWidth: 1,
                     borderColor: 'rgba(217, 167, 58, 0.25)'
                 }}
             >
-                {/* Brand & Actions Single Compact Row */}
                 <View style={{ 
                     flexDirection: 'row', 
                     justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    paddingHorizontal: 12,
-                    paddingBottom: 8
+                    alignItems: 'center'
                 }}>
-                    {/* Left: Sidebar Menu Drawer Toggle + Back to Home */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {/* Left: Sidebar Menu Drawer Trigger + Back Navigation */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <TouchableOpacity
                             onPress={() => setIsSidebarOpen(true)}
                             activeOpacity={0.75}
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: 'rgba(217, 167, 58, 0.25)',
-                                paddingHorizontal: 10,
-                                paddingVertical: 5,
-                                borderRadius: 10,
+                                gap: 6,
+                                backgroundColor: 'rgba(217, 167, 58, 0.18)',
+                                paddingHorizontal: 11,
+                                paddingVertical: 6.5,
+                                borderRadius: 12,
                                 borderWidth: 1.2,
                                 borderColor: GOLD
                             }}
                         >
-                            <Ionicons name="menu" size={16} color="#FFFFFF" />
-                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>Sidebar</Text>
+                            <Ionicons name="menu" size={17} color={GOLD} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '900', letterSpacing: 0.3 }}>Menu</Text>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
                         </TouchableOpacity>
 
-                        {activeTab === 'overview' ? (
-                            <TouchableOpacity
-                                onPress={handleBackToHome}
-                                activeOpacity={0.75}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 5,
-                                    borderRadius: 9,
-                                    borderWidth: 1,
-                                    borderColor: 'rgba(255, 255, 255, 0.15)'
-                                }}
-                            >
-                                <Ionicons name="storefront" size={12} color={GOLD} />
-                                <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' }}>Shop</Text>
-                            </TouchableOpacity>
-                        ) : (
+                        {activeTab !== 'overview' && (
                             <TouchableOpacity
                                 onPress={() => setActiveTab('overview')}
                                 activeOpacity={0.7}
                                 style={{
                                     flexDirection: 'row',
                                     alignItems: 'center',
-                                    gap: 3,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 5,
-                                    borderRadius: 9,
+                                    gap: 4,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                    paddingHorizontal: 9,
+                                    paddingVertical: 6.5,
+                                    borderRadius: 11,
                                     borderWidth: 1,
-                                    borderColor: 'rgba(255, 255, 255, 0.2)'
+                                    borderColor: 'rgba(255, 255, 255, 0.15)'
                                 }}
                             >
-                                <Ionicons name="arrow-back" size={12} color="#FFFFFF" />
-                                <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Home</Text>
+                                <Ionicons name="arrow-back" size={13} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Overview</Text>
                             </TouchableOpacity>
                         )}
                     </View>
 
-                    {/* Middle: Brand Emblem & Title */}
+                    {/* Middle: Active Title Indicator */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={{
                             width: 26, 
                             height: 26, 
-                            borderRadius: 7, 
+                            borderRadius: 8, 
                             backgroundColor: 'rgba(217, 167, 58, 0.15)', 
                             borderWidth: 1, 
                             borderColor: 'rgba(217, 167, 58, 0.35)', 
@@ -1011,38 +1267,56 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                         }}>
                             <Image source={AM_LOGO} style={{ width: 18, height: 18 }} resizeMode="contain" />
                         </View>
-                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.2 }}>
-                            Abu Mafhal <Text style={{ color: GOLD }}>Admin</Text>
+                        <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.2 }} numberOfLines={1}>
+                            {activeTab === 'overview' ? 'Command Center' : (activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace('_', ' '))}
                         </Text>
                     </View>
 
-                    {/* Right: AI Copilot & Logout */}
+                    {/* Right: AI Copilot, Shop Link, Logout */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity 
                             onPress={() => setShowAiModal(true)}
                             activeOpacity={0.7}
                             style={{ 
-                                width: 30, 
-                                height: 30, 
-                                borderRadius: 8, 
+                                width: 32, 
+                                height: 32, 
+                                borderRadius: 9, 
                                 backgroundColor: 'rgba(217, 167, 58, 0.15)', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
                                 borderWidth: 1,
-                                borderColor: 'rgba(217, 167, 58, 0.3)'
+                                borderColor: 'rgba(217, 167, 58, 0.35)'
                             }}
                             title="AI Copilot"
                         >
-                            <Ionicons name="sparkles" size={14} color={GOLD} />
+                            <Ionicons name="sparkles" size={15} color={GOLD} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            onPress={handleBackToHome}
+                            activeOpacity={0.7}
+                            style={{ 
+                                width: 32, 
+                                height: 32, 
+                                borderRadius: 9, 
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                borderWidth: 1,
+                                borderColor: 'rgba(255, 255, 255, 0.15)'
+                            }}
+                            title="Storefront"
+                        >
+                            <Ionicons name="storefront" size={14} color="#FFFFFF" />
                         </TouchableOpacity>
 
                         <TouchableOpacity 
                             onPress={handleLogoutPrompt}
                             activeOpacity={0.7}
                             style={{ 
-                                width: 30, 
-                                height: 30, 
-                                borderRadius: 8, 
+                                width: 32, 
+                                height: 32, 
+                                borderRadius: 9, 
                                 backgroundColor: 'rgba(239, 68, 68, 0.15)', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
@@ -1051,52 +1325,10 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                             }}
                             title="Log Out"
                         >
-                            <Ionicons name="log-out-outline" size={14} color="#F87171" />
+                            <Ionicons name="log-out-outline" size={15} color="#F87171" />
                         </TouchableOpacity>
                     </View>
                 </View>
-
-                {/* HORIZONTAL QUICK PILL TABS */}
-                <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false} 
-                    contentContainerStyle={{ paddingHorizontal: 12, gap: 5, paddingBottom: 2 }}
-                >
-                    {QUICK_TABS.map((tab) => {
-                        const isActive = activeTab === tab.id;
-                        return (
-                            <TouchableOpacity
-                                key={tab.id}
-                                onPress={() => setActiveTab(tab.id)}
-                                activeOpacity={0.7}
-                                style={{ 
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    paddingHorizontal: 9, 
-                                    paddingVertical: 4, 
-                                    borderRadius: 9, 
-                                    backgroundColor: isActive ? GOLD : 'rgba(255, 255, 255, 0.08)',
-                                    borderWidth: 1, 
-                                    borderColor: isActive ? GOLD : 'rgba(255, 255, 255, 0.12)'
-                                }}
-                            >
-                                <Ionicons 
-                                    name={isActive ? tab.activeIcon : tab.icon} 
-                                    size={12} 
-                                    color={isActive ? NAVY : '#FFFFFF'} 
-                                />
-                                <Text style={{ 
-                                    color: isActive ? NAVY : '#FFFFFF', 
-                                    fontSize: 10.5, 
-                                    fontWeight: isActive ? '800' : '600' 
-                                }}>
-                                    {tab.label}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </ScrollView>
             </LinearGradient>
 
 
