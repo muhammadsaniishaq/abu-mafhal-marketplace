@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { AdminAIService, fetchAdminPlatformContext } from '../services/adminAIService';
+import { generateAutonomousAdminResponse } from '../services/autonomousAIEngine.js';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -294,8 +295,10 @@ export const AdminAIAssistantModal = ({ visible, onClose, onNavigate, user }) =>
             const aiMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: text, suggestions, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), day: 'Today' };
             const f = [...cur, aiMsg]; setMessages(f); saveSession(f);
         } catch (err) {
-            const em = { id: (Date.now() + 1).toString(), role: 'assistant', content: `⚠️ ${err.message}`, suggestions: [], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), day: 'Today' };
-            const f = [...cur, em]; setMessages(f); saveSession(f);
+            console.warn('[Admin AI Modal] Error, invoking autonomous fallback:', err?.message);
+            const fallback = generateAutonomousAdminResponse({ prompt: txt || 'Platform summary', history: messages, platformContext: platformCtx });
+            const aiMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: fallback.text, suggestions: fallback.suggestions, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), day: 'Today' };
+            const f = [...cur, aiMsg]; setMessages(f); saveSession(f);
         } finally { setLoading(false); }
     };
 

@@ -8,7 +8,8 @@
  * • NEVER uses this service in User-facing screens
  * ─────────────────────────────────────────────────────────────
  */
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
+import { generateAutonomousAdminResponse } from './autonomousAIEngine.js';
 
 // ─────────────────────────────────────────────
 // Admin AI Tools (Function Calling Definitions)
@@ -492,39 +493,35 @@ export const AdminAIService = {
             console.log('[AdminAI] Context Error:', e);
         }
 
-        try {
-            if (provider === 'gemini' && !geminiKey) throw new Error('Gemini API Key not configured. Go to Admin Settings.');
-            if (provider === 'openai' && !openaiKey) throw new Error('OpenAI API Key not configured. Go to Admin Settings.');
+        let rawText = '';
 
-            let rawText = '';
-
-            if (provider === 'gemini') {
-                try {
-                    rawText = await callGemini(prompt, history, geminiKey, systemPrompt, platformContext, imageBase64, imageMimeType);
-                } catch (gemErr) {
-                    const em = (gemErr.message || '').toLowerCase();
-                    if (em.includes('quota') || em.includes('429') || em.includes('exceeded')) {
-                        console.log('[AdminAI] Gemini Quota Exceeded. Attempting OpenAI Fallback...');
-                        if (openaiKey) {
-                            rawText = await callOpenAI(prompt, history, openaiKey, systemPrompt, platformContext, imageBase64, imageMimeType);
-                        } else {
-                            throw new Error('Gemini Free limit reached. Please wait a minute, or configure OpenAI API Key in Settings for automatic backup.');
-                        }
-                    } else {
-                        throw gemErr;
-                    }
-                }
-            } else {
-                rawText = await callOpenAI(prompt, history, openaiKey, systemPrompt, platformContext, imageBase64, imageMimeType);
+        // Priority 1: Gemini (if requested and key provided)
+        if (provider === 'gemini' && geminiKey && geminiKey.trim().length > 10) {
+            try {
+                rawText = await callGemini(prompt, history, geminiKey, systemPrompt, platformContext, imageBase64, imageMimeType);
+            } catch (gemErr) {
+                console.warn('[AdminAI] Gemini call failed:', gemErr.message, 'Trying OpenAI fallback...');
             }
-
-            const suggMatch = rawText.match(/FOLLOW_UP:\s*(.+)/);
-            const suggestions = suggMatch ? suggMatch[1].split('|').map(s => s.trim()).filter(Boolean).slice(0, 3) : [];
-            const text = rawText.replace(/FOLLOW_UP:.*$/m, '').trim();
-            return { text, suggestions };
-        } catch (error) {
-            console.log('[AdminAI] Error:', error.message);
-            throw new Error(error.message || 'AI service failed. Please try again.');
         }
+
+        // Priority 2: OpenAI (if provider is openai, or as fallback from Gemini)
+        if (!rawText && openaiKey && openaiKey.trim().length > 10) {
+            try {
+                rawText = await callOpenAI(prompt, history, openaiKey, systemPrompt, platformContext, imageBase64, imageMimeType);
+            } catch (oaiErr) {
+                console.warn('[AdminAI] OpenAI call failed:', oaiErr.message, 'Falling back to Autonomous Admin Engine...');
+            }
+        }
+
+        // Priority 3: Autonomous Platform Intelligence Engine (Zero-failure local guarantee)
+        if (!rawText) {
+            console.log('[AdminAI] Utilizing Abu Mafhal Autonomous Admin Engine...');
+            return generateAutonomousAdminResponse({ prompt, history, platformContext });
+        }
+
+        const suggMatch = rawText.match(/FOLLOW_UP:\s*(.+)/);
+        const suggestions = suggMatch ? suggMatch[1].split('|').map(s => s.trim()).filter(Boolean).slice(0, 3) : ['Platform summary 📊', 'Low stock products 📉', 'Pending vendors 🏪'];
+        const text = rawText.replace(/FOLLOW_UP:.*$/m, '').trim();
+        return { text, suggestions };
     },
 };

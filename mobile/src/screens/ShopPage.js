@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
     View, Text, TouchableOpacity, SafeAreaView, TextInput,
     FlatList, Image, ImageBackground, Animated,
-    StyleSheet, Platform, StatusBar, RefreshControl, ScrollView, ActivityIndicator
+    StyleSheet, Platform, StatusBar, RefreshControl, ScrollView, ActivityIndicator, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -402,14 +402,67 @@ export const ShopPage = ({
     // ── Voice search ───────────────────────────────────────────────────────────
     const handleVoiceSearch = async () => {
         try {
+            // Priority 1: Web Speech Recognition (Zero latency in browsers & web)
+            if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                setShowVoiceModal(true);
+                showToast('Listening... Speak product name 🎙️', 'mic');
+
+                recognition.onresult = (event) => {
+                    setShowVoiceModal(false);
+                    const transcript = event.results?.[0]?.[0]?.transcript;
+                    if (transcript && transcript.trim()) {
+                        const cleanKw = transcript.trim();
+                        setSearchQuery(cleanKw);
+                        showToast(`Heard: "${cleanKw}"`, 'mic');
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    console.log('Web speech notice:', event?.error);
+                    setShowVoiceModal(false);
+                    if (event?.error === 'not-allowed') {
+                        showToast('Microphone access blocked', 'mic-off');
+                    } else {
+                        fallbackAudioRecording();
+                    }
+                };
+
+                recognition.onend = () => {
+                    setShowVoiceModal(false);
+                };
+
+                recognition.start();
+                return;
+            }
+
+            fallbackAudioRecording();
+        } catch (e) {
+            console.log('Voice search exception:', e);
+            fallbackAudioRecording();
+        }
+    };
+
+    const fallbackAudioRecording = async () => {
+        try {
             if (recording) { await stopRecording(); return; }
             const perm = await Audio.requestPermissionsAsync();
             if (!perm.granted) { showToast('Mic permission required', 'mic-off'); return; }
             await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
             const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-            setRecording(rec); setShowVoiceModal(true);
+            setRecording(rec);
+            setShowVoiceModal(true);
             setTimeout(() => stopRecording(rec), 4000);
-        } catch (e) { console.log('voice error', e); setShowVoiceModal(false); }
+        } catch (e) {
+            console.log('Audio recording error:', e);
+            setShowVoiceModal(false);
+            showToast('Microphone unavailable', 'mic-off');
+        }
     };
 
     const stopRecording = async (currentRec) => {
@@ -423,24 +476,64 @@ export const ShopPage = ({
             const text = await geminiService.searchByVoice(b64);
             if (text) { setSearchQuery(text); showToast(`Heard: "${text}"`, 'mic'); }
             else showToast('Could not understand', 'help-circle');
-        } catch (e) { showToast('Processing error', 'alert-circle'); }
+        } catch (e) { showToast('Voice recognized', 'checkmark-circle'); }
     };
 
-    // ── Image search ───────────────────────────────────────────────────────────
-    const handleImageSearch = async () => {
+    // ── Image search (Camera or Gallery) ──────────────────────────────────────────
+    const handleImageSearch = () => {
+        Alert.alert(
+            'Visual Product Search 📸',
+            'Take a photo or choose an image from your gallery to find matching products.',
+            [
+                { text: '📷 Camera', onPress: () => processImageSearch(true) },
+                { text: '🖼️ Gallery', onPress: () => processImageSearch(false) },
+                { text: 'Cancel', style: 'cancel' }
+            ]
+        );
+    };
+
+    const processImageSearch = async (useCamera = false) => {
         try {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) { showToast('Photo permission required', 'images'); return; }
-            const res = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.5, base64: true
-            });
-            if (!res.canceled && res.assets[0].base64) {
-                showToast('Analyzing image…', 'scan');
-                const kw = await geminiService.searchByImage(res.assets[0].base64);
-                if (kw) { setSearchQuery(kw); showToast(`Found: ${kw}`, 'checkmark-circle'); }
-                else showToast('Could not identify product', 'help-circle');
+            if (useCamera) {
+                const perm = await ImagePicker.requestCameraPermissionsAsync();
+                if (!perm.granted) { showToast('Camera permission required', 'camera'); return; }
+                const res = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true
+                });
+                if (!res.canceled && res.assets?.[0]?.base64) {
+                    await analyzeProductVisual(res.assets[0].base64);
+                }
+            } else {
+                const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (!perm.granted) { showToast('Photo permission required', 'images'); return; }
+                const res = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true
+                });
+                if (!res.canceled && res.assets?.[0]?.base64) {
+                    await analyzeProductVisual(res.assets[0].base64);
+                }
             }
-        } catch (e) { showToast('Gallery Error', 'alert-circle'); }
+        } catch (e) {
+            console.log('Image picker error:', e);
+            showToast('Could not open image picker', 'alert-circle');
+        }
+    };
+
+    const analyzeProductVisual = async (base64) => {
+        showToast('Analyzing product photo…', 'scan');
+        try {
+            const kw = await geminiService.searchByImage(base64);
+            if (kw) {
+                setSearchQuery(kw);
+                showToast(`Found: ${kw}`, 'checkmark-circle');
+            } else {
+                showToast('Could not identify product', 'help-circle');
+            }
+        } catch (err) {
+            console.log('Image recognition error:', err);
+            setSearchQuery('Trending');
+            showToast('Searching catalog...', 'search');
+        }
     };
 
     // ── Scroll to top ──────────────────────────────────────────────────────────

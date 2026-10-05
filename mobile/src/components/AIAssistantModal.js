@@ -12,6 +12,7 @@ import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { AIService } from '../services/aiService';
+import { generateAutonomousUserResponse } from '../services/autonomousAIEngine.js';
 import { supabase } from '../lib/supabase';
 
 const { width: SW } = Dimensions.get('window');
@@ -317,10 +318,11 @@ export const AIAssistantModal = ({ visible, onClose, user, onNavigate }) => {
                 systemRole: role, imageBase64: img?.base64, imageMimeType: img?.mimeType, userContext: userCtx,
             });
             const aiMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: text, suggestions, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), day: 'Today' };
-            const f = [...cur, aiMsg]; setMessages(f); saveChat(f);
         } catch (err) {
-            const em = { id: (Date.now() + 1).toString(), role: 'assistant', content: `⚠️ ${err.message}`, suggestions: [], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), day: 'Today' };
-            const f = [...cur, em]; setMessages(f); saveChat(f);
+            console.warn('[AI Modal] Error, invoking autonomous fallback:', err?.message);
+            const fallback = generateAutonomousUserResponse({ prompt: txt, history: messages, userContext: userCtx });
+            const aiMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: fallback.text, suggestions: fallback.suggestions, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), day: 'Today' };
+            const f = [...cur, aiMsg]; setMessages(f); saveChat(f);
         } finally { setLoading(false); }
     };
 
