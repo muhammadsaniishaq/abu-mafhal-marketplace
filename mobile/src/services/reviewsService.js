@@ -35,12 +35,61 @@ const saveFallbackReviews = async (reviewsList) => {
     }
 };
 
+/**
+ * Helper to compute average and rating distribution
+ */
+const calculateReviewStats = (reviewsList) => {
+    const totalCount = reviewsList.length;
+    if (totalCount === 0) {
+        return {
+            totalCount: 0,
+            averageRating: 0,
+            distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+            percentages: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+        };
+    }
+
+    const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    let sum = 0;
+
+    reviewsList.forEach(r => {
+        const val = Number(r.rating) || 5;
+        sum += val;
+        const star = Math.min(5, Math.max(1, Math.round(val)));
+        dist[star] = (dist[star] || 0) + 1;
+    });
+
+    const averageRating = (sum / totalCount).toFixed(1);
+    const percentages = {
+        5: Math.round((dist[5] / totalCount) * 100),
+        4: Math.round((dist[4] / totalCount) * 100),
+        3: Math.round((dist[3] / totalCount) * 100),
+        2: Math.round((dist[2] / totalCount) * 100),
+        1: Math.round((dist[1] / totalCount) * 100)
+    };
+
+    return {
+        totalCount,
+        averageRating,
+        distribution: dist,
+        percentages
+    };
+};
+
 export const reviewsService = {
     /**
-     * Fetch approved reviews for a specific product
+     * Fetch approved reviews for a specific product with full breakdown stats
      */
     fetchProductReviews: async (productId) => {
-        if (!productId) return { reviews: [], totalCount: 0, averageRating: 0 };
+        if (!productId) {
+            return {
+                reviews: [],
+                totalCount: 0,
+                averageRating: 0,
+                distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+                percentages: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+            };
+        }
 
         try {
             // 1. Try real Supabase reviews table
@@ -52,10 +101,8 @@ export const reviewsService = {
                 .order('created_at', { ascending: false });
 
             if (!error && Array.isArray(data)) {
-                const totalCount = data.length;
-                const sum = data.reduce((acc, curr) => acc + (Number(curr.rating) || 5), 0);
-                const averageRating = totalCount > 0 ? (sum / totalCount).toFixed(1) : 0;
-                return { reviews: data, totalCount, averageRating };
+                const stats = calculateReviewStats(data);
+                return { reviews: data, ...stats };
             }
         } catch (_) {}
 
@@ -64,18 +111,23 @@ export const reviewsService = {
         const filtered = fallback.filter(
             r => String(r.product_id) === String(productId) && (r.status === 'approved' || !r.status)
         );
-        const totalCount = filtered.length;
-        const sum = filtered.reduce((acc, curr) => acc + (Number(curr.rating) || 5), 0);
-        const averageRating = totalCount > 0 ? (sum / totalCount).toFixed(1) : 0;
-
-        return { reviews: filtered, totalCount, averageRating };
+        const stats = calculateReviewStats(filtered);
+        return { reviews: filtered, ...stats };
     },
 
     /**
      * Fetch approved reviews for a specific driver
      */
     fetchDriverReviews: async (driverId) => {
-        if (!driverId) return { reviews: [], totalCount: 0, averageRating: 0 };
+        if (!driverId) {
+            return {
+                reviews: [],
+                totalCount: 0,
+                averageRating: 0,
+                distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+                percentages: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+            };
+        }
 
         try {
             const { data, error } = await supabase
@@ -86,10 +138,8 @@ export const reviewsService = {
                 .order('created_at', { ascending: false });
 
             if (!error && Array.isArray(data)) {
-                const totalCount = data.length;
-                const sum = data.reduce((acc, curr) => acc + (Number(curr.rating) || 5), 0);
-                const averageRating = totalCount > 0 ? (sum / totalCount).toFixed(1) : 0;
-                return { reviews: data, totalCount, averageRating };
+                const stats = calculateReviewStats(data);
+                return { reviews: data, ...stats };
             }
         } catch (_) {}
 
@@ -97,57 +147,70 @@ export const reviewsService = {
         const filtered = fallback.filter(
             r => String(r.driver_id) === String(driverId) && (r.status === 'approved' || !r.status)
         );
-        const totalCount = filtered.length;
-        const sum = filtered.reduce((acc, curr) => acc + (Number(curr.rating) || 5), 0);
-        const averageRating = totalCount > 0 ? (sum / totalCount).toFixed(1) : 0;
-
-        return { reviews: filtered, totalCount, averageRating };
+        const stats = calculateReviewStats(filtered);
+        return { reviews: filtered, ...stats };
     },
 
     /**
-     * Submit a review (Product or Driver)
+     * Submit a review (Product or Driver) with automatic UUID generation
      */
     submitReview: async (reviewPayload) => {
-        const id = 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-        const newReview = {
-            id,
-            user_id: reviewPayload.user_id || null,
+        // Prepare database-safe payload (omits explicit id so Postgres generates valid UUID)
+        const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+        const dbPayload = {
+            product_id: isUUID(reviewPayload.product_id) ? reviewPayload.product_id : null,
+            driver_id: isUUID(reviewPayload.driver_id) ? reviewPayload.driver_id : null,
+            order_id: isUUID(reviewPayload.order_id) ? reviewPayload.order_id : null,
+            user_id: isUUID(reviewPayload.user_id) ? reviewPayload.user_id : null,
             user_name: reviewPayload.user_name || 'Verified Customer',
-            product_id: reviewPayload.product_id || null,
-            driver_id: reviewPayload.driver_id || null,
-            order_id: reviewPayload.order_id || null,
             review_type: reviewPayload.review_type || 'product',
             rating: Number(reviewPayload.rating) || 5,
             title: reviewPayload.title || '',
             comment: reviewPayload.comment || '',
             images: Array.isArray(reviewPayload.images) ? reviewPayload.images : [],
             status: reviewPayload.status || 'approved',
-            helpful: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            helpful: 0
         };
 
-        // 1. Try insert to Supabase 'reviews' table
-        let dbSuccess = false;
+        let savedRecord = null;
+
+        // 1. Insert directly to Supabase 'reviews' table
         try {
-            const { error } = await supabase.from('reviews').insert(newReview);
-            if (!error) {
-                dbSuccess = true;
+            const { data, error } = await supabase
+                .from('reviews')
+                .insert(dbPayload)
+                .select();
+
+            if (!error && data && data.length > 0) {
+                savedRecord = data[0];
+            } else if (error) {
+                console.warn('ReviewsService: Direct DB insert notice:', error.message);
             }
         } catch (err) {
-            console.warn('ReviewsService: Direct DB insert failed, using fallback', err);
+            console.warn('ReviewsService: DB insert exception:', err);
         }
 
-        // 2. Always sync to fallback store in app_settings for 100% live reliability
+        // 2. If direct insert couldn't return record, construct one for state and fallback
+        if (!savedRecord) {
+            savedRecord = {
+                ...dbPayload,
+                id: 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+                product_id: reviewPayload.product_id || null,
+                driver_id: reviewPayload.driver_id || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+        }
+
+        // 3. Always mirror to app_settings as secondary layer
         try {
             const existing = await getFallbackReviews();
-            const updated = [newReview, ...existing.filter(r => r.id !== newReview.id)];
+            const updated = [savedRecord, ...existing.filter(r => r.id !== savedRecord.id)];
             await saveFallbackReviews(updated);
-        } catch (err) {
-            console.warn('ReviewsService: Fallback save error', err);
-        }
+        } catch (_) {}
 
-        return { success: true, data: newReview };
+        return { success: true, data: savedRecord };
     },
 
     /**
@@ -157,7 +220,6 @@ export const reviewsService = {
         let list = [];
 
         try {
-            // 1. Attempt query from real Supabase reviews table with relations
             let query = supabase
                 .from('reviews')
                 .select(`
@@ -177,16 +239,15 @@ export const reviewsService = {
             }
 
             const { data, error } = await query;
-            if (!error && Array.isArray(data) && data.length > 0) {
+            if (!error && Array.isArray(data)) {
                 return data;
             }
         } catch (_) {}
 
-        // 2. Fallback to app_settings
+        // Fallback
         const fallback = await getFallbackReviews();
         list = fallback;
 
-        // Fetch product names and driver names to enrich fallback records
         try {
             const productIds = [...new Set(list.filter(r => r.product_id).map(r => r.product_id))];
             const driverIds = [...new Set(list.filter(r => r.driver_id).map(r => r.driver_id))];
@@ -212,7 +273,6 @@ export const reviewsService = {
             }));
         } catch (_) {}
 
-        // Apply in-memory filters
         if (statusFilter !== 'all') {
             list = list.filter(r => (r.status || 'approved') === statusFilter);
         }
@@ -224,7 +284,7 @@ export const reviewsService = {
     },
 
     /**
-     * Update review status (approve/reject)
+     * Update review status
      */
     updateReviewStatus: async (reviewId, newStatus) => {
         try {
@@ -254,6 +314,23 @@ export const reviewsService = {
             await saveFallbackReviews(updated);
         } catch (_) {}
 
+        return true;
+    },
+
+    /**
+     * Mark review helpful
+     */
+    markHelpful: async (reviewId) => {
+        try {
+            await supabase.rpc('increment_review_helpful', { review_id: reviewId });
+        } catch (_) {
+            try {
+                const { data } = await supabase.from('reviews').select('helpful').eq('id', reviewId).maybeSingle();
+                if (data) {
+                    await supabase.from('reviews').update({ helpful: (data.helpful || 0) + 1 }).eq('id', reviewId);
+                }
+            } catch (_) {}
+        }
         return true;
     }
 };
