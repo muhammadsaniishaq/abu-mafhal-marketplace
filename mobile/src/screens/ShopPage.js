@@ -110,8 +110,7 @@ const ProductCard = React.memo(({ item, onPress, onAddToCart, onWishlist, inWish
             <TouchableOpacity activeOpacity={1} onPressIn={onIn} onPressOut={onOut} onPress={() => onPress(item)}>
                 {/* Image */}
                 <View style={S.imgBox}>
-                    <Image source={{ uri: getImgUri(item) }} style={S.imgFull} resizeMode="cover" />
-                    <LinearGradient colors={['transparent', 'rgba(14,26,46,0.3)']} style={S.imgGrad} />
+                    <Image source={{ uri: getImgUri(item) }} style={S.imgFull} resizeMode="contain" />
 
                     {isOut && (
                         <View style={S.outOverlay}>
@@ -752,11 +751,12 @@ export const ShopPage = ({
                         const dOld = dHas ? item.compare_at_price : (item.original_price || null);
                         return (
                             <TouchableOpacity key={item.id} style={S.dealCard} activeOpacity={0.84} onPress={() => onProductClick(item)}>
-                                <Image source={{ uri: getImgUri(item) }} style={S.dealImg} resizeMode="cover" />
-                                <LinearGradient colors={['transparent', 'rgba(14,26,46,0.55)']} style={S.dealGrad} />
-                                <LinearGradient colors={['#EF4444', '#DC2626']} style={S.dealBadge}>
-                                    <Text style={S.dealBadgeTxt}>-{dPct}%</Text>
-                                </LinearGradient>
+                                <View style={{ width: '100%', height: 102, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', padding: 6, position: 'relative' }}>
+                                    <Image source={{ uri: getImgUri(item) }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                                    <LinearGradient colors={['#EF4444', '#DC2626']} style={S.dealBadge}>
+                                        <Text style={S.dealBadgeTxt}>-{dPct}%</Text>
+                                    </LinearGradient>
+                                </View>
                                 <View style={S.dealInfo}>
                                     <Text style={S.dealName} numberOfLines={1}>{item.name}</Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -1328,9 +1328,17 @@ const S = StyleSheet.create({
         shadowColor: NAVY,
         shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10,
     },
-    imgBox: { height: 142, position: 'relative', overflow: 'hidden', backgroundColor: '#EDF1F8' },
+    imgBox: {
+        height: 148,
+        position: 'relative',
+        overflow: 'hidden',
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 8,
+    },
     imgFull: { width: '100%', height: '100%' },
-    imgGrad: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 55 },
+    imgGrad: { display: 'none' },
 
     badge: {
         position: 'absolute', top: 8, left: 8,
