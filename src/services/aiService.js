@@ -1,26 +1,55 @@
-// ============================================
-// AI SERVICE - src/services/aiService.js
-// ============================================
-// This service integrates with OpenAI or Google Gemini for real AI responses
+import { supabase } from '../config/supabase.js';
 
 class AIService {
   constructor() {
     this.apiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
     this.geminiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-    this.useGemini = !this.apiKey && this.geminiKey;
+  }
+
+  async getActiveKeys() {
+    let gemKey = this.geminiKey;
+    let oaiKey = this.apiKey;
+
+    try {
+      const cached = localStorage.getItem('@abumafhal_settings_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const g = parsed.gemini_api_key?.value || parsed.gemini_api_key;
+        const o = parsed.openai_api_key?.value || parsed.openai_api_key;
+        if (g && typeof g === 'string') gemKey = g.trim();
+        if (o && typeof o === 'string') oaiKey = o.trim();
+      }
+    } catch (_) {}
+
+    if (!gemKey || !oaiKey) {
+      try {
+        const { data } = await supabase.from('app_settings').select('key,value').in('key', ['gemini_api_key', 'openai_api_key']);
+        if (data) {
+          const gRow = data.find(d => d.key === 'gemini_api_key');
+          const oRow = data.find(d => d.key === 'openai_api_key');
+          const g = gRow?.value?.value || gRow?.value;
+          const o = oRow?.value?.value || oRow?.value;
+          if (g && typeof g === 'string') gemKey = g.trim();
+          if (o && typeof o === 'string') oaiKey = o.trim();
+        }
+      } catch (_) {}
+    }
+
+    return { geminiKey: gemKey, openaiKey: oaiKey };
   }
 
   // Get AI response using OpenAI GPT
-  async getOpenAIResponse(userMessage, context = {}) {
+  async getOpenAIResponse(userMessage, context = {}, overrideKey) {
+    const key = overrideKey || this.apiKey;
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${key.trim()}`,
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4o-mini',
           messages: [
             {
               role: 'system',
@@ -50,10 +79,13 @@ class AIService {
       });
 
       const data = await response.json();
-      return {
-        text: data.choices[0].message.content,
-        suggestions: this.generateSuggestions(userMessage)
-      };
+      if (data.choices?.[0]?.message?.content) {
+        return {
+          text: data.choices[0].message.content,
+          suggestions: this.generateSuggestions(userMessage)
+        };
+      }
+      return this.getFallbackResponse(userMessage);
     } catch (error) {
       console.error('OpenAI API Error:', error);
       return this.getFallbackResponse(userMessage);
@@ -61,58 +93,67 @@ class AIService {
   }
 
   // Get AI response using Google Gemini
-  async getGeminiResponse(userMessage, context = {}) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.geminiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `You are a helpful AI shopping assistant for Abu Mafhal Marketplace.
-                
-                Context:
-                - Cart items: ${context.cartItems?.length || 0}
-                - User: ${context.userName || 'Guest'}
-                - Logged in: ${context.isLoggedIn ? 'Yes' : 'No'}
-                
-                User message: ${userMessage}
-                
-                Provide a helpful, friendly response with emojis. Be concise and action-oriented.`
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 500,
-            },
-          }),
-        }
-      );
+  async getGeminiResponse(userMessage, context = {}, overrideKey) {
+    const key = overrideKey || this.geminiKey;
+    const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
 
-      const data = await response.json();
-      return {
-        text: data.candidates[0].content.parts[0].text,
-        suggestions: this.generateSuggestions(userMessage)
-      };
-    } catch (error) {
-      console.error('Gemini API Error:', error);
-      return this.getFallbackResponse(userMessage);
+    for (const m of models) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key.trim()}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `You are a helpful AI shopping assistant for Abu Mafhal Marketplace.
+                  
+                  Context:
+                  - Cart items: ${context.cartItems?.length || 0}
+                  - User: ${context.userName || 'Guest'}
+                  - Logged in: ${context.isLoggedIn ? 'Yes' : 'No'}
+                  
+                  User message: ${userMessage}
+                  
+                  Provide a helpful, friendly response with emojis. Be concise and action-oriented.`
+                }]
+              }],
+              generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
+            }),
+          }
+        );
+
+        if (!response.ok) continue;
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return {
+            text,
+            suggestions: this.generateSuggestions(userMessage)
+          };
+        }
+      } catch (error) {
+        console.error('Gemini API Error:', error);
+      }
     }
+
+    return this.getFallbackResponse(userMessage);
   }
 
   // Main method to get AI response
   async getAIResponse(userMessage, context = {}) {
-    if (this.useGemini && this.geminiKey) {
-      return await this.getGeminiResponse(userMessage, context);
-    } else if (this.apiKey) {
-      return await this.getOpenAIResponse(userMessage, context);
-    } else {
-      return this.getFallbackResponse(userMessage);
+    const { geminiKey, openaiKey } = await this.getActiveKeys();
+
+    if (geminiKey) {
+      const res = await this.getGeminiResponse(userMessage, context, geminiKey);
+      if (res && res.text) return res;
     }
+    if (openaiKey) {
+      const res = await this.getOpenAIResponse(userMessage, context, openaiKey);
+      if (res && res.text) return res;
+    }
+    return this.getFallbackResponse(userMessage);
   }
 
   // Fallback response when no API key is configured

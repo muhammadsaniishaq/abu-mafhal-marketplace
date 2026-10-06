@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { UploadService } from '../../services/uploadService';
 import { supabase } from '../../lib/supabase';
 import { invalidateResendKeyCache } from '../../lib/notifications';
+import { geminiService, invalidateAiKeyCache } from '../../services/geminiService';
 import Constants from 'expo-constants';
 import { ForceUpdateModal } from '../../components/ForceUpdateModal';
 
@@ -364,6 +365,12 @@ export const AdminSettings = ({ navigation }) => {
     const [premblySecretKey,       setPremblySecretKey]      = useState(settings?.prembly_secret_key || '');
     const [geminiApiKey,           setGeminiApiKey]          = useState(settings?.gemini_api_key || '');
     const [openaiApiKey,           setOpenaiApiKey]          = useState(settings?.openai_api_key || '');
+    const [showGeminiKey,          setShowGeminiKey]         = useState(false);
+    const [showOpenaiKey,          setShowOpenaiKey]         = useState(false);
+    const [testingGemini,          setTestingGemini]         = useState(false);
+    const [geminiTestStatus,       setGeminiTestStatus]      = useState(null);
+    const [testingOpenai,          setTestingOpenai]         = useState(false);
+    const [openaiTestStatus,       setOpenaiTestStatus]      = useState(null);
     const [resendApiKey,           setResendApiKey]          = useState(settings?.resend_api_key || '');
     const [showResendKey,          setShowResendKey]         = useState(false);
     const [features,               setFeatures]              = useState(settings?.features || {});
@@ -842,8 +849,55 @@ export const AdminSettings = ({ navigation }) => {
         else {
             setUnsaved(false);
             invalidateResendKeyCache(); // Bust cached Resend key so new one is used immediately
+            invalidateAiKeyCache(); // Bust cached AI keys so new ones are used immediately
             Alert.alert('Deployed! ✅', 'All configurations are now live across the platform.');
             if (refreshSettings) refreshSettings();
+        }
+    };
+
+    const handleTestGeminiKey = async () => {
+        if (!geminiApiKey || geminiApiKey.trim().length < 10) {
+            Alert.alert('Babu Key', 'Da fatan za a saka Google Gemini API key kafin gwadawa.');
+            return;
+        }
+        setTestingGemini(true);
+        setGeminiTestStatus(null);
+        try {
+            const res = await geminiService.testGeminiKey(geminiApiKey);
+            setGeminiTestStatus(res);
+            if (res.success) {
+                Alert.alert('Nasara! ✅', res.message);
+            } else {
+                Alert.alert('Gargadi! ⚠️', res.message);
+            }
+        } catch (e) {
+            setGeminiTestStatus({ success: false, message: e.message });
+            Alert.alert('Kuskure ❌', e.message);
+        } finally {
+            setTestingGemini(false);
+        }
+    };
+
+    const handleTestOpenaiKey = async () => {
+        if (!openaiApiKey || openaiApiKey.trim().length < 10) {
+            Alert.alert('Babu Key', 'Da fatan za a saka OpenAI API key kafin gwadawa.');
+            return;
+        }
+        setTestingOpenai(true);
+        setOpenaiTestStatus(null);
+        try {
+            const res = await geminiService.testOpenAIKey(openaiApiKey);
+            setOpenaiTestStatus(res);
+            if (res.success) {
+                Alert.alert('Nasara! ✅', res.message);
+            } else {
+                Alert.alert('Gargadi! ⚠️', res.message);
+            }
+        } catch (e) {
+            setOpenaiTestStatus({ success: false, message: e.message });
+            Alert.alert('Kuskure ❌', e.message);
+        } finally {
+            setTestingOpenai(false);
         }
     };
 
@@ -2007,10 +2061,160 @@ export const AdminSettings = ({ navigation }) => {
                 </Card>
             </Sect>
 
-            <Sect title="AI Intelligence APIs" icon="sparkles">
+            <Sect title="AI Intelligence APIs" icon="sparkles" subtitle="Powers Image Vision Search, Voice AI & Auto-Descriptions">
                 <Card>
-                    <Inp label="Gemini Ultra Key"  value={geminiApiKey}  onChange={v => { setGeminiApiKey(v); setUnsaved(true); }}  icon="sparkles"  secure placeholder="AIza..." color="#8B5CF6" />
-                    <Inp label="OpenAI GPT Key"    value={openaiApiKey}  onChange={v => { setOpenaiApiKey(v); setUnsaved(true); }}  icon="brain"     secure placeholder="sk-..."  color="#10B981" />
+                    <View style={{ flexDirection: 'row', gap: 6, padding: 10, borderRadius: 10, backgroundColor: darkMode ? '#1E293B' : '#F0F9FF', borderWidth: 1, borderColor: '#BAE6FD', marginBottom: 14 }}>
+                        <Ionicons name="sparkles" size={16} color="#0284C7" style={{ marginTop: 1 }} />
+                        <Text style={{ fontSize: 12, color: darkMode ? '#BAE6FD' : '#0369A1', flex: 1, lineHeight: 18 }}>
+                            Google Gemini yana gudanar da binciken hoton kyamara (Image Search), binciken murya (Voice), da kirkirar bayanin kaya. OpenAI GPT kuma yana aiki a matsayin mai karfafawa. Samu sabon Gemini Key kyauta a <Text style={{ fontWeight: '800' }}>aistudio.google.com</Text>.
+                        </Text>
+                    </View>
+
+                    {/* Gemini Key */}
+                    <View style={{ marginBottom: 14 }}>
+                        <View style={{ position: 'relative' }}>
+                            <Inp
+                                label="Google Gemini API Key"
+                                value={geminiApiKey}
+                                onChange={v => { setGeminiApiKey(v); setUnsaved(true); setGeminiTestStatus(null); }}
+                                icon="sparkles"
+                                secure={!showGeminiKey}
+                                placeholder="AIzaSy..."
+                                color="#8B5CF6"
+                                hint="Kiran Gemini 1.5/2.0 Flash domin binciken hotuna da murya"
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowGeminiKey(p => !p)}
+                                style={S.eyeBtn}
+                            >
+                                <Ionicons name={showGeminiKey ? 'eye-off' : 'eye'} size={17} color={T.muted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                            <TouchableOpacity
+                                onPress={handleTestGeminiKey}
+                                disabled={testingGemini}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    backgroundColor: darkMode ? '#334155' : '#F1F5F9',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 7,
+                                    borderRadius: 8,
+                                    borderWidth: 1,
+                                    borderColor: '#CBD5E1',
+                                }}
+                            >
+                                {testingGemini ? (
+                                    <ActivityIndicator size="small" color="#8B5CF6" />
+                                ) : (
+                                    <Ionicons name="hardware-chip-outline" size={14} color="#8B5CF6" />
+                                )}
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: darkMode ? '#FFFFFF' : '#1E293B' }}>
+                                    {testingGemini ? 'Ana Gwada Gemini...' : 'Gwada Gemini API Key'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            {geminiApiKey && geminiApiKey.length > 8 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <View style={[S.dot, { backgroundColor: geminiTestStatus?.success ? '#10B981' : geminiTestStatus?.code === 403 ? '#EF4444' : '#8B5CF6' }]} />
+                                    <Text style={{ fontSize: 11, color: geminiTestStatus?.success ? '#10B981' : geminiTestStatus?.code === 403 ? '#EF4444' : '#8B5CF6', fontWeight: '700' }}>
+                                        {geminiTestStatus?.success ? 'Key Yana Aiki ✅' : geminiTestStatus?.code === 403 ? 'Leaked / Ya Lalace ❌' : 'An Saka Key'}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {geminiTestStatus && (
+                            <View style={{
+                                marginTop: 8,
+                                padding: 9,
+                                borderRadius: 8,
+                                backgroundColor: geminiTestStatus.success ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                                borderWidth: 1,
+                                borderColor: geminiTestStatus.success ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'
+                            }}>
+                                <Text style={{ fontSize: 11.5, color: geminiTestStatus.success ? '#059669' : '#DC2626', lineHeight: 16, fontWeight: '600' }}>
+                                    {geminiTestStatus.message}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* OpenAI Key */}
+                    <View style={{ marginBottom: 4 }}>
+                        <View style={{ position: 'relative' }}>
+                            <Inp
+                                label="OpenAI GPT API Key"
+                                value={openaiApiKey}
+                                onChange={v => { setOpenaiApiKey(v); setUnsaved(true); setOpenaiTestStatus(null); }}
+                                icon="brain"
+                                secure={!showOpenaiKey}
+                                placeholder="sk-proj-..."
+                                color="#10B981"
+                                hint="Kiran GPT-4o-mini a matsayin madadin AI (Fallback)"
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowOpenaiKey(p => !p)}
+                                style={S.eyeBtn}
+                            >
+                                <Ionicons name={showOpenaiKey ? 'eye-off' : 'eye'} size={17} color={T.muted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                            <TouchableOpacity
+                                onPress={handleTestOpenaiKey}
+                                disabled={testingOpenai}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    backgroundColor: darkMode ? '#334155' : '#F1F5F9',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 7,
+                                    borderRadius: 8,
+                                    borderWidth: 1,
+                                    borderColor: '#CBD5E1',
+                                }}
+                            >
+                                {testingOpenai ? (
+                                    <ActivityIndicator size="small" color="#10B981" />
+                                ) : (
+                                    <Ionicons name="hardware-chip-outline" size={14} color="#10B981" />
+                                )}
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: darkMode ? '#FFFFFF' : '#1E293B' }}>
+                                    {testingOpenai ? 'Ana Gwada OpenAI...' : 'Gwada OpenAI API Key'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            {openaiApiKey && openaiApiKey.length > 8 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <View style={[S.dot, { backgroundColor: openaiTestStatus?.success ? '#10B981' : openaiTestStatus?.code === 429 ? '#F59E0B' : '#10B981' }]} />
+                                    <Text style={{ fontSize: 11, color: openaiTestStatus?.success ? '#10B981' : openaiTestStatus?.code === 429 ? '#F59E0B' : '#10B981', fontWeight: '700' }}>
+                                        {openaiTestStatus?.success ? 'Key Yana Aiki ✅' : openaiTestStatus?.code === 429 ? 'Credits Sun Kare ⚠️' : 'An Saka Key'}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {openaiTestStatus && (
+                            <View style={{
+                                marginTop: 8,
+                                padding: 9,
+                                borderRadius: 8,
+                                backgroundColor: openaiTestStatus.success ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                                borderWidth: 1,
+                                borderColor: openaiTestStatus.success ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'
+                            }}>
+                                <Text style={{ fontSize: 11.5, color: openaiTestStatus.success ? '#059669' : '#DC2626', lineHeight: 16, fontWeight: '600' }}>
+                                    {openaiTestStatus.message}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
                 </Card>
             </Sect>
 

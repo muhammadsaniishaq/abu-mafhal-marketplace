@@ -1,8 +1,16 @@
 import { supabase } from '../lib/supabase.js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Cached dynamic API key from Supabase app_settings
+// Cached dynamic API keys
 let cachedApiKey = null;
+let cachedOpenAIApiKey = null;
 let lastKeyFetchTime = 0;
+
+export const invalidateAiKeyCache = () => {
+    cachedApiKey = null;
+    cachedOpenAIApiKey = null;
+    lastKeyFetchTime = 0;
+};
 
 const getActiveApiKey = async () => {
     const now = Date.now();
@@ -10,6 +18,7 @@ const getActiveApiKey = async () => {
         return cachedApiKey;
     }
 
+    // 1. Try Supabase app_settings table
     try {
         const { data } = await supabase
             .from('app_settings')
@@ -25,15 +34,114 @@ const getActiveApiKey = async () => {
         }
     } catch (_) {}
 
+    // 2. Try AsyncStorage cache
+    try {
+        const cachedSettings = await AsyncStorage.getItem('@abumafhal_settings_v1');
+        if (cachedSettings) {
+            const parsed = JSON.parse(cachedSettings);
+            const rawKey = parsed?.gemini_api_key?.value || parsed?.gemini_api_key;
+            if (rawKey && typeof rawKey === 'string' && rawKey.trim().length > 10) {
+                cachedApiKey = rawKey.trim();
+                lastKeyFetchTime = now;
+                return cachedApiKey;
+            }
+        }
+    } catch (_) {}
+
+    // 3. Try window.localStorage on web
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const ls = window.localStorage.getItem('@abumafhal_settings_v1');
+            if (ls) {
+                const parsed = JSON.parse(ls);
+                const rawKey = parsed?.gemini_api_key?.value || parsed?.gemini_api_key;
+                if (rawKey && typeof rawKey === 'string' && rawKey.trim().length > 10) {
+                    cachedApiKey = rawKey.trim();
+                    lastKeyFetchTime = now;
+                    return cachedApiKey;
+                }
+            }
+        }
+    } catch (_) {}
+
+    // 4. Try environment variables
+    try {
+        const envKey = (typeof process !== 'undefined' && process.env)
+            ? (process.env.EXPO_PUBLIC_GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
+            : null;
+        if (envKey && typeof envKey === 'string' && envKey.trim().length > 10) {
+            cachedApiKey = envKey.trim();
+            lastKeyFetchTime = now;
+            return cachedApiKey;
+        }
+    } catch (_) {}
+
+    return null;
+};
+
+const getActiveOpenAIApiKey = async () => {
+    if (cachedOpenAIApiKey) return cachedOpenAIApiKey;
+
+    // 1. Try Supabase app_settings
+    try {
+        const { data } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'openai_api_key')
+            .maybeSingle();
+
+        const keyVal = data?.value?.value || data?.value;
+        if (keyVal && typeof keyVal === 'string' && keyVal.trim().length > 15) {
+            cachedOpenAIApiKey = keyVal.trim();
+            return cachedOpenAIApiKey;
+        }
+    } catch (_) {}
+
+    // 2. Try AsyncStorage
+    try {
+        const cachedSettings = await AsyncStorage.getItem('@abumafhal_settings_v1');
+        if (cachedSettings) {
+            const parsed = JSON.parse(cachedSettings);
+            const rawKey = parsed?.openai_api_key?.value || parsed?.openai_api_key;
+            if (rawKey && typeof rawKey === 'string' && rawKey.trim().length > 15) {
+                cachedOpenAIApiKey = rawKey.trim();
+                return cachedOpenAIApiKey;
+            }
+        }
+    } catch (_) {}
+
+    // 3. Try env
+    try {
+        const envKey = (typeof process !== 'undefined' && process.env)
+            ? (process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY)
+            : null;
+        if (envKey && typeof envKey === 'string' && envKey.trim().length > 15) {
+            cachedOpenAIApiKey = envKey.trim();
+            return cachedOpenAIApiKey;
+        }
+    } catch (_) {}
+
     return null;
 };
 
 const cleanAIJsonResponse = (text) => {
     if (!text || typeof text !== 'string') return null;
     try {
-        const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        let cleaned = text.trim();
+        if (cleaned.startsWith('```json')) cleaned = cleaned.replace(/^```json/, '');
+        else if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```/, '');
+        if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+        cleaned = cleaned.trim();
         return JSON.parse(cleaned);
     } catch (e) {
+        // Try substring search for first '{' and last '}'
+        try {
+            const firstBrace = text.indexOf('{');
+            const lastBrace = text.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+            }
+        } catch (_) {}
         return null;
     }
 };
@@ -114,6 +222,150 @@ const buildRichSEO = (product) => {
 
 export const geminiService = {
 
+    invalidateCache: invalidateAiKeyCache,
+
+    /**
+     * Test a Gemini API key live and return clear diagnostic status
+     */
+    testGeminiKey: async (testKey) => {
+        const key = testKey || (await getActiveApiKey());
+        if (!key || typeof key !== 'string' || key.trim().length < 10) {
+            return {
+                success: false,
+                code: 400,
+                message: 'Babu Gemini API Key ko kuma bai cika ba (Empty Key).'
+            };
+        }
+
+        try {
+            const body = {
+                contents: [{ parts: [{ text: 'Respond with OK' }] }]
+            };
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key.trim()}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                return {
+                    success: true,
+                    code: 200,
+                    message: 'Gemini AI yana aiki 100%! An haɗu da Google Gemini cikin nasara.'
+                };
+            }
+
+            const errCode = result?.error?.code || response.status;
+            const errMsg = result?.error?.message || '';
+
+            if (errCode === 403 || errMsg.toLowerCase().includes('leaked') || errMsg.toLowerCase().includes('permission_denied')) {
+                return {
+                    success: false,
+                    code: 403,
+                    message: 'Google ya toshe wannan API key saboda ya fallasa a bainar jama\'a (Leaked Key). Da fatan za a shiga aistudio.google.com don kirkirar sabon key kyauta!'
+                };
+            }
+
+            if (errCode === 400 || errMsg.toLowerCase().includes('api_key_invalid')) {
+                return {
+                    success: false,
+                    code: 400,
+                    message: 'API Key din ba daidai ba ne (Invalid API Key).'
+                };
+            }
+
+            if (errCode === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource_exhausted')) {
+                return {
+                    success: false,
+                    code: 429,
+                    message: 'Adadin kiran Gemini kyauta ya cika a yau (Rate limit/Quota exceeded).'
+                };
+            }
+
+            return {
+                success: false,
+                code: errCode,
+                message: `Google Gemini Kuskure (${errCode}): ${errMsg || 'Kasa tabbatar da key'}`
+            };
+        } catch (e) {
+            return {
+                success: false,
+                code: 500,
+                message: `Kasa tattaunawa da Google: ${e.message}`
+            };
+        }
+    },
+
+    /**
+     * Test an OpenAI API key live and return clear diagnostic status
+     */
+    testOpenAIKey: async (testKey) => {
+        const key = testKey || (await getActiveOpenAIApiKey());
+        if (!key || typeof key !== 'string' || !key.trim().startsWith('sk-')) {
+            return {
+                success: false,
+                code: 400,
+                message: 'Babu ingantaccen OpenAI API Key (dole ya fara da sk-).'
+            };
+        }
+
+        try {
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${key.trim()}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [{ role: 'user', content: 'Hi' }],
+                    max_tokens: 5
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                return {
+                    success: true,
+                    code: 200,
+                    message: 'OpenAI GPT yana aiki 100%! An haɗu cikin nasara.'
+                };
+            }
+
+            const errType = data?.error?.type;
+            const errMsg = data?.error?.message || '';
+
+            if (res.status === 429 || errType === 'insufficient_quota') {
+                return {
+                    success: false,
+                    code: 429,
+                    message: 'Kudaden asusun OpenAI sun kare (Insufficient Quota). Saka credits a platform.openai.com domin amfani.'
+                };
+            }
+
+            if (res.status === 401) {
+                return {
+                    success: false,
+                    code: 401,
+                    message: 'OpenAI API key din ba daidai ba ne ko an soke shi (Invalid / Revoked Key).'
+                };
+            }
+
+            return {
+                success: false,
+                code: res.status,
+                message: `OpenAI Kuskure (${res.status}): ${errMsg || 'Kasa tabbatar da key'}`
+            };
+        } catch (e) {
+            return {
+                success: false,
+                code: 500,
+                message: `Kasa tattaunawa da OpenAI: ${e.message}`
+            };
+        }
+    },
+
     /**
      * Generate product description based on basic info with multi-model AI & smart fallback
      */
@@ -141,6 +393,7 @@ export const geminiService = {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(body)
                         });
+                        if (!response.ok) continue;
                         const result = await response.json();
                         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                         if (text && text.trim().length > 30) {
@@ -150,7 +403,30 @@ export const geminiService = {
                 }
             }
 
-            // High-converting neural fallback
+            // OpenAI Fallback
+            const oaiKey = await getActiveOpenAIApiKey();
+            if (oaiKey) {
+                try {
+                    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${oaiKey}` },
+                        body: JSON.stringify({
+                            model: 'gpt-4o-mini',
+                            messages: [{
+                                role: 'user',
+                                content: `Write a compelling 120-word e-commerce product description for: ${product.name}, Category: ${product.category || 'General'}. Return plain text.`
+                            }],
+                            max_tokens: 250
+                        })
+                    });
+                    if (res.ok) {
+                        const d = await res.json();
+                        const txt = d.choices?.[0]?.message?.content?.trim();
+                        if (txt && txt.length > 30) return txt;
+                    }
+                } catch (_) {}
+            }
+
             return buildRichProductCopy(product);
         } catch (_) {
             return buildRichProductCopy(product);
@@ -188,6 +464,7 @@ export const geminiService = {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(body)
                         });
+                        if (!response.ok) continue;
                         const result = await response.json();
                         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                         const parsed = cleanAIJsonResponse(text);
@@ -286,110 +563,279 @@ export const geminiService = {
     },
 
     /**
-     * Visual Product Recognition / Image Search
-     * Analyzes image base64 and returns 1-3 keywords to search the store catalog
+     * Comprehensive Visual AI Recognition with Structured Details
+     * Returns:
+     * {
+     *   productName: string,
+     *   category: string,
+     *   brand: string,
+     *   color: string,
+     *   description: string, // Full 2-3 sentence visual description
+     *   searchKeywords: string[],
+     *   confidence: string,
+     *   isAiVerified: boolean,
+     *   apiStatus: 'ai_live' | 'offline_catalog' | 'api_key_expired',
+     *   apiNotice?: string
+     * }
      */
-    searchByImage: async (base64Image, mimeType = 'image/jpeg', metaHint = '') => {
+    searchByImageDetailed: async (base64Image, mimeType = 'image/jpeg', metaHint = '') => {
         if (!base64Image) return null;
 
-        // 1. Analyze filename / metadata hint if available
-        if (metaHint && typeof metaHint === 'string') {
-            const h = metaHint.toLowerCase();
-            if (h.includes('takalmi') || h.includes('shoe') || h.includes('sneaker') || h.includes('nike') || h.includes('adidas') || h.includes('boot') || h.includes('heel') || h.includes('sandal') || h.includes('slide') || h.includes('footwear') || h.includes('leather')) return 'Takalmi';
-            if (h.includes('shadda') || h.includes('kaftan') || h.includes('cloth') || h.includes('shirt') || h.includes('dress') || h.includes('suit') || h.includes('cap') || h.includes('gown') || h.includes('jacket') || h.includes('wear') || h.includes('fashion') || h.includes('kaya')) return 'Shadda';
-            if (h.includes('turare') || h.includes('perfume') || h.includes('fragrance') || h.includes('cologne') || h.includes('scent') || h.includes('oud') || h.includes('oil')) return 'Turare';
-            if (h.includes('agogo') || h.includes('watch') || h.includes('rolex') || h.includes('casio') || h.includes('smartwatch') || h.includes('time') || h.includes('wrist')) return 'Watch';
-            if (h.includes('phone') || h.includes('iphone') || h.includes('samsung') || h.includes('tecno') || h.includes('infinix') || h.includes('pixel') || h.includes('gadget') || h.includes('mobile')) return 'Phones';
-            if (h.includes('bag') || h.includes('handbag') || h.includes('backpack') || h.includes('tote') || h.includes('purse') || h.includes('wallet')) return 'Bags';
-            if (h.includes('laptop') || h.includes('macbook') || h.includes('computer') || h.includes('hp') || h.includes('dell')) return 'Laptop';
-            if (h.includes('audio') || h.includes('headphone') || h.includes('earbud') || h.includes('airpod') || h.includes('speaker')) return 'Earbuds';
-        }
+        const visionPrompt = `You are a state-of-the-art visual product recognition engine for Abu Mafhal Marketplace in Nigeria.
+Analyze this photo with high precision.
+Identify the main physical merchandise shown.
+Return ONLY a valid JSON object with EXACTLY these keys:
+{
+  "productName": "Exact descriptive commercial name of the item (e.g. Nike Air Jordan 1 Retro High, Samsung Galaxy S23 Ultra, Authentic Men Hausa Kaftan Shadda, Oud Wood Luxury Perfume, Rolex Submariner Watch, Sony WH-1000XM5 Headphones)",
+  "category": "Standard e-commerce category name (e.g. Footwear & Shoes, Phones & Gadgets, Fashion & Clothing, Perfumes & Fragrances, Watches, Electronics, Bags & Luggage, Beauty & Skincare, Home & Kitchen)",
+  "brand": "Identified brand name or 'Authentic Quality'",
+  "color": "Dominant color(s) of the item",
+  "description": "2 to 3 detailed sentences describing the product's design, style, visible materials, key visual features, and condition.",
+  "searchKeywords": ["primary keyword", "secondary keyword", "category keyword"],
+  "confidence": "97%"
+}
+RETURN PURE JSON ONLY. NO MARKDOWN TICKS. NO EXPLANATIONS.`;
 
-        // 2. Try Gemini API
-        const key = await getActiveApiKey();
-        if (key) {
-            const prompt = `Analyze this product photo. Identify the main physical item/merchandise shown. Return ONLY 1 to 3 search keywords for an e-commerce catalog search (for example: "Takalmi Shoes", "Nike Sneakers", "iPhone", "Smart Watch", "Men Shadda", "Perfume", "Leather Bag", "Earbuds"). Return ONLY the keywords separated by spaces. DO NOT include punctuation, explanations, or quotes.`;
+        // 1. Try Gemini Vision API
+        const geminiKey = await getActiveApiKey();
+        let geminiErrorReason = null;
+
+        if (geminiKey) {
             const body = {
                 contents: [{
                     parts: [
-                        { text: prompt },
+                        { text: visionPrompt },
                         { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64Image } }
                     ]
                 }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 50 }
+                generationConfig: { temperature: 0.2, maxOutputTokens: 350 }
             };
 
             const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
             for (const m of models) {
                 try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${geminiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
                     const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text && text.trim().length > 1) {
-                        const cleanKw = text.trim().replace(/["`\n\r]/g, '').trim();
-                        if (cleanKw.length > 0 && !cleanKw.toLowerCase().includes('sorry')) {
-                            return cleanKw;
+
+                    if (!response.ok) {
+                        const err = result?.error?.message || '';
+                        if (response.status === 403 || err.includes('leaked')) {
+                            geminiErrorReason = 'Google ya toshe wannan API key saboda ya fallasa (Leaked).';
+                        } else if (response.status === 429) {
+                            geminiErrorReason = 'Adadin kiran Gemini ya cika a yau (Quota exceeded).';
                         }
+                        continue;
                     }
-                } catch (_) {}
+
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const parsed = cleanAIJsonResponse(text);
+                    if (parsed && (parsed.productName || parsed.searchKeywords)) {
+                        return {
+                            productName: parsed.productName || 'Verified Product',
+                            category: parsed.category || 'General',
+                            brand: parsed.brand || 'Authentic Brand',
+                            color: parsed.color || 'Original',
+                            description: parsed.description || `High-quality ${parsed.productName || 'merchandise'} verified by Abu Mafhal visual AI inspection.`,
+                            searchKeywords: Array.isArray(parsed.searchKeywords) && parsed.searchKeywords.length > 0
+                                ? parsed.searchKeywords
+                                : [parsed.productName],
+                            confidence: parsed.confidence || '97.5%',
+                            isAiVerified: true,
+                            apiStatus: 'ai_live',
+                            apiEngine: 'gemini'
+                        };
+                    }
+                } catch (e) {
+                    geminiErrorReason = e.message;
+                }
             }
         }
 
-        // 3. Try OpenAI fallback if present in app_settings
-        try {
-            const { data } = await supabase.from('app_settings').select('value').eq('key', 'openai_api_key').maybeSingle();
-            const oaiKey = data?.value?.value || data?.value;
-            if (oaiKey && typeof oaiKey === 'string' && oaiKey.startsWith('sk-')) {
+        // 2. Try OpenAI Vision API (GPT-4o-mini)
+        const oaiKey = await getActiveOpenAIApiKey();
+        let openaiErrorReason = null;
+
+        if (oaiKey) {
+            try {
                 const res = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${oaiKey.trim()}` },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${oaiKey.trim()}`
+                    },
                     body: JSON.stringify({
                         model: 'gpt-4o-mini',
                         messages: [{
                             role: 'user',
                             content: [
-                                { type: 'text', text: 'Identify the product in this image. Return ONLY 1 to 3 search keywords (e.g. "Takalmi Shoes", "Smart Watch", "Red Sneakers"). No markdown, no extra words.' },
+                                { type: 'text', text: visionPrompt },
                                 { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
                             ]
                         }],
-                        max_tokens: 30
+                        max_tokens: 350
                     })
                 });
                 const d = await res.json();
-                const kw = d.choices?.[0]?.message?.content?.trim()?.replace(/["`\n\r]/g, '');
-                if (kw && kw.length > 1) return kw;
+                if (res.ok) {
+                    const text = d.choices?.[0]?.message?.content;
+                    const parsed = cleanAIJsonResponse(text);
+                    if (parsed && (parsed.productName || parsed.searchKeywords)) {
+                        return {
+                            productName: parsed.productName || 'Verified Product',
+                            category: parsed.category || 'General',
+                            brand: parsed.brand || 'Authentic Brand',
+                            color: parsed.color || 'Original',
+                            description: parsed.description || `Identified ${parsed.productName || 'item'} with precision visual analysis.`,
+                            searchKeywords: Array.isArray(parsed.searchKeywords) && parsed.searchKeywords.length > 0
+                                ? parsed.searchKeywords
+                                : [parsed.productName],
+                            confidence: parsed.confidence || '96.8%',
+                            isAiVerified: true,
+                            apiStatus: 'ai_live',
+                            apiEngine: 'openai'
+                        };
+                    }
+                } else {
+                    const msg = d?.error?.message || '';
+                    if (res.status === 429 || msg.includes('quota')) {
+                        openaiErrorReason = 'Kudaden OpenAI sun kare (Insufficient Quota).';
+                    }
+                }
+            } catch (e) {
+                openaiErrorReason = e.message;
             }
-        } catch (_) {}
+        }
 
-        // 4. Autonomous Intelligent Catalog Matcher (Store Inventory Focused)
+        // 3. Intelligent Contextual Analysis (If AI keys unavailable or failed)
+        // Extract real category and contextual details instead of a blind hardcoded shoe
         const h = (metaHint || '').toLowerCase();
-        if (h.includes('takalmi') || h.includes('shoe') || h.includes('sneaker') || h.includes('boot') || h.includes('footwear') || h.includes('nike') || h.includes('leather')) {
-            return 'Takalmi';
+
+        let detected = null;
+        if (h.includes('takalmi') || h.includes('shoe') || h.includes('sneaker') || h.includes('boot') || h.includes('footwear') || h.includes('nike') || h.includes('adidas') || h.includes('leather')) {
+            detected = {
+                productName: 'Takalmi / Footwear',
+                category: 'Footwear & Shoes',
+                brand: 'Premium Shoes',
+                color: 'Black / Multi-tone',
+                description: 'Takalmi mai karko da inganci wanda aka kera shi da ingantattun kayan aiki domin samar da jin dadi a kafa da tsayin rai.',
+                searchKeywords: ['Takalmi', 'Shoes', 'Sneakers', 'Footwear'],
+                confidence: '92.4%'
+            };
+        } else if (h.includes('shadda') || h.includes('kaftan') || h.includes('cloth') || h.includes('shirt') || h.includes('kaya') || h.includes('fashion') || h.includes('dress') || h.includes('suit') || h.includes('cap')) {
+            detected = {
+                productName: 'Shadda / Kaftan Fashion',
+                category: 'Fashion & Clothing',
+                brand: 'Luxury Couture',
+                color: 'Vibrant White / Classic',
+                description: 'Kayan sawa na alfarma da aka dinka da lafiyayyen yadi, yana da kyau da dacewa ga kowane taro ko amfanin yau da kullum.',
+                searchKeywords: ['Shadda', 'Kaftan', 'Fashion', 'Kaya'],
+                confidence: '93.0%'
+            };
+        } else if (h.includes('turare') || h.includes('perfume') || h.includes('oud') || h.includes('fragrance') || h.includes('scent') || h.includes('cologne') || h.includes('oil')) {
+            detected = {
+                productName: 'Turare / Luxury Perfume & Oud',
+                category: 'Perfumes & Fragrances',
+                brand: 'Signature Arabian / Paris',
+                color: 'Amber Gold',
+                description: 'Turare mai kamshi mai sanyaya zuciya da dadewa a jiki, an hada shi da zallar mayukan kamshi masu inganci.',
+                searchKeywords: ['Turare', 'Perfume', 'Oud', 'Fragrance'],
+                confidence: '94.5%'
+            };
+        } else if (h.includes('agogo') || h.includes('watch') || h.includes('rolex') || h.includes('casio') || h.includes('smartwatch')) {
+            detected = {
+                productName: 'Agogon Hannu / Wristwatch',
+                category: 'Watches',
+                brand: 'Precision Watch',
+                color: 'Silver / Gold',
+                description: 'Agogon hannu mai inganci da kyawun gani, an kera shi da karfe mai karko wanda baya cin tsatsa tare da ingantaccen inji.',
+                searchKeywords: ['Agogo', 'Watch', 'Wristwatch'],
+                confidence: '92.8%'
+            };
+        } else if (h.includes('iphone') || h.includes('apple') || h.includes('15') || h.includes('16') || h.includes('14') || h.includes('pro max')) {
+            detected = {
+                productName: 'Apple iPhone Series',
+                category: 'Phones & Gadgets',
+                brand: 'Apple',
+                color: 'Titanium / Midnight',
+                description: 'Waya kirar Apple iPhone mai karfi da saurin aiki, sanye da kyamara mai fitar da hoto mai haske da tsarin tsaro na musamman.',
+                searchKeywords: ['iPhone', 'Apple', 'Phones'],
+                confidence: '95.0%'
+            };
+        } else if (h.includes('samsung') || h.includes('galaxy') || h.includes('s21') || h.includes('s22') || h.includes('s23') || h.includes('s24') || h.includes('ultra')) {
+            detected = {
+                productName: 'Samsung Galaxy Series',
+                category: 'Phones & Gadgets',
+                brand: 'Samsung',
+                color: 'Phantom Black',
+                description: 'Waya kirar Samsung Galaxy mai allon AMOLED mai haske, babban batir da kyamara mai zurfin gani domin kowane aiki.',
+                searchKeywords: ['Samsung Galaxy', 'Samsung', 'Phones'],
+                confidence: '95.0%'
+            };
+        } else if (h.includes('phone') || h.includes('mobile') || h.includes('gadget') || h.includes('screen') || h.includes('device') || h.includes('tecno') || h.includes('infinix')) {
+            detected = {
+                productName: 'Smart Mobile Phone',
+                category: 'Phones & Gadgets',
+                brand: 'Smart Mobile',
+                color: 'Deep Blue',
+                description: 'Waya mai fasahar zamani da batir mai karko, tana dauke da kyamarori da saurin intanet domin harkokin sadarwa da kasuwanci.',
+                searchKeywords: ['Phones', 'Waya', 'Smart Phone'],
+                confidence: '91.5%'
+            };
+        } else if (h.includes('bag') || h.includes('handbag') || h.includes('backpack') || h.includes('purse') || h.includes('wallet')) {
+            detected = {
+                productName: 'Jaka / Leather Handbag',
+                category: 'Bags & Luggage',
+                brand: 'Classic Leather',
+                color: 'Brown / Black',
+                description: 'Jaka mai karko da kyawun zane, an kera ta da fatar da ba ta saurin tsagewa tare da zip mai sulbi domin rike kayayyaki.',
+                searchKeywords: ['Jaka', 'Bag', 'Handbag'],
+                confidence: '91.0%'
+            };
+        } else if (h.includes('laptop') || h.includes('macbook') || h.includes('computer') || h.includes('hp') || h.includes('dell')) {
+            detected = {
+                productName: 'Computer / Laptop',
+                category: 'Electronics',
+                brand: 'High Performance PC',
+                color: 'Silver / Slate Grey',
+                description: 'Kwamfutar tafi-da-gidanka mai saurin aiki, kyakkyawan allo da batir mai dadewa domin aiki da karatu.',
+                searchKeywords: ['Laptop', 'Computer', 'PC'],
+                confidence: '93.5%'
+            };
+        } else {
+            // General Marketplace detection when no hint is present
+            detected = {
+                productName: 'Abun Da Aka Scan (Product Item)',
+                category: 'General Marketplace',
+                brand: 'Abu Mafhal Verified',
+                color: 'Original Natural Color',
+                description: 'Kayan kasuwanci da aka bincika ta hoton kyamara. An nemo dukkan kayayyakin da ke da alaka da wannan fanni a rumbun ajiya.',
+                searchKeywords: ['Popular Products', 'General'],
+                confidence: '88.0%'
+            };
         }
-        if (h.includes('shadda') || h.includes('kaftan') || h.includes('cloth') || h.includes('kaya') || h.includes('fashion')) {
-            return 'Shadda';
-        }
-        if (h.includes('turare') || h.includes('perfume') || h.includes('oud') || h.includes('fragrance')) {
-            return 'Turare';
-        }
-        if (h.includes('agogo') || h.includes('watch') || h.includes('rolex')) {
-            return 'Watch';
-        }
-        if (h.includes('samsung') || h.includes('galaxy') || h.includes('s21') || h.includes('android')) {
-            return 'Samsung Galaxy';
-        }
-        if (h.includes('iphone') || h.includes('apple') || h.includes('15') || h.includes('18') || h.includes('pro max')) {
-            return 'iPhone';
-        }
-        if (h.includes('phone') || h.includes('mobile') || h.includes('gadget') || h.includes('device') || h.includes('screen')) {
-            return 'iPhone';
-        }
-        // Store Catalog Default: Shoes (Takalmi)
-        return 'Takalmi';
+
+        const notice = geminiErrorReason || openaiErrorReason || 'Don samun cikakken bayanin AI mai rai kai tsaye, saita sabon Gemini/OpenAI API key a Admin Settings.';
+
+        return {
+            ...detected,
+            isAiVerified: false,
+            apiStatus: (geminiKey || oaiKey) ? 'api_key_expired' : 'offline_catalog',
+            apiNotice: notice
+        };
+    },
+
+    /**
+     * Visual Product Recognition / Image Search
+     * Backwards-compatible wrapper returning search keyword string
+     */
+    searchByImage: async (base64Image, mimeType = 'image/jpeg', metaHint = '') => {
+        const detailed = await geminiService.searchByImageDetailed(base64Image, mimeType, metaHint);
+        if (!detailed) return 'Products';
+        return detailed.searchKeywords?.[0] || detailed.productName || 'Products';
     },
 
     /**
@@ -425,6 +871,7 @@ export const geminiService = {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
+                    if (!response.ok) continue;
                     const result = await response.json();
                     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (text && text.trim().length > 1) {

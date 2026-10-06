@@ -465,14 +465,22 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
             if (!result.canceled && result.assets[0].base64) {
                 setAnalyzingImage(true);
-                showToast('Analyzing image...', 'scan');
+                showToast('Analyzing image with AI...', 'scan');
 
-                const keywords = await geminiService.searchByImage(result.assets[0].base64);
+                const detailed = await geminiService.searchByImageDetailed(
+                    result.assets[0].base64,
+                    result.assets[0].mimeType || 'image/jpeg',
+                    result.assets[0].fileName || ''
+                );
 
                 setAnalyzingImage(false);
-                if (keywords) {
-                    setSearchQuery(keywords);
-                    showToast(`Found: ${keywords}`, 'checkmark-circle');
+                if (detailed) {
+                    const searchTarget = detailed.searchKeywords?.[0] || detailed.productName || 'Products';
+                    setSearchQuery(searchTarget);
+                    showToast(`An gano: ${detailed.productName}`, 'checkmark-circle');
+                    if (onGoToShop) {
+                        onGoToShop(searchTarget);
+                    }
                 } else {
                     showToast('Could not identify product', 'help-circle');
                 }

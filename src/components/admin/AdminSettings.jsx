@@ -34,6 +34,10 @@ const AdminSettings = () => {
     const [unsaved, setUnsaved] = useState(false);
     const [toast, setToast] = useState('');
     const [copied, setCopied] = useState(false);
+    const [testingGemini, setTestingGemini] = useState(false);
+    const [geminiStatus, setGeminiStatus] = useState(null);
+    const [testingOpenai, setTestingOpenai] = useState(false);
+    const [openaiStatus, setOpenaiStatus] = useState(null);
 
     // --- Unified Settings State ---
     const [settings, setSettings] = useState({});
@@ -225,6 +229,66 @@ const AdminSettings = () => {
             navigator.clipboard.writeText(url);
             setCopied(true);
             setTimeout(() => setCopied(false), 2500);
+        }
+    };
+
+    const testGeminiKey = async () => {
+        const key = settings.gemini_api_key;
+        if (!key || String(key).trim().length < 10) {
+            setGeminiStatus({ success: false, message: 'Please enter a Gemini API Key first.' });
+            return;
+        }
+        setTestingGemini(true);
+        setGeminiStatus(null);
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${String(key).trim()}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: 'Hello' }] }] })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setGeminiStatus({ success: true, message: 'Gemini Key is active and working 100%! Connected to Google.' });
+            } else {
+                const msg = data?.error?.message || '';
+                if (res.status === 403 || msg.toLowerCase().includes('leaked')) {
+                    setGeminiStatus({ success: false, message: 'Google reported this key as LEAKED/REVOKED. Please create a new free key at aistudio.google.com' });
+                } else {
+                    setGeminiStatus({ success: false, message: `Error (${res.status}): ${msg}` });
+                }
+            }
+        } catch (e) {
+            setGeminiStatus({ success: false, message: `Connection error: ${e.message}` });
+        } finally {
+            setTestingGemini(false);
+        }
+    };
+
+    const testOpenaiKey = async () => {
+        const key = settings.openai_api_key;
+        if (!key || !String(key).trim().startsWith('sk-')) {
+            setOpenaiStatus({ success: false, message: 'Please enter a valid OpenAI API Key (starts with sk-).' });
+            return;
+        }
+        setTestingOpenai(true);
+        setOpenaiStatus(null);
+        try {
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${String(key).trim()}` },
+                body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5 })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setOpenaiStatus({ success: true, message: 'OpenAI Key is active and working 100%!' });
+            } else {
+                const msg = data?.error?.message || '';
+                setOpenaiStatus({ success: false, message: `Error (${res.status}): ${msg}` });
+            }
+        } catch (e) {
+            setOpenaiStatus({ success: false, message: `Connection error: ${e.message}` });
+        } finally {
+            setTestingOpenai(false);
         }
     };
 
@@ -957,8 +1021,43 @@ const AdminSettings = () => {
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                                     {/* AI Keys */}
-                                    <InputField type="password" label="Google Gemini API Key" field="gemini_api_key" hint="Used for generative AI features." />
-                                    <InputField type="password" label="OpenAI API Key" field="openai_api_key" />
+                                    <div className="mb-4">
+                                        <InputField type="password" label="Google Gemini API Key" field="gemini_api_key" hint="Used for generative AI features, image search & voice." />
+                                        <div className="flex items-center justify-between -mt-3 mb-2">
+                                            <button
+                                                type="button"
+                                                onClick={testGeminiKey}
+                                                disabled={testingGemini}
+                                                className="text-xs px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg border border-purple-200 transition"
+                                            >
+                                                {testingGemini ? 'Testing Gemini...' : '⚡ Test Gemini API Key'}
+                                            </button>
+                                        </div>
+                                        {geminiStatus && (
+                                            <div className={`p-2 rounded text-xs mb-3 ${geminiStatus.success ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                                {geminiStatus.message}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <InputField type="password" label="OpenAI API Key" field="openai_api_key" hint="Used as backup AI engine." />
+                                        <div className="flex items-center justify-between -mt-3 mb-2">
+                                            <button
+                                                type="button"
+                                                onClick={testOpenaiKey}
+                                                disabled={testingOpenai}
+                                                className="text-xs px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 transition"
+                                            >
+                                                {testingOpenai ? 'Testing OpenAI...' : '⚡ Test OpenAI API Key'}
+                                            </button>
+                                        </div>
+                                        {openaiStatus && (
+                                            <div className={`p-2 rounded text-xs mb-3 ${openaiStatus.success ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                                {openaiStatus.message}
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Document Links */}
                                     <div className="col-span-full mt-4"></div>

@@ -1,12 +1,41 @@
-// ============================================
-// AI PRODUCT DESCRIPTION SERVICE
-// src/services/aiProductService.js
-// ============================================
+import { supabase } from '../config/supabase.js';
 
 class AIProductService {
   constructor() {
-    this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    this.geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+    this.geminiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  }
+
+  async getActiveKeys() {
+    let gemKey = this.geminiKey;
+    let oaiKey = this.openaiKey;
+
+    try {
+      const cached = localStorage.getItem('@abumafhal_settings_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const g = parsed.gemini_api_key?.value || parsed.gemini_api_key;
+        const o = parsed.openai_api_key?.value || parsed.openai_api_key;
+        if (g && typeof g === 'string') gemKey = g.trim();
+        if (o && typeof o === 'string') oaiKey = o.trim();
+      }
+    } catch (_) {}
+
+    if (!gemKey || !oaiKey) {
+      try {
+        const { data } = await supabase.from('app_settings').select('key,value').in('key', ['gemini_api_key', 'openai_api_key']);
+        if (data) {
+          const gRow = data.find(d => d.key === 'gemini_api_key');
+          const oRow = data.find(d => d.key === 'openai_api_key');
+          const g = gRow?.value?.value || gRow?.value;
+          const o = oRow?.value?.value || oRow?.value;
+          if (g && typeof g === 'string') gemKey = g.trim();
+          if (o && typeof o === 'string') oaiKey = o.trim();
+        }
+      } catch (_) {}
+    }
+
+    return { geminiKey: gemKey, openaiKey: oaiKey };
   }
 
   /**
@@ -14,36 +43,38 @@ class AIProductService {
    */
   async generateDescription(productData) {
     const { name, category, price, features } = productData;
-
-    // If no API keys available, use template-based generation
-    if (!this.openaiKey && !this.geminiKey) {
-      return this.generateTemplateDescription(productData);
-    }
+    const { geminiKey, openaiKey } = await this.getActiveKeys();
 
     try {
-      if (this.geminiKey) {
-        return await this.generateWithGemini(productData);
-      } else if (this.openaiKey) {
-        return await this.generateWithOpenAI(productData);
+      if (geminiKey) {
+        const desc = await this.generateWithGemini(productData, geminiKey);
+        if (desc) return desc;
+      }
+      if (openaiKey) {
+        const desc = await this.generateWithOpenAI(productData, openaiKey);
+        if (desc) return desc;
       }
     } catch (error) {
       console.error('AI description generation failed:', error);
-      // Fallback to template
-      return this.generateTemplateDescription(productData);
     }
+
+    return this.generateTemplateDescription(productData);
   }
 
   /**
    * Generate with OpenAI GPT
    */
-  async generateWithOpenAI(productData) {
+  async generateWithOpenAI(productData, overrideKey) {
+    const key = overrideKey || this.openaiKey;
+    if (!key) return null;
+
     const { name, category, price, features, brand } = productData;
 
     const prompt = `Write a compelling, SEO-optimized product description for an e-commerce listing:
 
 Product Name: ${name}
 Category: ${category}
-Price: ₦${price.toLocaleString()}
+Price: ₦${price ? Number(price).toLocaleString() : 'Competitive'}
 ${brand ? `Brand: ${brand}` : ''}
 ${features ? `Key Features: ${features}` : ''}
 
@@ -59,10 +90,10 @@ Requirements:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.openaiKey}`,
+        'Authorization': `Bearer ${key.trim()}`,
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -79,58 +110,51 @@ Requirements:
     });
 
     const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message);
-    }
-
+    if (data.error) throw new Error(data.error.message);
     return data.choices[0].message.content;
   }
 
   /**
    * Generate with Google Gemini
    */
-  async generateWithGemini(productData) {
+  async generateWithGemini(productData, overrideKey) {
+    const key = overrideKey || this.geminiKey;
+    if (!key) return null;
+
     const { name, category, price, features, brand } = productData;
 
     const prompt = `Write a compelling, SEO-optimized product description for:
 
 Product: ${name}
 Category: ${category}
-Price: ₦${price.toLocaleString()}
+Price: ₦${price ? Number(price).toLocaleString() : 'Competitive'}
 ${brand ? `Brand: ${brand}` : ''}
 ${features ? `Features: ${features}` : ''}
 
-Create 3-4 engaging paragraphs that highlight benefits and value.`;
+Create 3-4 engaging paragraphs that highlight benefits and value. Return plain text.`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.geminiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 500,
-          },
-        }),
-      }
-    );
-
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message);
+    const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+    for (const m of models) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key.trim()}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.7, maxOutputTokens: 500 }
+            }),
+          }
+        );
+        if (!response.ok) continue;
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim().length > 30) return text.trim();
+      } catch (_) {}
     }
 
-    return data.candidates[0].content.parts[0].text;
+    return null;
   }
 
   /**
