@@ -304,7 +304,7 @@ export const fetchAllCategories = async ({ activeOnly = false, forceRefresh = fa
  */
 export const saveCategory = async (categoryData, editingCategory = null) => {
     if (!categoryData?.name?.trim()) {
-        throw new Error('Sunan Category yana da muhimmanci (Category name is required).');
+        throw new Error('Category name is required.');
     }
 
     const name = categoryData.name.trim();

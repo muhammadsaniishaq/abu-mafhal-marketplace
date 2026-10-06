@@ -25,6 +25,44 @@ const invalidateWebCaches = () => {
   }
 };
 
+// Comprehensive Global Marketplace Categories List (35+ Major World Categories)
+export const GLOBAL_CATEGORIES = [
+  { name: "Phones & Tablets", slug: "phones-tablets", icon: "Tag", image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80" },
+  { name: "Electronics & Gadgets", slug: "electronics-gadgets", icon: "Tag", image: "https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=600&auto=format&fit=crop&q=80" },
+  { name: "Computers & IT Accessories", slug: "computers-it-accessories", icon: "Tag", image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&auto=format&fit=crop&q=80" },
+  { name: "Women's Fashion & Apparel", slug: "womens-fashion", icon: "Tag", image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600&auto=format&fit=crop&q=80" },
+  { name: "Men's Fashion & Clothing", slug: "mens-fashion", icon: "Tag", image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80" },
+  { name: "Traditional & Cultural Attire", slug: "traditional-cultural-attire", icon: "Tag", image: "https://images.unsplash.com/photo-1589465885857-44edb59bbff2?w=600&auto=format&fit=crop&q=80" },
+  { name: "Islamic Fashion & Abayas", slug: "islamic-fashion-abayas", icon: "Tag", image: "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80" },
+  { name: "Shoes & Footwear", slug: "shoes-footwear", icon: "Tag", image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80" },
+  { name: "Bags, Luggage & Backpacks", slug: "bags-luggage", icon: "Tag", image: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=80" },
+  { name: "Watches & Fine Jewelry", slug: "watches-fine-jewelry", icon: "Tag", image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80" },
+  { name: "Perfumes & Luxury Fragrances", slug: "perfumes-luxury-fragrances", icon: "Tag", image: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&auto=format&fit=crop&q=80" },
+  { name: "Beauty, Cosmetics & Skincare", slug: "beauty-cosmetics-skincare", icon: "Tag", image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600&auto=format&fit=crop&q=80" },
+  { name: "Health, Wellness & Pharmacy", slug: "health-wellness-pharmacy", icon: "Tag", image: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=600&auto=format&fit=crop&q=80" },
+  { name: "Herbal & Organic Remedies", slug: "herbal-organic-remedies", icon: "Tag", image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80" },
+  { name: "Home, Living & Furniture", slug: "home-living-furniture", icon: "Tag", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&auto=format&fit=crop&q=80" },
+  { name: "Kitchen & Dining Appliances", slug: "kitchen-dining-appliances", icon: "Tag", image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80" },
+  { name: "Groceries & Supermarket", slug: "groceries-supermarket", icon: "Tag", image: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80" },
+  { name: "Food, Drinks & Beverages", slug: "food-drinks-beverages", icon: "Tag", image: "https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600&auto=format&fit=crop&q=80" },
+  { name: "Baby, Kids & Toys", slug: "baby-kids-toys", icon: "Tag", image: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80" },
+  { name: "Sports, Fitness & Outdoor", slug: "sports-fitness-outdoor", icon: "Tag", image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80" },
+  { name: "Automotive, Parts & Accessories", slug: "automotive-parts-accessories", icon: "Tag", image: "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=600&auto=format&fit=crop&q=80" },
+  { name: "Books, Stationery & Education", slug: "books-stationery-education", icon: "Tag", image: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80" },
+  { name: "Gaming, Consoles & VR", slug: "gaming-consoles-vr", icon: "Tag", image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80" },
+  { name: "Industrial Tools & Hardware", slug: "industrial-tools-hardware", icon: "Tag", image: "https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=600&auto=format&fit=crop&q=80" },
+  { name: "Solar, Inverters & Energy", slug: "solar-inverters-energy", icon: "Tag", image: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80" },
+  { name: "Pet Supplies & Animal Care", slug: "pet-supplies-animal-care", icon: "Tag", image: "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80" },
+  { name: "Arts, Crafts & Sewing", slug: "arts-crafts-sewing", icon: "Tag", image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&auto=format&fit=crop&q=80" },
+  { name: "Music, Instruments & Audio", slug: "music-instruments-audio", icon: "Tag", image: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=600&auto=format&fit=crop&q=80" },
+  { name: "Building & Construction Materials", slug: "building-construction-materials", icon: "Tag", image: "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=600&auto=format&fit=crop&q=80" },
+  { name: "Security & Surveillance", slug: "security-surveillance", icon: "Tag", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=600&auto=format&fit=crop&q=80" },
+  { name: "Office Furniture & Supplies", slug: "office-furniture-supplies", icon: "Tag", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80" },
+  { name: "Gifts, Souvenirs & Hampers", slug: "gifts-souvenirs-hampers", icon: "Tag", image: "https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=600&auto=format&fit=crop&q=80" },
+  { name: "Travel, Camping & Outdoors", slug: "travel-camping-outdoors", icon: "Tag", image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80" },
+  { name: "General Merchandise", slug: "general-merchandise", icon: "Tag", image: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=600&auto=format&fit=crop&q=80" }
+];
+
 const AdminCategories = () => {
   const [categories, setCategories] = useState([]);
   const [productCounts, setProductCounts] = useState({});
@@ -702,6 +740,44 @@ const AdminCategories = () => {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Quick-Select from Global Marketplace Catalog */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50/50 p-3.5 rounded-2xl border border-amber-200/80">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D9A73A]" />
+                    <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                      Quick-Select Catalog (35+ Departments)
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-amber-800/90 mb-2">
+                  Pick a department below to auto-fill the name, slug, and cover photo instantly:
+                </p>
+                <select
+                  onChange={(e) => {
+                    const selected = GLOBAL_CATEGORIES.find(c => c.slug === e.target.value);
+                    if (selected) {
+                      setForm(prev => ({
+                        ...prev,
+                        name: selected.name,
+                        slug: selected.slug,
+                        image_url: selected.image,
+                        icon: selected.icon || 'Tag'
+                      }));
+                    }
+                  }}
+                  defaultValue=""
+                  className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#D9A73A]"
+                >
+                  <option value="" disabled>-- Choose a department or enter custom below --</option>
+                  {GLOBAL_CATEGORIES.map(c => (
+                    <option key={c.slug} value={c.slug}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

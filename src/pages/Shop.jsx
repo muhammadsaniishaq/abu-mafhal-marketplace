@@ -312,8 +312,28 @@ const Shop = () => {
 
       console.log('[Shop] Products fetched count:', raw.length);
 
-      // Extract unique categories dynamically
-      const uniqueCats = ['All', ...new Set(raw.map(p => p.category).filter(Boolean))];
+      // Extract categories dynamically from categories table and product list
+      let activeDbCategories = [];
+      try {
+        const [catsRes, setRes] = await Promise.allSettled([
+          supabase.from('categories').select('name, is_active, display_order').order('display_order', { ascending: true }),
+          supabase.from('app_settings').select('value').eq('key', 'custom_taxonomy_categories').maybeSingle()
+        ]);
+        if (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value?.data)) {
+          activeDbCategories = catsRes.value.data.filter(c => c.is_active !== false).map(c => c.name);
+        }
+        if (setRes.status === 'fulfilled' && setRes.value?.data?.value) {
+          let customVal = setRes.value.data.value;
+          if (typeof customVal === 'string') {
+            try { customVal = JSON.parse(customVal); } catch (_) {}
+          }
+          const list = Array.isArray(customVal) ? customVal : (customVal?.categories || []);
+          const activeCustom = list.filter(c => c.is_active !== false && !c.is_deleted).map(c => c.name);
+          activeDbCategories = [...activeDbCategories, ...activeCustom];
+        }
+      } catch (_) {}
+
+      const uniqueCats = ['All', ...new Set([...activeDbCategories, ...raw.map(p => p.category).filter(Boolean)])];
       setCategories(uniqueCats);
 
       // Dynamic max price

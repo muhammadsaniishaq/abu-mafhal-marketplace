@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, Image, Alert,
     Modal, TextInput, ActivityIndicator, RefreshControl, StyleSheet,
-    ScrollView, Platform, Switch, Dimensions
+    ScrollView, Platform, Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
 import {
     fetchAllCategories,
@@ -15,7 +14,6 @@ import {
     deleteCategory,
     toggleCategoryStatus,
     subscribeToCategoryChanges,
-    invalidateCategoryCaches,
     generateSlug
 } from '../../services/categoryService';
 
@@ -31,7 +29,6 @@ const BRAND = {
     emerald: '#10B981',
     emeraldLight: '#ECFDF5',
     sky: '#0284C7',
-    skyLight: '#E0F2FE',
     slate: '#64748B',
     slateDark: '#0F172A',
     bg: '#F8FAFC',
@@ -41,120 +38,42 @@ const BRAND = {
     danger: '#EF4444',
 };
 
-// 1-Tap Category Name Suggestions with luxury presets & icons
-const CATEGORY_SUGGESTIONS = [
-    {
-        name: "Wayoyi & Na'urori",
-        english: "Phones & Gadgets",
-        slug: "wayoyi-naurori",
-        icon: "phone-portrait-outline",
-        image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Kayan Mata & Turare",
-        english: "Women's Fashion & Perfumes",
-        slug: "kayan-mata-turare",
-        icon: "sparkles-outline",
-        image: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Alkyabba & Shadda",
-        english: "Men's Traditional Wears",
-        slug: "alkyabba-shadda",
-        icon: "shirt-outline",
-        image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Turare & Kayan Kwalliya",
-        english: "Perfumes & Cosmetics",
-        slug: "turare-kayan-kwalliya",
-        icon: "flame-outline",
-        image: "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Takalma & Jakunkuna",
-        english: "Shoes & Luxury Bags",
-        slug: "takalma-jakunkuna",
-        icon: "bag-handle-outline",
-        image: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Agogo & Kayan Ado",
-        english: "Watches & Jewelry",
-        slug: "agogo-kayan-ado",
-        icon: "watch-outline",
-        image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Kayan Gida & Kicin",
-        english: "Home & Kitchen Appliances",
-        slug: "kayan-gida-kicin",
-        icon: "home-outline",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Kayan Yara & Jarirai",
-        english: "Kids & Baby Essentials",
-        slug: "kayan-yara-jarirai",
-        icon: "happy-outline",
-        image: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Kayan Abinci & Masarufi",
-        english: "Groceries & Food",
-        slug: "kayan-abinci-masarufi",
-        icon: "restaurant-outline",
-        image: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Magungunan Musulunci",
-        english: "Islamic & Herbal Health",
-        slug: "magungunan-musulunci",
-        icon: "leaf-outline",
-        image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Kayan Maza & Yadi",
-        english: "Men's Fabrics & Clothing",
-        slug: "kayan-maza-yadi",
-        icon: "briefcase-outline",
-        image: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Kayan Wasanni & Motsa Jiki",
-        english: "Sports & Fitness",
-        slug: "kayan-wasanni-motsa-jiki",
-        icon: "barbell-outline",
-        image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Motoci & Kayan Gyara",
-        english: "Automotive & Spare Parts",
-        slug: "motoci-kayan-gyara",
-        icon: "car-sport-outline",
-        image: "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=600&auto=format&fit=crop&q=80"
-    },
-    {
-        name: "Littattafai & Karatu",
-        english: "Books & Education",
-        slug: "littattafai-karatu",
-        icon: "book-outline",
-        image: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80"
-    }
-];
-
-// Luxury Preset Photos Rail
-const LUXURY_PHOTO_PRESETS = [
-    { title: "Turare / Perfumes", uri: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&auto=format&fit=crop&q=80" },
-    { title: "Wayoyi / Phones", uri: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80" },
-    { title: "Shadda / Fabrics", uri: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80" },
-    { title: "Kayan Kwalliya", uri: "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=600&auto=format&fit=crop&q=80" },
-    { title: "Agogo / Watches", uri: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80" },
-    { title: "Takalma / Shoes", uri: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&auto=format&fit=crop&q=80" },
-    { title: "Kayan Gida / Home", uri: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80" },
-    { title: "Kayan Yara / Baby", uri: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80" },
-    { title: "Abinci / Groceries", uri: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80" },
-    { title: "Maganin Musulunci", uri: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80" }
+// Comprehensive Global Marketplace Categories List (35+ Major World Categories)
+export const GLOBAL_CATEGORIES = [
+    { name: "Phones & Tablets", slug: "phones-tablets", icon: "phone-portrait-outline", image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80" },
+    { name: "Electronics & Gadgets", slug: "electronics-gadgets", icon: "hardware-chip-outline", image: "https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=600&auto=format&fit=crop&q=80" },
+    { name: "Computers & IT Accessories", slug: "computers-it-accessories", icon: "laptop-outline", image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&auto=format&fit=crop&q=80" },
+    { name: "Women's Fashion & Apparel", slug: "womens-fashion", icon: "sparkles-outline", image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600&auto=format&fit=crop&q=80" },
+    { name: "Men's Fashion & Clothing", slug: "mens-fashion", icon: "shirt-outline", image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80" },
+    { name: "Traditional & Cultural Attire", slug: "traditional-cultural-attire", icon: "color-palette-outline", image: "https://images.unsplash.com/photo-1589465885857-44edb59bbff2?w=600&auto=format&fit=crop&q=80" },
+    { name: "Islamic Fashion & Abayas", slug: "islamic-fashion-abayas", icon: "ribbon-outline", image: "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80" },
+    { name: "Shoes & Footwear", slug: "shoes-footwear", icon: "footsteps-outline", image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80" },
+    { name: "Bags, Luggage & Backpacks", slug: "bags-luggage", icon: "bag-handle-outline", image: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=80" },
+    { name: "Watches & Fine Jewelry", slug: "watches-fine-jewelry", icon: "watch-outline", image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80" },
+    { name: "Perfumes & Luxury Fragrances", slug: "perfumes-luxury-fragrances", icon: "flame-outline", image: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&auto=format&fit=crop&q=80" },
+    { name: "Beauty, Cosmetics & Skincare", slug: "beauty-cosmetics-skincare", icon: "brush-outline", image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600&auto=format&fit=crop&q=80" },
+    { name: "Health, Wellness & Pharmacy", slug: "health-wellness-pharmacy", icon: "heart-outline", image: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=600&auto=format&fit=crop&q=80" },
+    { name: "Herbal & Organic Remedies", slug: "herbal-organic-remedies", icon: "leaf-outline", image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80" },
+    { name: "Home, Living & Furniture", slug: "home-living-furniture", icon: "home-outline", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&auto=format&fit=crop&q=80" },
+    { name: "Kitchen & Dining Appliances", slug: "kitchen-dining-appliances", icon: "restaurant-outline", image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80" },
+    { name: "Groceries & Supermarket", slug: "groceries-supermarket", icon: "cart-outline", image: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80" },
+    { name: "Food, Drinks & Beverages", slug: "food-drinks-beverages", icon: "nutrition-outline", image: "https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600&auto=format&fit=crop&q=80" },
+    { name: "Baby, Kids & Toys", slug: "baby-kids-toys", icon: "happy-outline", image: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80" },
+    { name: "Sports, Fitness & Outdoor", slug: "sports-fitness-outdoor", icon: "barbell-outline", image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80" },
+    { name: "Automotive, Parts & Accessories", slug: "automotive-parts-accessories", icon: "car-sport-outline", image: "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=600&auto=format&fit=crop&q=80" },
+    { name: "Books, Stationery & Education", slug: "books-stationery-education", icon: "book-outline", image: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80" },
+    { name: "Gaming, Consoles & VR", slug: "gaming-consoles-vr", icon: "game-controller-outline", image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80" },
+    { name: "Industrial Tools & Hardware", slug: "industrial-tools-hardware", icon: "construct-outline", image: "https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=600&auto=format&fit=crop&q=80" },
+    { name: "Solar, Inverters & Energy", slug: "solar-inverters-energy", icon: "sunny-outline", image: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80" },
+    { name: "Pet Supplies & Animal Care", slug: "pet-supplies-animal-care", icon: "paw-outline", image: "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=600&auto=format&fit=crop&q=80" },
+    { name: "Arts, Crafts & Sewing", slug: "arts-crafts-sewing", icon: "cut-outline", image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&auto=format&fit=crop&q=80" },
+    { name: "Music, Instruments & Audio", slug: "music-instruments-audio", icon: "musical-notes-outline", image: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=600&auto=format&fit=crop&q=80" },
+    { name: "Building & Construction Materials", slug: "building-construction-materials", icon: "business-outline", image: "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=600&auto=format&fit=crop&q=80" },
+    { name: "Security & Surveillance", slug: "security-surveillance", icon: "shield-checkmark-outline", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=600&auto=format&fit=crop&q=80" },
+    { name: "Office Furniture & Supplies", slug: "office-furniture-supplies", icon: "briefcase-outline", image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80" },
+    { name: "Gifts, Souvenirs & Hampers", slug: "gifts-souvenirs-hampers", icon: "gift-outline", image: "https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=600&auto=format&fit=crop&q=80" },
+    { name: "Travel, Camping & Outdoors", slug: "travel-camping-outdoors", icon: "compass-outline", image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80" },
+    { name: "General Merchandise", slug: "general-merchandise", icon: "grid-outline", image: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=600&auto=format&fit=crop&q=80" }
 ];
 
 export const AdminCategories = ({ navigation, onBack }) => {
@@ -176,21 +95,23 @@ export const AdminCategories = ({ navigation, onBack }) => {
     const [formDisplayOrder, setFormDisplayOrder] = useState('1');
     const [formIsActive, setFormIsActive] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [modalFeedback, setModalFeedback] = useState(null); // { type: 'success' | 'error' | 'loading', text: '' }
+    const [modalFeedback, setModalFeedback] = useState(null);
+
+    // Dropdown picker modal state
+    const [dropdownVisible, setDropdownVisible] = useState(false);
+    const [dropdownSearch, setDropdownSearch] = useState('');
 
     useEffect(() => {
         fetchCategoriesAndCounts();
 
-        // Subscribe to internal category service updates
         const unsubscribe = subscribeToCategoryChanges((newCats) => {
             if (Array.isArray(newCats)) {
                 setCategories(newCats);
             }
         });
 
-        // Also subscribe to Postgres Realtime changes
         const channel = supabase
-            .channel('admin-categories-unified-v7')
+            .channel('admin-categories-unified-v8')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
                 fetchCategoriesAndCounts(true);
             })
@@ -217,8 +138,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
             ]);
 
             const prods = (Array.isArray(prodsRes?.data)) ? prodsRes.data : [];
-
-            // Compute counts
             const counts = {};
             prods.forEach(p => {
                 if (p.category) {
@@ -230,14 +149,14 @@ export const AdminCategories = ({ navigation, onBack }) => {
             setCategories(Array.isArray(cats) ? cats : []);
             setProductCounts(counts);
         } catch (e) {
-            console.error('[AdminCategories] Fetch crash:', e);
+            console.error('[AdminCategories] Fetch error:', e);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
-    // Lightweight image compression for web
+    // Client-side lightweight image compression for web
     const compressImageOnWeb = (dataUrl, callback) => {
         if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.Image) {
             return callback(dataUrl);
@@ -276,12 +195,12 @@ export const AdminCategories = ({ navigation, onBack }) => {
         }
     };
 
-    // 100% Reliable File Picker & Upload Handler
+    // Image Picker & Upload Handler
     const handlePickImage = async () => {
         setUploading(true);
         setModalFeedback(null);
         try {
-            // WEB BROWSER: Native HTML File Input (Works 100% on Chrome, Safari, Edge, Mobile Web)
+            // WEB BROWSER: HTML File Input
             if (Platform.OS === 'web' && typeof document !== 'undefined') {
                 const fileInput = document.createElement('input');
                 fileInput.type = 'file';
@@ -301,10 +220,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             compressImageOnWeb(rawDataUrl, (compressedUrl) => {
                                 setFormImageUrl(compressedUrl);
                                 setUploading(false);
-                                setModalFeedback({
-                                    type: 'success',
-                                    text: 'An loda hoton cikin nasara! ✓'
-                                });
+                                setModalFeedback({ type: 'success', text: 'Image uploaded successfully!' });
                             });
                         } else {
                             setUploading(false);
@@ -312,10 +228,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                     };
                     reader.onerror = () => {
                         setUploading(false);
-                        setModalFeedback({
-                            type: 'error',
-                            text: 'Kuskure wajen karanta fayil din hoto.'
-                        });
+                        setModalFeedback({ type: 'error', text: 'Failed to read image file.' });
                     };
                     reader.readAsDataURL(file);
                 };
@@ -330,10 +243,10 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 return;
             }
 
-            // NATIVE MOBILE (Android / iOS): expo-image-picker
+            // NATIVE MOBILE: Expo Image Picker
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Izini (Permission)', 'Muna bukatar izinin shiga hotunanka domin zaɓar hoton category.');
+                Alert.alert('Permission Needed', 'Media library access is required to select category images.');
                 setUploading(false);
                 return;
             }
@@ -348,26 +261,15 @@ export const AdminCategories = ({ navigation, onBack }) => {
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const asset = result.assets[0];
                 if (asset.base64) {
-                    const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
-                    setFormImageUrl(dataUrl);
-                    setModalFeedback({
-                        type: 'success',
-                        text: 'An zaɓi hoton cikin nasara! ✓'
-                    });
+                    setFormImageUrl(`data:image/jpeg;base64,${asset.base64}`);
                 } else if (asset.uri) {
                     setFormImageUrl(asset.uri);
-                    setModalFeedback({
-                        type: 'success',
-                        text: 'An zaɓi hoton cikin nasara! ✓'
-                    });
                 }
+                setModalFeedback({ type: 'success', text: 'Image selected successfully!' });
             }
         } catch (err) {
             console.error('Image pick error:', err);
-            setModalFeedback({
-                type: 'error',
-                text: 'Kuskuren hoto: ' + (err.message || 'Error')
-            });
+            setModalFeedback({ type: 'error', text: 'Image selection error: ' + (err.message || 'Error') });
         } finally {
             if (Platform.OS !== 'web') setUploading(false);
         }
@@ -405,25 +307,20 @@ export const AdminCategories = ({ navigation, onBack }) => {
         }
     };
 
-    // 1-Tap Category Suggestion Auto-Filler
-    const handleSelectSuggestion = (sug) => {
-        setFormName(sug.name);
-        setFormSlug(sug.slug);
-        setFormImageUrl(sug.image);
-        setFormIcon(sug.icon);
-        setModalFeedback({
-            type: 'success',
-            text: `An zaɓi "${sug.name}" da hoton alfarma kai tsaye! ✓`
-        });
+    // Selecting from Global Categories Dropdown
+    const handleSelectDropdownItem = (item) => {
+        setFormName(item.name);
+        setFormSlug(item.slug);
+        setFormImageUrl(item.image);
+        setFormIcon(item.icon);
+        setDropdownVisible(false);
+        setModalFeedback({ type: 'success', text: `Selected "${item.name}"!` });
     };
 
-    // 100% Reliable Save Handler with visual in-modal status feedback
+    // Save Category Handler
     const handleSave = async () => {
         if (!formName.trim()) {
-            setModalFeedback({
-                type: 'error',
-                text: 'Da fatan a saka ko a zaɓi sunan Category (Please enter or select a category name).'
-            });
+            setModalFeedback({ type: 'error', text: 'Please select or enter a category name.' });
             return;
         }
 
@@ -432,10 +329,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
         try {
             setSaving(true);
-            setModalFeedback({
-                type: 'loading',
-                text: 'Ana ajiye category da bayyana shi a dukkan manhajar...'
-            });
+            setModalFeedback({ type: 'loading', text: 'Saving category across platform...' });
 
             const result = await saveCategory({
                 name: formName.trim(),
@@ -446,7 +340,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 is_active: formIsActive === true
             }, editingCategory);
 
-            // Optimistic update of local list
             const savedCat = result?.category || {
                 id: editingCategory?.id || `cat_${Date.now()}`,
                 name: formName.trim(),
@@ -467,26 +360,17 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 return [savedCat, ...prev];
             });
 
-            setModalFeedback({
-                type: 'success',
-                text: `✓ An Ajiye Cikin Nasara! Category "${formName.trim()}" ya hau kai tsaye 100%.`
-            });
-
-            // Refresh counts & database silently
+            setModalFeedback({ type: 'success', text: `Category "${formName.trim()}" saved successfully!` });
             fetchCategoriesAndCounts(true);
 
-            // Close modal after showing success
             setTimeout(() => {
                 setModalVisible(false);
                 setModalFeedback(null);
-            }, 800);
+            }, 650);
 
         } catch (err) {
             console.error('Save failed:', err);
-            setModalFeedback({
-                type: 'error',
-                text: 'Kuskure wajen ajiye: ' + (err.message || 'An kasa ajiye category.')
-            });
+            setModalFeedback({ type: 'error', text: 'Save Error: ' + (err.message || 'Failed to save.') });
         } finally {
             setSaving(false);
         }
@@ -494,38 +378,36 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
     const handleToggleStatus = async (cat) => {
         const nextStatus = cat.is_active === false ? true : false;
-        // Optimistic UI update
         setCategories(prev => prev.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: nextStatus } : c));
 
         try {
             await toggleCategoryStatus(cat);
         } catch (err) {
             console.error('Toggle status error:', err);
-            // Revert
             setCategories(prev => prev.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: !nextStatus } : c));
-            Alert.alert('Matsalar Status', 'Ba a iya canza matsayin category ba.');
+            Alert.alert('Status Error', 'Could not toggle category visibility.');
         }
     };
 
     const deleteCat = (cat) => {
         const count = productCounts[(cat.name || '').toLowerCase().trim()] || 0;
-        const warning = count > 0 ? `\n\nLURA: Wannan category yana da kayayyaki ${count} da aka danganta da shi.` : '';
+        const warning = count > 0 ? `\n\nNote: This category currently has ${count} linked products.` : '';
 
         Alert.alert(
-            'Goge Category (Delete)',
-            `Kana da tabbacin kana son goge "${cat.name}"?${warning}`,
+            'Delete Category',
+            `Are you sure you want to delete "${cat.name}"?${warning}`,
             [
-                { text: 'A\'a (Cancel)', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Goge (Delete)',
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             setCategories(prev => prev.filter(c => c.id !== cat.id && c.slug !== cat.slug));
                             await deleteCategory(cat);
-                            Alert.alert('An Goge', `An cire category "${cat.name}" cikin nasara.`);
+                            fetchCategoriesAndCounts(true);
                         } catch (delErr) {
-                            Alert.alert('Delete Failed', delErr.message || 'An kasa goge category.');
+                            Alert.alert('Delete Failed', delErr.message || 'Failed to delete category.');
                             fetchCategoriesAndCounts(true);
                         }
                     }
@@ -545,7 +427,12 @@ export const AdminCategories = ({ navigation, onBack }) => {
         return true;
     });
 
-    // Stats
+    const filteredDropdownList = GLOBAL_CATEGORIES.filter(item =>
+        !dropdownSearch.trim() ||
+        item.name.toLowerCase().includes(dropdownSearch.toLowerCase()) ||
+        item.slug.toLowerCase().includes(dropdownSearch.toLowerCase())
+    );
+
     const totalCategories = categories.length;
     const activeCategories = categories.filter(c => c.is_active !== false).length;
     const inactiveCategories = categories.filter(c => c.is_active === false).length;
@@ -553,7 +440,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
     return (
         <View style={s.container}>
-            {/* Header Area with Luxury Navy & Gold styling */}
+            {/* Header Area */}
             <LinearGradient
                 colors={[BRAND.navyDark, BRAND.navy, BRAND.navyLight]}
                 start={{ x: 0, y: 0 }}
@@ -574,11 +461,11 @@ export const AdminCategories = ({ navigation, onBack }) => {
                     <View style={{ flex: 1, paddingRight: 10 }}>
                         <View style={s.badgePill}>
                             <Ionicons name="sparkles" size={11} color={BRAND.gold} />
-                            <Text style={s.badgePillTxt}>TSARIN KASUWA • TAXONOMY</Text>
+                            <Text style={s.badgePillTxt}>PLATFORM TAXONOMY</Text>
                         </View>
-                        <Text style={s.headerTitle}>Sarrafa Categories</Text>
+                        <Text style={s.headerTitle}>Category Management</Text>
                         <Text style={s.headerSubtitle}>
-                            Bangarori, jerin fifiko & bayyana kai tsaye a manhaja 100%
+                            Configure marketplace catalog, display order & live visibility
                         </Text>
                     </View>
 
@@ -594,28 +481,28 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             style={s.addBtnGrad}
                         >
                             <Ionicons name="add" size={18} color="#071422" />
-                            <Text style={s.addBtnTxt}>KARA SABO</Text>
+                            <Text style={s.addBtnTxt}>ADD CATEGORY</Text>
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>
 
-                {/* 4 Top KPI Metric Cards */}
+                {/* 4 KPI Metric Cards */}
                 <View style={s.kpiRow}>
                     <View style={s.kpiCard}>
                         <Text style={s.kpiValue}>{totalCategories}</Text>
-                        <Text style={s.kpiLabel}>Duka (Total)</Text>
+                        <Text style={s.kpiLabel}>Total</Text>
                     </View>
                     <View style={s.kpiCard}>
                         <Text style={[s.kpiValue, { color: BRAND.emerald }]}>{activeCategories}</Text>
-                        <Text style={s.kpiLabel}>Masu Aiki</Text>
+                        <Text style={s.kpiLabel}>Active</Text>
                     </View>
                     <View style={s.kpiCard}>
                         <Text style={[s.kpiValue, { color: BRAND.slate }]}>{inactiveCategories}</Text>
-                        <Text style={s.kpiLabel}>An Dakatar</Text>
+                        <Text style={s.kpiLabel}>Inactive</Text>
                     </View>
                     <View style={s.kpiCard}>
                         <Text style={[s.kpiValue, { color: BRAND.gold }]}>{totalLinkedProds}</Text>
-                        <Text style={s.kpiLabel}>Kayayyaki</Text>
+                        <Text style={s.kpiLabel}>Products</Text>
                     </View>
                 </View>
 
@@ -623,7 +510,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 <View style={s.searchBar}>
                     <Ionicons name="search" size={16} color={BRAND.gold} style={{ marginRight: 8 }} />
                     <TextInput
-                        placeholder="Nemi category ko slug..."
+                        placeholder="Search category name or slug..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         style={s.searchInput}
@@ -636,12 +523,12 @@ export const AdminCategories = ({ navigation, onBack }) => {
                     )}
                 </View>
 
-                {/* Filter Pills Row */}
+                {/* Filter Tabs */}
                 <View style={s.filterPillsRow}>
                     {[
-                        { key: 'all', label: `Duka (${totalCategories})` },
-                        { key: 'active', label: `Masu Aiki (${activeCategories})` },
-                        { key: 'inactive', label: `An Dakatar (${inactiveCategories})` },
+                        { key: 'all', label: `All (${totalCategories})` },
+                        { key: 'active', label: `Active (${activeCategories})` },
+                        { key: 'inactive', label: `Inactive (${inactiveCategories})` },
                     ].map(f => (
                         <TouchableOpacity
                             key={f.key}
@@ -657,20 +544,20 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 </View>
             </LinearGradient>
 
-            {/* Content List */}
+            {/* Category List */}
             {loading && !refreshing ? (
                 <View style={s.loadingCenter}>
                     <ActivityIndicator size="large" color={BRAND.gold} />
-                    <Text style={s.loadingTxt}>Ana loda categories na kasuwa...</Text>
+                    <Text style={s.loadingTxt}>Loading categories...</Text>
                 </View>
             ) : filteredCategories.length === 0 ? (
                 <View style={s.emptyBox}>
                     <View style={s.emptyIconCircle}>
                         <Ionicons name="layers-outline" size={38} color={BRAND.gold} />
                     </View>
-                    <Text style={s.emptyTitle}>Babu wani category a halin yanzu</Text>
+                    <Text style={s.emptyTitle}>No categories found</Text>
                     <Text style={s.emptySub}>
-                        {searchQuery ? 'Babu sakamako ga bincikenka.' : 'Danna "KARA SABO" a sama domin daura sabon category 100%.'}
+                        {searchQuery ? 'Try clearing your search query.' : 'Tap "ADD CATEGORY" above to create your first category.'}
                     </Text>
                 </View>
             ) : (
@@ -698,7 +585,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         {item.image_url ? (
                                             <Image source={{ uri: item.image_url }} style={s.catThumbImg} />
                                         ) : (
-                                            <Ionicons name={item.icon || "layers"} size={24} color={BRAND.gold} />
+                                            <Ionicons name={item.icon || "layers"} size={22} color={BRAND.gold} />
                                         )}
                                     </View>
 
@@ -710,7 +597,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                             </Text>
                                             <View style={[s.statusPill, isActive ? s.statusPillActive : s.statusPillInactive]}>
                                                 <Text style={[s.statusPillTxt, isActive ? s.statusPillTxtActive : s.statusPillTxtInactive]}>
-                                                    {isActive ? 'YANA AIKI' : 'AN DAKATAR'}
+                                                    {isActive ? 'ACTIVE' : 'INACTIVE'}
                                                 </Text>
                                             </View>
                                         </View>
@@ -719,16 +606,15 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                             /{item.slug || 'category'}
                                         </Text>
 
-                                        {/* Micro stats */}
                                         <View style={s.catMetaRow}>
                                             <View style={s.metaItem}>
                                                 <Ionicons name="cube-outline" size={12} color={BRAND.gold} />
-                                                <Text style={s.metaTxt}>{count} kayayyaki</Text>
+                                                <Text style={s.metaTxt}>{count} products</Text>
                                             </View>
                                             <Text style={s.metaDot}>•</Text>
                                             <View style={s.metaItem}>
                                                 <Ionicons name="swap-vertical-outline" size={12} color={BRAND.slate} />
-                                                <Text style={s.metaTxt}>Lambar #{item.display_order ?? 0}</Text>
+                                                <Text style={s.metaTxt}>Order #{item.display_order ?? 0}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -736,7 +622,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
                                 {/* Action Buttons */}
                                 <View style={s.catActionsCol}>
-                                    {/* Quick 1-Tap Toggle */}
                                     <TouchableOpacity
                                         onPress={() => handleToggleStatus(item)}
                                         style={[s.toggleBtn, isActive ? s.toggleBtnActive : s.toggleBtnInactive]}
@@ -749,7 +634,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         />
                                     </TouchableOpacity>
 
-                                    {/* Edit */}
                                     <TouchableOpacity
                                         onPress={() => openEditModal(item)}
                                         style={s.editBtn}
@@ -758,7 +642,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         <Ionicons name="pencil" size={14} color={BRAND.navy} />
                                     </TouchableOpacity>
 
-                                    {/* Delete */}
                                     <TouchableOpacity
                                         onPress={() => deleteCat(item)}
                                         style={s.delBtn}
@@ -791,10 +674,10 @@ export const AdminCategories = ({ navigation, onBack }) => {
                         >
                             <View style={{ flex: 1, paddingRight: 8 }}>
                                 <Text style={s.modalTitle}>
-                                    {editingCategory ? 'Gyara Category' : 'Dauki / Kara Sabon Category'}
+                                    {editingCategory ? 'Edit Category' : 'Create New Category'}
                                 </Text>
                                 <Text style={s.modalSub}>
-                                    Zai bayyana kai tsaye 100% a dukkan manhajar waya da yanar gizo
+                                    Changes sync instantly across web and mobile platforms
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={s.closeBtn}>
@@ -831,127 +714,32 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 </View>
                             )}
 
-                            {/* 1. Image Preview & Upload Controls */}
-                            <View style={s.imageUploadSection}>
-                                <View style={s.imagePreviewBox}>
-                                    {formImageUrl ? (
-                                        <Image source={{ uri: formImageUrl }} style={s.imagePreviewImg} />
-                                    ) : (
-                                        <Ionicons name={formIcon || "image-outline"} size={36} color={BRAND.gold} />
-                                    )}
-                                    {uploading && (
-                                        <View style={s.uploadingOverlay}>
-                                            <ActivityIndicator color={BRAND.gold} />
-                                        </View>
-                                    )}
-                                </View>
-
-                                <View style={{ flex: 1, gap: 8 }}>
-                                    <TouchableOpacity
-                                        onPress={handlePickImage}
-                                        disabled={uploading}
-                                        style={s.pickImageBtn}
-                                        activeOpacity={0.85}
-                                    >
-                                        <Ionicons name="cloud-upload-outline" size={16} color="#071422" />
-                                        <Text style={s.pickImageTxt}>
-                                            {uploading ? 'Ana lodawa...' : 'Zabi Hoto (Upload Image)'}
-                                        </Text>
-                                    </TouchableOpacity>
-
-                                    {formImageUrl ? (
-                                        <TouchableOpacity
-                                            onPress={() => setFormImageUrl('')}
-                                            style={s.removeImageBtn}
-                                            activeOpacity={0.75}
-                                        >
-                                            <Ionicons name="trash-outline" size={13} color={BRAND.danger} />
-                                            <Text style={s.removeImageTxt}>Cire Hoton</Text>
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <Text style={s.imageHintTxt}>
-                                            Zabi hoto daga waya/kwamfuta ko danna kowanne a kasa.
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-
-                            {/* 2. Hotunan Alfarma Masu Kyau (Luxury Preset Photo Gallery) */}
-                            <View style={s.presetPhotosWrap}>
-                                <Text style={s.presetPhotosTitle}>Zaɓi Hoton Alfarma (Luxury Preset Photos):</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.presetPhotosRail}>
-                                    {LUXURY_PHOTO_PRESETS.map((p, idx) => {
-                                        const isSelected = formImageUrl === p.uri;
-                                        return (
-                                            <TouchableOpacity
-                                                key={idx}
-                                                onPress={() => {
-                                                    setFormImageUrl(p.uri);
-                                                    setModalFeedback({
-                                                        type: 'success',
-                                                        text: `An zaɓi hoton "${p.title}"! ✓`
-                                                    });
-                                                }}
-                                                style={[s.presetPhotoItem, isSelected && s.presetPhotoItemActive]}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Image source={{ uri: p.uri }} style={s.presetPhotoImg} />
-                                                {isSelected && (
-                                                    <View style={s.presetCheckBadge}>
-                                                        <Ionicons name="checkmark" size={12} color="#071422" />
-                                                    </View>
-                                                )}
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </ScrollView>
-                            </View>
-
-                            {/* 3. 💡 Zaɓaɓɓun Sunayen Categories (1-Tap Smart Suggestions) */}
-                            <View style={s.suggestionsBox}>
-                                <View style={s.suggestionsHeader}>
-                                    <Ionicons name="sparkles" size={14} color={BRAND.gold} />
-                                    <Text style={s.suggestionsTitle}>Zaɓaɓɓun Sunayen Categories (1-Tap Suggestions):</Text>
-                                </View>
-                                <Text style={s.suggestionsSub}>
-                                    Danna kowanne don cikasa suna, slug da hoton alfarma kai tsaye:
-                                </Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.suggestionsRail}>
-                                    {CATEGORY_SUGGESTIONS.map((item, idx) => {
-                                        const isSelected = formName.toLowerCase().trim() === item.name.toLowerCase().trim();
-                                        return (
-                                            <TouchableOpacity
-                                                key={idx}
-                                                onPress={() => handleSelectSuggestion(item)}
-                                                style={[s.suggestionChip, isSelected && s.suggestionChipActive]}
-                                                activeOpacity={0.8}
-                                            >
-                                                <View style={[s.suggestionChipIconWrap, isSelected && s.suggestionChipIconWrapActive]}>
-                                                    <Ionicons
-                                                        name={item.icon}
-                                                        size={14}
-                                                        color={isSelected ? '#071422' : BRAND.gold}
-                                                    />
-                                                </View>
-                                                <View>
-                                                    <Text style={[s.suggestionChipTxt, isSelected && s.suggestionChipTxtActive]}>
-                                                        {item.name}
-                                                    </Text>
-                                                    <Text style={[s.suggestionChipSubTxt, isSelected && s.suggestionChipSubTxtActive]}>
-                                                        {item.english}
-                                                    </Text>
-                                                </View>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </ScrollView>
-                            </View>
-
-                            {/* 4. Category Name */}
+                            {/* 1. Global Categories Dropdown Selector */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Sunan Category (Category Name) *</Text>
+                                <Text style={s.fieldLabel}>Select Category from Global Catalog</Text>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setDropdownSearch('');
+                                        setDropdownVisible(true);
+                                    }}
+                                    style={s.dropdownTrigger}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                        <Ionicons name={formIcon || "list-outline"} size={18} color={BRAND.gold} />
+                                        <Text style={[s.dropdownTriggerTxt, !formName && { color: '#94A3B8' }]}>
+                                            {formName || "Choose from 35+ world categories..."}
+                                        </Text>
+                                    </View>
+                                    <Ionicons name="chevron-down" size={18} color={BRAND.slate} />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* 2. Category Name Input (Pre-filled by Dropdown or Custom) */}
+                            <View style={s.formField}>
+                                <Text style={s.fieldLabel}>Category Name *</Text>
                                 <TextInput
-                                    placeholder="misali: Kayan Mata & Turare"
+                                    placeholder="e.g. Phones & Tablets"
                                     value={formName}
                                     onChangeText={handleNameChange}
                                     style={s.input}
@@ -959,11 +747,11 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* 5. Slug */}
+                            {/* 3. URL Slug */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Lambar Mahada (Slug / URL Identifier)</Text>
+                                <Text style={s.fieldLabel}>URL Slug / Identifier</Text>
                                 <TextInput
-                                    placeholder="misali: kayan-mata-turare"
+                                    placeholder="e.g. phones-tablets"
                                     value={formSlug}
                                     onChangeText={setFormSlug}
                                     style={s.input}
@@ -972,11 +760,59 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* 6. Display Order */}
+                            {/* 4. Image Upload & Preview Section */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Lambar Tsari / Fifiko (Display Order)</Text>
+                                <Text style={s.fieldLabel}>Category Cover Image</Text>
+                                <View style={s.imageUploadSection}>
+                                    <View style={s.imagePreviewBox}>
+                                        {formImageUrl ? (
+                                            <Image source={{ uri: formImageUrl }} style={s.imagePreviewImg} />
+                                        ) : (
+                                            <Ionicons name={formIcon || "image-outline"} size={32} color={BRAND.gold} />
+                                        )}
+                                        {uploading && (
+                                            <View style={s.uploadingOverlay}>
+                                                <ActivityIndicator color={BRAND.gold} />
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View style={{ flex: 1, gap: 8 }}>
+                                        <TouchableOpacity
+                                            onPress={handlePickImage}
+                                            disabled={uploading}
+                                            style={s.pickImageBtn}
+                                            activeOpacity={0.85}
+                                        >
+                                            <Ionicons name="cloud-upload-outline" size={16} color="#071422" />
+                                            <Text style={s.pickImageTxt}>
+                                                {uploading ? 'Uploading...' : 'Upload Image'}
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        {formImageUrl ? (
+                                            <TouchableOpacity
+                                                onPress={() => setFormImageUrl('')}
+                                                style={s.removeImageBtn}
+                                                activeOpacity={0.75}
+                                            >
+                                                <Ionicons name="trash-outline" size={13} color={BRAND.danger} />
+                                                <Text style={s.removeImageTxt}>Remove Image</Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <Text style={s.imageHintTxt}>
+                                                Select a photo from device or choose a preset above.
+                                            </Text>
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* 5. Display Order */}
+                            <View style={s.formField}>
+                                <Text style={s.fieldLabel}>Display Order (Priority)</Text>
                                 <TextInput
-                                    placeholder="misali: 1"
+                                    placeholder="e.g. 1"
                                     value={formDisplayOrder}
                                     onChangeText={setFormDisplayOrder}
                                     keyboardType="numeric"
@@ -985,11 +821,11 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* 7. Active Toggle */}
+                            {/* 6. Active Visibility */}
                             <View style={s.switchFieldRow}>
                                 <View style={{ flex: 1, paddingRight: 12 }}>
-                                    <Text style={s.fieldLabel}>Bude Don Jama'a (Active Visibility)</Text>
-                                    <Text style={s.switchSubTxt}>Zai bayyana a shafin farko da shagon kasuwa nan take</Text>
+                                    <Text style={s.fieldLabel}>Active Public Visibility</Text>
+                                    <Text style={s.switchSubTxt}>Display category in store navigation and homepage</Text>
                                 </View>
                                 <Switch
                                     value={formIsActive}
@@ -999,7 +835,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* 8. Submit Button */}
+                            {/* 7. Submit Button */}
                             <TouchableOpacity
                                 onPress={handleSave}
                                 disabled={saving}
@@ -1015,19 +851,91 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                     {saving ? (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                             <ActivityIndicator color="#071422" />
-                                            <Text style={s.submitBtnTxt}>Ana ajiye category...</Text>
+                                            <Text style={s.submitBtnTxt}>Saving Category...</Text>
                                         </View>
                                     ) : (
                                         <>
                                             <Ionicons name="checkmark-circle" size={19} color="#071422" />
                                             <Text style={s.submitBtnTxt}>
-                                                {editingCategory ? 'Ajiye Gyara (Update Category)' : 'Dauka & Fara Aiki (Create & Publish)'}
+                                                {editingCategory ? 'Update Category' : 'Save & Publish Category'}
                                             </Text>
                                         </>
                                     )}
                                 </LinearGradient>
                             </TouchableOpacity>
                         </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ════ GLOBAL CATEGORIES DROPDOWN MODAL ════ */}
+            <Modal
+                visible={dropdownVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setDropdownVisible(false)}
+            >
+                <View style={s.dropdownBackdrop}>
+                    <View style={s.dropdownSheet}>
+                        <View style={s.dropdownHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.dropdownTitle}>Select Category</Text>
+                                <Text style={s.dropdownSub}>Choose from global marketplace categories</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setDropdownVisible(false)} style={s.closeBtn}>
+                                <Ionicons name="close" size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search in Dropdown */}
+                        <View style={s.dropdownSearchWrap}>
+                            <Ionicons name="search" size={16} color={BRAND.gold} style={{ marginRight: 8 }} />
+                            <TextInput
+                                placeholder="Filter categories..."
+                                value={dropdownSearch}
+                                onChangeText={setDropdownSearch}
+                                style={s.dropdownSearchInput}
+                                placeholderTextColor="#94A3B8"
+                                autoFocus={Platform.OS === 'web'}
+                            />
+                            {dropdownSearch.length > 0 && (
+                                <TouchableOpacity onPress={() => setDropdownSearch('')}>
+                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Categories List */}
+                        <FlatList
+                            data={filteredDropdownList}
+                            keyExtractor={item => item.slug}
+                            contentContainerStyle={{ padding: 12 }}
+                            renderItem={({ item }) => {
+                                const isSelected = formSlug === item.slug;
+                                return (
+                                    <TouchableOpacity
+                                        onPress={() => handleSelectDropdownItem(item)}
+                                        style={[s.dropdownItem, isSelected && s.dropdownItemActive]}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={s.dropdownItemThumb}>
+                                            <Image source={{ uri: item.image }} style={s.dropdownItemImg} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[s.dropdownItemTxt, isSelected && s.dropdownItemTxtActive]}>
+                                                {item.name}
+                                            </Text>
+                                            <Text style={s.dropdownItemSlug}>
+                                                /{item.slug}
+                                            </Text>
+                                        </View>
+                                        {isSelected && (
+                                            <Ionicons name="checkmark-circle" size={18} color={BRAND.emerald} />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
                     </View>
                 </View>
             </Modal>
@@ -1248,9 +1156,9 @@ const s = StyleSheet.create({
         flex: 1,
     },
     catThumbWrap: {
-        width: 52,
-        height: 52,
-        borderRadius: 14,
+        width: 50,
+        height: 50,
+        borderRadius: 12,
         backgroundColor: '#F8FAFC',
         borderWidth: 1.2,
         borderColor: BRAND.borderGold,
@@ -1425,22 +1333,58 @@ const s = StyleSheet.create({
     feedbackBannerTxtLoading: {
         color: '#92400E',
     },
+    // Form fields
+    formField: {
+        marginBottom: 14,
+    },
+    fieldLabel: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: BRAND.slateDark,
+        marginBottom: 6,
+    },
+    dropdownTrigger: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderWidth: 1.2,
+        borderColor: BRAND.borderGold,
+    },
+    dropdownTriggerTxt: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: BRAND.slateDark,
+    },
+    input: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        fontSize: 13,
+        color: BRAND.slateDark,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        fontWeight: '600',
+    },
     // Image Upload
     imageUploadSection: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 14,
-        marginBottom: 14,
         padding: 12,
         backgroundColor: '#F8FAFC',
-        borderRadius: 16,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
     imagePreviewBox: {
-        width: 76,
-        height: 76,
-        borderRadius: 16,
+        width: 72,
+        height: 72,
+        borderRadius: 14,
         backgroundColor: '#FFFFFF',
         borderWidth: 1.5,
         borderColor: BRAND.borderGold,
@@ -1490,143 +1434,6 @@ const s = StyleSheet.create({
         color: BRAND.slate,
         lineHeight: 14,
     },
-    // Preset Photos Gallery
-    presetPhotosWrap: {
-        marginBottom: 16,
-    },
-    presetPhotosTitle: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: BRAND.slateDark,
-        marginBottom: 8,
-    },
-    presetPhotosRail: {
-        flexDirection: 'row',
-        gap: 8,
-        paddingRight: 10,
-    },
-    presetPhotoItem: {
-        width: 62,
-        height: 62,
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 2,
-        borderColor: 'transparent',
-        position: 'relative',
-    },
-    presetPhotoItemActive: {
-        borderColor: BRAND.gold,
-    },
-    presetPhotoImg: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
-    presetCheckBadge: {
-        position: 'absolute',
-        top: 3,
-        right: 3,
-        backgroundColor: BRAND.gold,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    // Smart Suggestions
-    suggestionsBox: {
-        backgroundColor: '#FFFBEB',
-        borderRadius: 14,
-        padding: 12,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.4)',
-    },
-    suggestionsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginBottom: 4,
-    },
-    suggestionsTitle: {
-        fontSize: 12,
-        fontWeight: '900',
-        color: '#92400E',
-    },
-    suggestionsSub: {
-        fontSize: 10.5,
-        color: '#78350F',
-        marginBottom: 10,
-    },
-    suggestionsRail: {
-        flexDirection: 'row',
-        gap: 8,
-        paddingRight: 10,
-    },
-    suggestionChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 10,
-        borderWidth: 1.2,
-        borderColor: '#FDE68A',
-    },
-    suggestionChipActive: {
-        backgroundColor: BRAND.gold,
-        borderColor: BRAND.gold,
-    },
-    suggestionChipIconWrap: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        backgroundColor: '#FEF3C7',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    suggestionChipIconWrapActive: {
-        backgroundColor: '#FFFFFF',
-    },
-    suggestionChipTxt: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: BRAND.slateDark,
-    },
-    suggestionChipTxtActive: {
-        color: '#071422',
-        fontWeight: '900',
-    },
-    suggestionChipSubTxt: {
-        fontSize: 9.5,
-        color: BRAND.slate,
-    },
-    suggestionChipSubTxtActive: {
-        color: '#3B2404',
-        fontWeight: '700',
-    },
-    // Form fields
-    formField: {
-        marginBottom: 14,
-    },
-    fieldLabel: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: BRAND.slateDark,
-        marginBottom: 6,
-    },
-    input: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        fontSize: 13,
-        color: BRAND.slateDark,
-        borderWidth: 1,
-        borderColor: '#CBD5E1',
-        fontWeight: '600',
-    },
     switchFieldRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1661,5 +1468,93 @@ const s = StyleSheet.create({
         color: '#071422',
         fontSize: 14,
         fontWeight: '900',
+    },
+    // Global Categories Dropdown Modal Styles
+    dropdownBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(7, 20, 34, 0.8)',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    dropdownSheet: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        maxHeight: '80%',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: BRAND.borderGold,
+    },
+    dropdownHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        backgroundColor: BRAND.navyDark,
+        borderBottomWidth: 1,
+        borderColor: BRAND.borderGold,
+    },
+    dropdownTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    dropdownSub: {
+        fontSize: 10.5,
+        color: '#94A3B8',
+        marginTop: 1,
+    },
+    dropdownSearchWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderBottomWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+    },
+    dropdownSearchInput: {
+        flex: 1,
+        fontSize: 13,
+        color: BRAND.slateDark,
+        fontWeight: '600',
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        marginBottom: 4,
+    },
+    dropdownItemActive: {
+        backgroundColor: '#FEF3C7',
+    },
+    dropdownItemThumb: {
+        width: 38,
+        height: 38,
+        borderRadius: 8,
+        overflow: 'hidden',
+        backgroundColor: '#E2E8F0',
+    },
+    dropdownItemImg: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    dropdownItemTxt: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: BRAND.slateDark,
+    },
+    dropdownItemTxtActive: {
+        color: BRAND.navyDark,
+        fontWeight: '900',
+    },
+    dropdownItemSlug: {
+        fontSize: 10.5,
+        color: BRAND.slate,
+        marginTop: 1,
     },
 });
