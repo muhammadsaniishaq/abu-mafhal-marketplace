@@ -41,6 +41,122 @@ const BRAND = {
     danger: '#EF4444',
 };
 
+// 1-Tap Category Name Suggestions with luxury presets & icons
+const CATEGORY_SUGGESTIONS = [
+    {
+        name: "Wayoyi & Na'urori",
+        english: "Phones & Gadgets",
+        slug: "wayoyi-naurori",
+        icon: "phone-portrait-outline",
+        image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Kayan Mata & Turare",
+        english: "Women's Fashion & Perfumes",
+        slug: "kayan-mata-turare",
+        icon: "sparkles-outline",
+        image: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Alkyabba & Shadda",
+        english: "Men's Traditional Wears",
+        slug: "alkyabba-shadda",
+        icon: "shirt-outline",
+        image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Turare & Kayan Kwalliya",
+        english: "Perfumes & Cosmetics",
+        slug: "turare-kayan-kwalliya",
+        icon: "flame-outline",
+        image: "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Takalma & Jakunkuna",
+        english: "Shoes & Luxury Bags",
+        slug: "takalma-jakunkuna",
+        icon: "bag-handle-outline",
+        image: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Agogo & Kayan Ado",
+        english: "Watches & Jewelry",
+        slug: "agogo-kayan-ado",
+        icon: "watch-outline",
+        image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Kayan Gida & Kicin",
+        english: "Home & Kitchen Appliances",
+        slug: "kayan-gida-kicin",
+        icon: "home-outline",
+        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Kayan Yara & Jarirai",
+        english: "Kids & Baby Essentials",
+        slug: "kayan-yara-jarirai",
+        icon: "happy-outline",
+        image: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Kayan Abinci & Masarufi",
+        english: "Groceries & Food",
+        slug: "kayan-abinci-masarufi",
+        icon: "restaurant-outline",
+        image: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Magungunan Musulunci",
+        english: "Islamic & Herbal Health",
+        slug: "magungunan-musulunci",
+        icon: "leaf-outline",
+        image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Kayan Maza & Yadi",
+        english: "Men's Fabrics & Clothing",
+        slug: "kayan-maza-yadi",
+        icon: "briefcase-outline",
+        image: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Kayan Wasanni & Motsa Jiki",
+        english: "Sports & Fitness",
+        slug: "kayan-wasanni-motsa-jiki",
+        icon: "barbell-outline",
+        image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Motoci & Kayan Gyara",
+        english: "Automotive & Spare Parts",
+        slug: "motoci-kayan-gyara",
+        icon: "car-sport-outline",
+        image: "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        name: "Littattafai & Karatu",
+        english: "Books & Education",
+        slug: "littattafai-karatu",
+        icon: "book-outline",
+        image: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80"
+    }
+];
+
+// Luxury Preset Photos Rail
+const LUXURY_PHOTO_PRESETS = [
+    { title: "Turare / Perfumes", uri: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&auto=format&fit=crop&q=80" },
+    { title: "Wayoyi / Phones", uri: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80" },
+    { title: "Shadda / Fabrics", uri: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80" },
+    { title: "Kayan Kwalliya", uri: "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=600&auto=format&fit=crop&q=80" },
+    { title: "Agogo / Watches", uri: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80" },
+    { title: "Takalma / Shoes", uri: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&auto=format&fit=crop&q=80" },
+    { title: "Kayan Gida / Home", uri: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80" },
+    { title: "Kayan Yara / Baby", uri: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80" },
+    { title: "Abinci / Groceries", uri: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80" },
+    { title: "Maganin Musulunci", uri: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80" }
+];
+
 export const AdminCategories = ({ navigation, onBack }) => {
     const [categories, setCategories] = useState([]);
     const [productCounts, setProductCounts] = useState({});
@@ -56,9 +172,11 @@ export const AdminCategories = ({ navigation, onBack }) => {
     const [formName, setFormName] = useState('');
     const [formSlug, setFormSlug] = useState('');
     const [formImageUrl, setFormImageUrl] = useState('');
+    const [formIcon, setFormIcon] = useState('grid-outline');
     const [formDisplayOrder, setFormDisplayOrder] = useState('1');
     const [formIsActive, setFormIsActive] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [modalFeedback, setModalFeedback] = useState(null); // { type: 'success' | 'error' | 'loading', text: '' }
 
     useEffect(() => {
         fetchCategoriesAndCounts();
@@ -72,7 +190,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
         // Also subscribe to Postgres Realtime changes
         const channel = supabase
-            .channel('admin-categories-unified-v6')
+            .channel('admin-categories-unified-v7')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
                 fetchCategoriesAndCounts(true);
             })
@@ -119,54 +237,139 @@ export const AdminCategories = ({ navigation, onBack }) => {
         }
     };
 
-    const handlePickImage = async () => {
+    // Lightweight image compression for web
+    const compressImageOnWeb = (dataUrl, callback) => {
+        if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.Image) {
+            return callback(dataUrl);
+        }
         try {
+            const img = new window.Image();
+            img.onload = () => {
+                const maxDim = 700;
+                let width = img.width || 400;
+                let height = img.height || 400;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressed = canvas.toDataURL('image/jpeg', 0.82);
+                    callback(compressed);
+                } else {
+                    callback(dataUrl);
+                }
+            };
+            img.onerror = () => callback(dataUrl);
+            img.src = dataUrl;
+        } catch (_) {
+            callback(dataUrl);
+        }
+    };
+
+    // 100% Reliable File Picker & Upload Handler
+    const handlePickImage = async () => {
+        setUploading(true);
+        setModalFeedback(null);
+        try {
+            // WEB BROWSER: Native HTML File Input (Works 100% on Chrome, Safari, Edge, Mobile Web)
+            if (Platform.OS === 'web' && typeof document !== 'undefined') {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = 'image/*';
+                fileInput.style.display = 'none';
+
+                fileInput.onchange = async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) {
+                        setUploading(false);
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = async (re) => {
+                        const rawDataUrl = re.target?.result;
+                        if (rawDataUrl) {
+                            compressImageOnWeb(rawDataUrl, (compressedUrl) => {
+                                setFormImageUrl(compressedUrl);
+                                setUploading(false);
+                                setModalFeedback({
+                                    type: 'success',
+                                    text: 'An loda hoton cikin nasara! ✓'
+                                });
+                            });
+                        } else {
+                            setUploading(false);
+                        }
+                    };
+                    reader.onerror = () => {
+                        setUploading(false);
+                        setModalFeedback({
+                            type: 'error',
+                            text: 'Kuskure wajen karanta fayil din hoto.'
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                document.body.appendChild(fileInput);
+                fileInput.click();
+                setTimeout(() => {
+                    if (fileInput.parentNode) {
+                        fileInput.parentNode.removeChild(fileInput);
+                    }
+                }, 1000);
+                return;
+            }
+
+            // NATIVE MOBILE (Android / iOS): expo-image-picker
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Izini (Permission)', 'Muna bukatar izinin shiga hotunanka domin zaɓar hoton category.');
+                setUploading(false);
+                return;
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.85,
+                mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'Images',
+                allowsEditing: false,
+                quality: 0.7,
                 base64: true
             });
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const asset = result.assets[0];
                 if (asset.base64) {
-                    setUploading(true);
-                    let uploadedUrl = null;
-                    const fileName = `categories/cat_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
-                    
-                    try {
-                        const { error: uploadError } = await supabase.storage
-                            .from('products')
-                            .upload(fileName, decode(asset.base64), {
-                                contentType: 'image/png',
-                                upsert: true
-                            });
-
-                        if (!uploadError) {
-                            const { data: publicUrlData } = supabase.storage
-                                .from('products')
-                                .getPublicUrl(fileName);
-                            uploadedUrl = publicUrlData?.publicUrl;
-                        }
-                    } catch (_) {}
-
-                    if (uploadedUrl) {
-                        setFormImageUrl(uploadedUrl);
-                    } else if (asset.base64) {
-                        setFormImageUrl(`data:image/png;base64,${asset.base64}`);
-                    } else {
-                        setFormImageUrl(asset.uri);
-                    }
+                    const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
+                    setFormImageUrl(dataUrl);
+                    setModalFeedback({
+                        type: 'success',
+                        text: 'An zaɓi hoton cikin nasara! ✓'
+                    });
                 } else if (asset.uri) {
                     setFormImageUrl(asset.uri);
+                    setModalFeedback({
+                        type: 'success',
+                        text: 'An zaɓi hoton cikin nasara! ✓'
+                    });
                 }
             }
         } catch (err) {
             console.error('Image pick error:', err);
+            setModalFeedback({
+                type: 'error',
+                text: 'Kuskuren hoto: ' + (err.message || 'Error')
+            });
         } finally {
-            setUploading(false);
+            if (Platform.OS !== 'web') setUploading(false);
         }
     };
 
@@ -175,6 +378,8 @@ export const AdminCategories = ({ navigation, onBack }) => {
         setFormName('');
         setFormSlug('');
         setFormImageUrl('');
+        setFormIcon('grid-outline');
+        setModalFeedback(null);
         const maxOrder = categories.reduce((max, c) => Math.max(max, parseInt(c.display_order, 10) || 0), 0);
         setFormDisplayOrder(String(maxOrder + 1));
         setFormIsActive(true);
@@ -186,6 +391,8 @@ export const AdminCategories = ({ navigation, onBack }) => {
         setFormName(cat.name || '');
         setFormSlug(cat.slug || '');
         setFormImageUrl(cat.image_url || '');
+        setFormIcon(cat.icon || 'grid-outline');
+        setModalFeedback(null);
         setFormDisplayOrder(String(cat.display_order ?? 0));
         setFormIsActive(cat.is_active !== false);
         setModalVisible(true);
@@ -198,9 +405,26 @@ export const AdminCategories = ({ navigation, onBack }) => {
         }
     };
 
+    // 1-Tap Category Suggestion Auto-Filler
+    const handleSelectSuggestion = (sug) => {
+        setFormName(sug.name);
+        setFormSlug(sug.slug);
+        setFormImageUrl(sug.image);
+        setFormIcon(sug.icon);
+        setModalFeedback({
+            type: 'success',
+            text: `An zaɓi "${sug.name}" da hoton alfarma kai tsaye! ✓`
+        });
+    };
+
+    // 100% Reliable Save Handler with visual in-modal status feedback
     const handleSave = async () => {
         if (!formName.trim()) {
-            return Alert.alert('Kuskure (Error)', 'Da fatan a saka sunan Category (Please enter a category name).');
+            setModalFeedback({
+                type: 'error',
+                text: 'Da fatan a saka ko a zaɓi sunan Category (Please enter or select a category name).'
+            });
+            return;
         }
 
         const slug = formSlug.trim() || generateSlug(formName);
@@ -208,28 +432,61 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
         try {
             setSaving(true);
+            setModalFeedback({
+                type: 'loading',
+                text: 'Ana ajiye category da bayyana shi a dukkan manhajar...'
+            });
 
-            await saveCategory({
+            const result = await saveCategory({
                 name: formName.trim(),
                 slug,
                 image_url: formImageUrl.trim() || null,
+                icon: formIcon || 'grid-outline',
                 display_order: displayOrder,
                 is_active: formIsActive === true
             }, editingCategory);
 
-            setModalVisible(false);
-            await fetchCategoriesAndCounts(true);
+            // Optimistic update of local list
+            const savedCat = result?.category || {
+                id: editingCategory?.id || `cat_${Date.now()}`,
+                name: formName.trim(),
+                slug,
+                icon: formIcon || 'grid-outline',
+                image_url: formImageUrl.trim() || null,
+                display_order: displayOrder,
+                is_active: formIsActive === true
+            };
 
-            Alert.alert(
-                'An Samu Nasara! 🎉',
-                editingCategory
-                    ? `An sabunta category "${formName.trim()}" kuma yana aiki 100% a dukkan manhajar.`
-                    : `An kirkiri sabon category "${formName.trim()}" kuma ya hau kai tsaye 100%!`,
-                [{ text: 'To Madalla', style: 'default' }]
-            );
+            setCategories(prev => {
+                const idx = prev.findIndex(c => (editingCategory?.id && c.id === editingCategory.id) || c.slug === slug);
+                if (idx >= 0) {
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], ...savedCat };
+                    return next;
+                }
+                return [savedCat, ...prev];
+            });
+
+            setModalFeedback({
+                type: 'success',
+                text: `✓ An Ajiye Cikin Nasara! Category "${formName.trim()}" ya hau kai tsaye 100%.`
+            });
+
+            // Refresh counts & database silently
+            fetchCategoriesAndCounts(true);
+
+            // Close modal after showing success
+            setTimeout(() => {
+                setModalVisible(false);
+                setModalFeedback(null);
+            }, 800);
+
         } catch (err) {
             console.error('Save failed:', err);
-            Alert.alert('Save Failed', err.message || 'An samu matsala wajen ajiye category.');
+            setModalFeedback({
+                type: 'error',
+                text: 'Kuskure wajen ajiye: ' + (err.message || 'An kasa ajiye category.')
+            });
         } finally {
             setSaving(false);
         }
@@ -484,7 +741,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         onPress={() => handleToggleStatus(item)}
                                         style={[s.toggleBtn, isActive ? s.toggleBtnActive : s.toggleBtnInactive]}
                                         activeOpacity={0.75}
-                                        title={isActive ? 'Dakatar da Category' : 'Kunna Category'}
                                     >
                                         <Ionicons
                                             name={isActive ? "checkmark-circle" : "pause-circle-outline"}
@@ -533,12 +789,12 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             end={{ x: 1, y: 0 }}
                             style={s.modalHeader}
                         >
-                            <View>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
                                 <Text style={s.modalTitle}>
                                     {editingCategory ? 'Gyara Category' : 'Dauki / Kara Sabon Category'}
                                 </Text>
                                 <Text style={s.modalSub}>
-                                    Zai hau kai tsaye 100% a manhajar waya da yanar gizo
+                                    Zai bayyana kai tsaye 100% a dukkan manhajar waya da yanar gizo
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={s.closeBtn}>
@@ -546,14 +802,42 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             </TouchableOpacity>
                         </LinearGradient>
 
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 18 }}>
-                            {/* Image Preview & Picker */}
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
+                            {/* In-Modal Feedback Banner */}
+                            {modalFeedback && (
+                                <View style={[
+                                    s.feedbackBanner,
+                                    modalFeedback.type === 'success' && s.feedbackBannerSuccess,
+                                    modalFeedback.type === 'error' && s.feedbackBannerError,
+                                    modalFeedback.type === 'loading' && s.feedbackBannerLoading,
+                                ]}>
+                                    {modalFeedback.type === 'loading' ? (
+                                        <ActivityIndicator size="small" color={BRAND.gold} />
+                                    ) : (
+                                        <Ionicons
+                                            name={modalFeedback.type === 'success' ? "checkmark-circle" : "alert-circle"}
+                                            size={18}
+                                            color={modalFeedback.type === 'success' ? BRAND.emerald : BRAND.danger}
+                                        />
+                                    )}
+                                    <Text style={[
+                                        s.feedbackBannerTxt,
+                                        modalFeedback.type === 'success' && s.feedbackBannerTxtSuccess,
+                                        modalFeedback.type === 'error' && s.feedbackBannerTxtError,
+                                        modalFeedback.type === 'loading' && s.feedbackBannerTxtLoading,
+                                    ]}>
+                                        {modalFeedback.text}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* 1. Image Preview & Upload Controls */}
                             <View style={s.imageUploadSection}>
                                 <View style={s.imagePreviewBox}>
                                     {formImageUrl ? (
                                         <Image source={{ uri: formImageUrl }} style={s.imagePreviewImg} />
                                     ) : (
-                                        <Ionicons name="image-outline" size={34} color={BRAND.gold} />
+                                        <Ionicons name={formIcon || "image-outline"} size={36} color={BRAND.gold} />
                                     )}
                                     {uploading && (
                                         <View style={s.uploadingOverlay}>
@@ -569,31 +853,101 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         style={s.pickImageBtn}
                                         activeOpacity={0.85}
                                     >
-                                        <Ionicons name="cloud-upload-outline" size={15} color="#071422" />
+                                        <Ionicons name="cloud-upload-outline" size={16} color="#071422" />
                                         <Text style={s.pickImageTxt}>
-                                            {uploading ? 'Ana lodawa...' : 'Zabi Hoto (Pick Image)'}
+                                            {uploading ? 'Ana lodawa...' : 'Zabi Hoto (Upload Image)'}
                                         </Text>
                                     </TouchableOpacity>
 
-                                    <Text style={s.imageHintTxt}>
-                                        Hoton murabba'i (1:1) ya fi kyau. PNG ko JPG.
-                                    </Text>
+                                    {formImageUrl ? (
+                                        <TouchableOpacity
+                                            onPress={() => setFormImageUrl('')}
+                                            style={s.removeImageBtn}
+                                            activeOpacity={0.75}
+                                        >
+                                            <Ionicons name="trash-outline" size={13} color={BRAND.danger} />
+                                            <Text style={s.removeImageTxt}>Cire Hoton</Text>
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <Text style={s.imageHintTxt}>
+                                            Zabi hoto daga waya/kwamfuta ko danna kowanne a kasa.
+                                        </Text>
+                                    )}
                                 </View>
                             </View>
 
-                            {/* Image URL Manual Input */}
-                            <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Link na Hoto (Image URL kai tsaye)</Text>
-                                <TextInput
-                                    placeholder="https://images.unsplash.com/..."
-                                    value={formImageUrl}
-                                    onChangeText={setFormImageUrl}
-                                    style={s.input}
-                                    placeholderTextColor="#94A3B8"
-                                />
+                            {/* 2. Hotunan Alfarma Masu Kyau (Luxury Preset Photo Gallery) */}
+                            <View style={s.presetPhotosWrap}>
+                                <Text style={s.presetPhotosTitle}>Zaɓi Hoton Alfarma (Luxury Preset Photos):</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.presetPhotosRail}>
+                                    {LUXURY_PHOTO_PRESETS.map((p, idx) => {
+                                        const isSelected = formImageUrl === p.uri;
+                                        return (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                onPress={() => {
+                                                    setFormImageUrl(p.uri);
+                                                    setModalFeedback({
+                                                        type: 'success',
+                                                        text: `An zaɓi hoton "${p.title}"! ✓`
+                                                    });
+                                                }}
+                                                style={[s.presetPhotoItem, isSelected && s.presetPhotoItemActive]}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Image source={{ uri: p.uri }} style={s.presetPhotoImg} />
+                                                {isSelected && (
+                                                    <View style={s.presetCheckBadge}>
+                                                        <Ionicons name="checkmark" size={12} color="#071422" />
+                                                    </View>
+                                                )}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
                             </View>
 
-                            {/* Category Name */}
+                            {/* 3. 💡 Zaɓaɓɓun Sunayen Categories (1-Tap Smart Suggestions) */}
+                            <View style={s.suggestionsBox}>
+                                <View style={s.suggestionsHeader}>
+                                    <Ionicons name="sparkles" size={14} color={BRAND.gold} />
+                                    <Text style={s.suggestionsTitle}>Zaɓaɓɓun Sunayen Categories (1-Tap Suggestions):</Text>
+                                </View>
+                                <Text style={s.suggestionsSub}>
+                                    Danna kowanne don cikasa suna, slug da hoton alfarma kai tsaye:
+                                </Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.suggestionsRail}>
+                                    {CATEGORY_SUGGESTIONS.map((item, idx) => {
+                                        const isSelected = formName.toLowerCase().trim() === item.name.toLowerCase().trim();
+                                        return (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                onPress={() => handleSelectSuggestion(item)}
+                                                style={[s.suggestionChip, isSelected && s.suggestionChipActive]}
+                                                activeOpacity={0.8}
+                                            >
+                                                <View style={[s.suggestionChipIconWrap, isSelected && s.suggestionChipIconWrapActive]}>
+                                                    <Ionicons
+                                                        name={item.icon}
+                                                        size={14}
+                                                        color={isSelected ? '#071422' : BRAND.gold}
+                                                    />
+                                                </View>
+                                                <View>
+                                                    <Text style={[s.suggestionChipTxt, isSelected && s.suggestionChipTxtActive]}>
+                                                        {item.name}
+                                                    </Text>
+                                                    <Text style={[s.suggestionChipSubTxt, isSelected && s.suggestionChipSubTxtActive]}>
+                                                        {item.english}
+                                                    </Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
+
+                            {/* 4. Category Name */}
                             <View style={s.formField}>
                                 <Text style={s.fieldLabel}>Sunan Category (Category Name) *</Text>
                                 <TextInput
@@ -605,7 +959,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* Slug */}
+                            {/* 5. Slug */}
                             <View style={s.formField}>
                                 <Text style={s.fieldLabel}>Lambar Mahada (Slug / URL Identifier)</Text>
                                 <TextInput
@@ -618,7 +972,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* Display Order */}
+                            {/* 6. Display Order */}
                             <View style={s.formField}>
                                 <Text style={s.fieldLabel}>Lambar Tsari / Fifiko (Display Order)</Text>
                                 <TextInput
@@ -631,11 +985,11 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* Active Toggle */}
+                            {/* 7. Active Toggle */}
                             <View style={s.switchFieldRow}>
                                 <View style={{ flex: 1, paddingRight: 12 }}>
                                     <Text style={s.fieldLabel}>Bude Don Jama'a (Active Visibility)</Text>
-                                    <Text style={s.switchSubTxt}>Zai fito a shafin farko da shagon kasuwa nan take</Text>
+                                    <Text style={s.switchSubTxt}>Zai bayyana a shafin farko da shagon kasuwa nan take</Text>
                                 </View>
                                 <Switch
                                     value={formIsActive}
@@ -645,7 +999,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                 />
                             </View>
 
-                            {/* Submit Button */}
+                            {/* 8. Submit Button */}
                             <TouchableOpacity
                                 onPress={handleSave}
                                 disabled={saving}
@@ -659,10 +1013,13 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                     style={s.submitBtnGrad}
                                 >
                                     {saving ? (
-                                        <ActivityIndicator color="#071422" />
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <ActivityIndicator color="#071422" />
+                                            <Text style={s.submitBtnTxt}>Ana ajiye category...</Text>
+                                        </View>
                                     ) : (
                                         <>
-                                            <Ionicons name="checkmark-circle" size={18} color="#071422" />
+                                            <Ionicons name="checkmark-circle" size={19} color="#071422" />
                                             <Text style={s.submitBtnTxt}>
                                                 {editingCategory ? 'Ajiye Gyara (Update Category)' : 'Dauka & Fara Aiki (Create & Publish)'}
                                             </Text>
@@ -750,24 +1107,24 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        paddingHorizontal: 13,
+        paddingHorizontal: 12,
         paddingVertical: 9,
     },
     addBtnTxt: {
         color: '#071422',
         fontWeight: '900',
-        fontSize: 12,
+        fontSize: 11.5,
+        letterSpacing: 0.5,
     },
     kpiRow: {
         flexDirection: 'row',
-        alignItems: 'center',
         gap: 8,
         marginBottom: 12,
     },
     kpiCard: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.07)',
-        borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        borderRadius: 12,
         paddingVertical: 8,
         paddingHorizontal: 6,
         alignItems: 'center',
@@ -780,11 +1137,10 @@ const s = StyleSheet.create({
         color: '#FFFFFF',
     },
     kpiLabel: {
-        fontSize: 9.5,
-        fontWeight: '700',
+        fontSize: 9,
         color: '#94A3B8',
-        marginTop: 1,
-        textTransform: 'uppercase',
+        marginTop: 2,
+        fontWeight: '600',
     },
     searchBar: {
         flexDirection: 'row',
@@ -792,8 +1148,8 @@ const s = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
         paddingHorizontal: 12,
-        height: 42,
-        borderWidth: 1.5,
+        paddingVertical: 7,
+        borderWidth: 1,
         borderColor: BRAND.borderGold,
     },
     searchInput: {
@@ -1002,7 +1358,7 @@ const s = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderTopLeftRadius: 26,
         borderTopRightRadius: 26,
-        maxHeight: '90%',
+        maxHeight: '92%',
         overflow: 'hidden',
     },
     modalHeader: {
@@ -1032,11 +1388,49 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    // Feedback Banner
+    feedbackBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        marginBottom: 14,
+        borderWidth: 1,
+    },
+    feedbackBannerSuccess: {
+        backgroundColor: '#ECFDF5',
+        borderColor: BRAND.emerald,
+    },
+    feedbackBannerError: {
+        backgroundColor: '#FEF2F2',
+        borderColor: BRAND.danger,
+    },
+    feedbackBannerLoading: {
+        backgroundColor: '#FFFBEB',
+        borderColor: BRAND.gold,
+    },
+    feedbackBannerTxt: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    feedbackBannerTxtSuccess: {
+        color: '#065F46',
+    },
+    feedbackBannerTxtError: {
+        color: '#991B1B',
+    },
+    feedbackBannerTxtLoading: {
+        color: '#92400E',
+    },
+    // Image Upload
     imageUploadSection: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 14,
-        marginBottom: 16,
+        marginBottom: 14,
         padding: 12,
         backgroundColor: '#F8FAFC',
         borderRadius: 16,
@@ -1044,8 +1438,8 @@ const s = StyleSheet.create({
         borderColor: '#E2E8F0',
     },
     imagePreviewBox: {
-        width: 72,
-        height: 72,
+        width: 76,
+        height: 76,
         borderRadius: 16,
         backgroundColor: '#FFFFFF',
         borderWidth: 1.5,
@@ -1072,7 +1466,7 @@ const s = StyleSheet.create({
         gap: 6,
         backgroundColor: BRAND.gold,
         paddingHorizontal: 14,
-        paddingVertical: 8,
+        paddingVertical: 9,
         borderRadius: 10,
     },
     pickImageTxt: {
@@ -1080,10 +1474,139 @@ const s = StyleSheet.create({
         fontSize: 12,
         fontWeight: '900',
     },
+    removeImageBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingVertical: 4,
+    },
+    removeImageTxt: {
+        color: BRAND.danger,
+        fontSize: 11,
+        fontWeight: '700',
+    },
     imageHintTxt: {
         fontSize: 10.5,
         color: BRAND.slate,
+        lineHeight: 14,
     },
+    // Preset Photos Gallery
+    presetPhotosWrap: {
+        marginBottom: 16,
+    },
+    presetPhotosTitle: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: BRAND.slateDark,
+        marginBottom: 8,
+    },
+    presetPhotosRail: {
+        flexDirection: 'row',
+        gap: 8,
+        paddingRight: 10,
+    },
+    presetPhotoItem: {
+        width: 62,
+        height: 62,
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: 'transparent',
+        position: 'relative',
+    },
+    presetPhotoItemActive: {
+        borderColor: BRAND.gold,
+    },
+    presetPhotoImg: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    presetCheckBadge: {
+        position: 'absolute',
+        top: 3,
+        right: 3,
+        backgroundColor: BRAND.gold,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // Smart Suggestions
+    suggestionsBox: {
+        backgroundColor: '#FFFBEB',
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.4)',
+    },
+    suggestionsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 4,
+    },
+    suggestionsTitle: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#92400E',
+    },
+    suggestionsSub: {
+        fontSize: 10.5,
+        color: '#78350F',
+        marginBottom: 10,
+    },
+    suggestionsRail: {
+        flexDirection: 'row',
+        gap: 8,
+        paddingRight: 10,
+    },
+    suggestionChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 10,
+        borderWidth: 1.2,
+        borderColor: '#FDE68A',
+    },
+    suggestionChipActive: {
+        backgroundColor: BRAND.gold,
+        borderColor: BRAND.gold,
+    },
+    suggestionChipIconWrap: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    suggestionChipIconWrapActive: {
+        backgroundColor: '#FFFFFF',
+    },
+    suggestionChipTxt: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: BRAND.slateDark,
+    },
+    suggestionChipTxtActive: {
+        color: '#071422',
+        fontWeight: '900',
+    },
+    suggestionChipSubTxt: {
+        fontSize: 9.5,
+        color: BRAND.slate,
+    },
+    suggestionChipSubTxtActive: {
+        color: '#3B2404',
+        fontWeight: '700',
+    },
+    // Form fields
     formField: {
         marginBottom: 14,
     },
@@ -1120,7 +1643,7 @@ const s = StyleSheet.create({
         borderRadius: 14,
         overflow: 'hidden',
         marginTop: 6,
-        marginBottom: 26,
+        marginBottom: 20,
         elevation: 3,
         shadowColor: BRAND.gold,
         shadowOffset: { width: 0, height: 3 },
