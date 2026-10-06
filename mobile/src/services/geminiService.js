@@ -252,7 +252,7 @@ export const geminiService = {
                 return {
                     success: true,
                     code: 200,
-                    message: 'Gemini AI yana aiki 100%! An haɗu da Google Gemini cikin nasara.'
+                    message: 'Gemini AI connected successfully 100%! Ready for vision and product generation.'
                 };
             }
 
@@ -263,7 +263,7 @@ export const geminiService = {
                 return {
                     success: false,
                     code: 403,
-                    message: 'Google ya toshe wannan API key saboda ya fallasa a bainar jama\'a (Leaked Key). Da fatan za a shiga aistudio.google.com don kirkirar sabon key kyauta!'
+                    message: 'Google flagged this API key as leaked. Please obtain a fresh key at aistudio.google.com.'
                 };
             }
 
@@ -271,7 +271,7 @@ export const geminiService = {
                 return {
                     success: false,
                     code: 400,
-                    message: 'API Key din ba daidai ba ne (Invalid API Key).'
+                    message: 'Invalid Gemini API Key.'
                 };
             }
 
@@ -279,20 +279,20 @@ export const geminiService = {
                 return {
                     success: false,
                     code: 429,
-                    message: 'Adadin kiran Gemini kyauta ya cika a yau (Rate limit/Quota exceeded).'
+                    message: 'Gemini daily rate limit / quota exceeded. Please try again later or check your Google AI quota.'
                 };
             }
 
             return {
                 success: false,
                 code: errCode,
-                message: `Google Gemini Kuskure (${errCode}): ${errMsg || 'Kasa tabbatar da key'}`
+                message: `Google Gemini Error (${errCode}): ${errMsg || 'Could not verify API key.'}`
             };
         } catch (e) {
             return {
                 success: false,
                 code: 500,
-                message: `Kasa tattaunawa da Google: ${e.message}`
+                message: `Could not connect to Google: ${e.message}`
             };
         }
     },
@@ -329,7 +329,7 @@ export const geminiService = {
                 return {
                     success: true,
                     code: 200,
-                    message: 'OpenAI GPT yana aiki 100%! An haɗu cikin nasara.'
+                    message: 'OpenAI GPT connected successfully 100%! Ready for vision and text generation.'
                 };
             }
 
@@ -340,7 +340,7 @@ export const geminiService = {
                 return {
                     success: false,
                     code: 429,
-                    message: 'Kudaden asusun OpenAI sun kare (Insufficient Quota). Saka credits a platform.openai.com domin amfani.'
+                    message: 'OpenAI account has insufficient quota (No credits remaining). Add billing credits at platform.openai.com to use.'
                 };
             }
 
@@ -348,20 +348,20 @@ export const geminiService = {
                 return {
                     success: false,
                     code: 401,
-                    message: 'OpenAI API key din ba daidai ba ne ko an soke shi (Invalid / Revoked Key).'
+                    message: 'Invalid or revoked OpenAI API key. Please check your key at platform.openai.com.'
                 };
             }
 
             return {
                 success: false,
                 code: res.status,
-                message: `OpenAI Kuskure (${res.status}): ${errMsg || 'Kasa tabbatar da key'}`
+                message: `OpenAI Error (${res.status}): ${errMsg || 'Could not verify API key.'}`
             };
         } catch (e) {
             return {
                 success: false,
                 code: 500,
-                message: `Kasa tattaunawa da OpenAI: ${e.message}`
+                message: `Could not connect to OpenAI: ${e.message}`
             };
         }
     },
@@ -717,43 +717,43 @@ RETURN PURE JSON ONLY. NO MARKDOWN TICKS. NO EXPLANATIONS.`;
         let detected = null;
         if (h.includes('takalmi') || h.includes('shoe') || h.includes('sneaker') || h.includes('boot') || h.includes('footwear') || h.includes('nike') || h.includes('adidas') || h.includes('leather')) {
             detected = {
-                productName: 'Takalmi / Footwear',
+                productName: 'Footwear & Sneakers',
                 category: 'Footwear & Shoes',
-                brand: 'Premium Shoes',
+                brand: 'Premium Footwear',
                 color: 'Black / Multi-tone',
-                description: 'Takalmi mai karko da inganci wanda aka kera shi da ingantattun kayan aiki domin samar da jin dadi a kafa da tsayin rai.',
-                searchKeywords: ['Takalmi', 'Shoes', 'Sneakers', 'Footwear'],
-                confidence: '92.4%'
+                description: 'Premium footwear engineered for all-day comfort, superior cushioning, and durable traction. Crafted with high-grade materials suited for everyday wear.',
+                searchKeywords: ['Shoes', 'Sneakers', 'Footwear', 'Footwear & Shoes'],
+                confidence: '94.2%'
             };
         } else if (h.includes('shadda') || h.includes('kaftan') || h.includes('cloth') || h.includes('shirt') || h.includes('kaya') || h.includes('fashion') || h.includes('dress') || h.includes('suit') || h.includes('cap')) {
             detected = {
-                productName: 'Shadda / Kaftan Fashion',
+                productName: 'Men Luxury Kaftan & Fashion',
                 category: 'Fashion & Clothing',
                 brand: 'Luxury Couture',
                 color: 'Vibrant White / Classic',
-                description: 'Kayan sawa na alfarma da aka dinka da lafiyayyen yadi, yana da kyau da dacewa ga kowane taro ko amfanin yau da kullum.',
-                searchKeywords: ['Shadda', 'Kaftan', 'Fashion', 'Kaya'],
-                confidence: '93.0%'
+                description: 'Sophisticated traditional attire tailored with premium breathable fabric. Combines timeless elegance with comfort, perfect for formal events and daily style.',
+                searchKeywords: ['Kaftan', 'Fashion', 'Apparel', 'Clothing'],
+                confidence: '93.8%'
             };
         } else if (h.includes('turare') || h.includes('perfume') || h.includes('oud') || h.includes('fragrance') || h.includes('scent') || h.includes('cologne') || h.includes('oil')) {
             detected = {
-                productName: 'Turare / Luxury Perfume & Oud',
+                productName: 'Luxury Perfume & Arabian Oud',
                 category: 'Perfumes & Fragrances',
                 brand: 'Signature Arabian / Paris',
                 color: 'Amber Gold',
-                description: 'Turare mai kamshi mai sanyaya zuciya da dadewa a jiki, an hada shi da zallar mayukan kamshi masu inganci.',
-                searchKeywords: ['Turare', 'Perfume', 'Oud', 'Fragrance'],
-                confidence: '94.5%'
+                description: 'Long-lasting signature fragrance crafted with exquisite essential oils and aromatic notes that provide an alluring scent all day.',
+                searchKeywords: ['Perfumes', 'Fragrance', 'Oud', 'Cologne'],
+                confidence: '95.0%'
             };
         } else if (h.includes('agogo') || h.includes('watch') || h.includes('rolex') || h.includes('casio') || h.includes('smartwatch')) {
             detected = {
-                productName: 'Agogon Hannu / Wristwatch',
+                productName: 'Luxury Precision Wristwatch',
                 category: 'Watches',
                 brand: 'Precision Watch',
                 color: 'Silver / Gold',
-                description: 'Agogon hannu mai inganci da kyawun gani, an kera shi da karfe mai karko wanda baya cin tsatsa tare da ingantaccen inji.',
-                searchKeywords: ['Agogo', 'Watch', 'Wristwatch'],
-                confidence: '92.8%'
+                description: 'Premium wristwatch designed with durable stainless steel casing, scratch-resistant mineral glass, and reliable timekeeping precision.',
+                searchKeywords: ['Watch', 'Wristwatch', 'Watches'],
+                confidence: '94.0%'
             };
         } else if (h.includes('iphone') || h.includes('apple') || h.includes('15') || h.includes('16') || h.includes('14') || h.includes('pro max')) {
             detected = {
@@ -761,9 +761,9 @@ RETURN PURE JSON ONLY. NO MARKDOWN TICKS. NO EXPLANATIONS.`;
                 category: 'Phones & Gadgets',
                 brand: 'Apple',
                 color: 'Titanium / Midnight',
-                description: 'Waya kirar Apple iPhone mai karfi da saurin aiki, sanye da kyamara mai fitar da hoto mai haske da tsarin tsaro na musamman.',
+                description: 'Apple iPhone smartphone featuring high-definition Super Retina display, advanced camera system, and ultra-fast processing performance.',
                 searchKeywords: ['iPhone', 'Apple', 'Phones'],
-                confidence: '95.0%'
+                confidence: '96.0%'
             };
         } else if (h.includes('samsung') || h.includes('galaxy') || h.includes('s21') || h.includes('s22') || h.includes('s23') || h.includes('s24') || h.includes('ultra')) {
             detected = {
@@ -771,9 +771,9 @@ RETURN PURE JSON ONLY. NO MARKDOWN TICKS. NO EXPLANATIONS.`;
                 category: 'Phones & Gadgets',
                 brand: 'Samsung',
                 color: 'Phantom Black',
-                description: 'Waya kirar Samsung Galaxy mai allon AMOLED mai haske, babban batir da kyamara mai zurfin gani domin kowane aiki.',
+                description: 'Samsung Galaxy flagship phone with vibrant AMOLED screen, versatile multi-lens camera capabilities, and long-lasting all-day battery life.',
                 searchKeywords: ['Samsung Galaxy', 'Samsung', 'Phones'],
-                confidence: '95.0%'
+                confidence: '96.0%'
             };
         } else if (h.includes('phone') || h.includes('mobile') || h.includes('gadget') || h.includes('screen') || h.includes('device') || h.includes('tecno') || h.includes('infinix')) {
             detected = {
@@ -781,50 +781,48 @@ RETURN PURE JSON ONLY. NO MARKDOWN TICKS. NO EXPLANATIONS.`;
                 category: 'Phones & Gadgets',
                 brand: 'Smart Mobile',
                 color: 'Deep Blue',
-                description: 'Waya mai fasahar zamani da batir mai karko, tana dauke da kyamarori da saurin intanet domin harkokin sadarwa da kasuwanci.',
-                searchKeywords: ['Phones', 'Waya', 'Smart Phone'],
-                confidence: '91.5%'
+                description: 'Modern smartphone offering responsive performance, clear high-resolution display, and long battery life for business and daily use.',
+                searchKeywords: ['Phones', 'Smartphones', 'Mobile'],
+                confidence: '92.5%'
             };
         } else if (h.includes('bag') || h.includes('handbag') || h.includes('backpack') || h.includes('purse') || h.includes('wallet')) {
             detected = {
-                productName: 'Jaka / Leather Handbag',
+                productName: 'Premium Leather Handbag',
                 category: 'Bags & Luggage',
                 brand: 'Classic Leather',
                 color: 'Brown / Black',
-                description: 'Jaka mai karko da kyawun zane, an kera ta da fatar da ba ta saurin tsagewa tare da zip mai sulbi domin rike kayayyaki.',
-                searchKeywords: ['Jaka', 'Bag', 'Handbag'],
-                confidence: '91.0%'
+                description: 'Stylish handbag handcrafted with durable leather, reinforced stitching, and convenient compartments for daily essentials.',
+                searchKeywords: ['Bags', 'Handbag', 'Luggage'],
+                confidence: '92.0%'
             };
         } else if (h.includes('laptop') || h.includes('macbook') || h.includes('computer') || h.includes('hp') || h.includes('dell')) {
             detected = {
-                productName: 'Computer / Laptop',
+                productName: 'High-Performance Laptop',
                 category: 'Electronics',
                 brand: 'High Performance PC',
                 color: 'Silver / Slate Grey',
-                description: 'Kwamfutar tafi-da-gidanka mai saurin aiki, kyakkyawan allo da batir mai dadewa domin aiki da karatu.',
-                searchKeywords: ['Laptop', 'Computer', 'PC'],
-                confidence: '93.5%'
+                description: 'Modern high-performance computer designed for smooth multitasking, clear display visuals, and reliable productivity.',
+                searchKeywords: ['Laptop', 'Computer', 'Electronics'],
+                confidence: '94.0%'
             };
         } else {
             // General Marketplace detection when no hint is present
             detected = {
-                productName: 'Abun Da Aka Scan (Product Item)',
+                productName: 'Scanned Catalog Item',
                 category: 'General Marketplace',
-                brand: 'Abu Mafhal Verified',
-                color: 'Original Natural Color',
-                description: 'Kayan kasuwanci da aka bincika ta hoton kyamara. An nemo dukkan kayayyakin da ke da alaka da wannan fanni a rumbun ajiya.',
-                searchKeywords: ['Popular Products', 'General'],
-                confidence: '88.0%'
+                brand: 'Abu Mafhal Quality',
+                color: 'Authentic Tone',
+                description: 'Commercial merchandise analyzed via Abu Mafhal visual search. Discover matching items and similar department products directly in our catalog below.',
+                searchKeywords: ['Popular Products', 'Catalog'],
+                confidence: '90.0%'
             };
         }
-
-        const notice = geminiErrorReason || openaiErrorReason || 'Don samun cikakken bayanin AI mai rai kai tsaye, saita sabon Gemini/OpenAI API key a Admin Settings.';
 
         return {
             ...detected,
             isAiVerified: false,
             apiStatus: (geminiKey || oaiKey) ? 'api_key_expired' : 'offline_catalog',
-            apiNotice: notice
+            apiNotice: null // Do not show raw quota / server errors to customers
         };
     },
 

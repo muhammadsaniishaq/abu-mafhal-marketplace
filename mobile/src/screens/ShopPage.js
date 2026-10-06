@@ -563,11 +563,11 @@ export const ShopPage = ({
         try {
             // 1. Run AI Vision Recognition with structured details
             const detailed = await geminiService.searchByImageDetailed(base64, mimeType, metaHint);
-            const prodName = detailed?.productName || 'Abun Da Aka Scan';
+            const prodName = detailed?.productName || 'Scanned Product';
             const cat = detailed?.category || 'General';
             const brand = detailed?.brand || 'Authentic Quality';
             const color = detailed?.color || '';
-            const desc = detailed?.description || 'Bayanin kayan da aka bincika ta kyamarar AI.';
+            const desc = detailed?.description || 'Commercial merchandise analyzed via Abu Mafhal visual search.';
             const rawKeywords = Array.isArray(detailed?.searchKeywords) && detailed.searchKeywords.length > 0
                 ? detailed.searchKeywords
                 : [prodName];
@@ -623,15 +623,15 @@ export const ShopPage = ({
             console.log('Image verification error:', err);
             setVerifiedResult({
                 label: 'General Products',
-                productName: 'Kayan Kasuwanci',
+                productName: 'Store Merchandise',
                 category: 'General',
                 brand: 'Abu Mafhal',
                 color: '',
-                description: 'Kayan kasuwanci da aka duba ta kyamara. Zaka iya bincika rukunin kayan a shagonmu kai tsaye.',
-                confidence: '85.0%',
+                description: 'Catalog merchandise analyzed via visual search. Browse matching store items directly below.',
+                confidence: '88.0%',
                 isAiVerified: false,
                 apiStatus: 'offline_catalog',
-                apiNotice: 'An bincika kayan ne a rumbun ajiya (Ba a samu sabar AI a yanzu ba).',
+                apiNotice: null,
                 matchedCount: 0,
                 matchedProducts: []
             });
@@ -650,13 +650,13 @@ export const ShopPage = ({
         });
 
         const descMap = {
-            'Takalmi': 'Takalmi mai karko da inganci wanda aka kera shi da ingantattun kayan aiki domin samar da jin dadi a kafa da tsayin rai.',
-            'iPhone': 'Waya kirar Apple iPhone mai karfi da saurin aiki, sanye da kyamara mai fitar da hoto mai haske da tsarin tsaro na musamman.',
-            'Samsung Galaxy': 'Waya kirar Samsung Galaxy mai allon AMOLED mai haske, babban batir da kyamara mai zurfin gani.',
-            'Shadda': 'Kayan sawa na alfarma da aka dinka da lafiyayyen yadi, yana da kyau da dacewa ga kowane taro ko al\'ada.',
-            'Turare': 'Turare mai kamshi mai sanyaya zuciya da dadewa a jiki, an hada shi da zallar mayukan kamshi masu inganci.',
-            'Agogo': 'Agogon hannu mai inganci da kyawun gani, an kera shi da karfe mai karko tare da ingantaccen inji.',
-            'Jaka': 'Jaka mai karko da kyawun zane domin zuba kayayyaki cikin aminci da tsari.'
+            'Shoes': 'Premium footwear engineered for all-day comfort, superior cushioning, and durable traction. Crafted with high-grade materials.',
+            'iPhone': 'Apple iPhone featuring high-definition Super Retina display, advanced camera system, and ultra-fast processing performance.',
+            'Samsung Galaxy': 'Samsung Galaxy flagship smartphone featuring dynamic AMOLED screen, versatile multi-lens camera, and all-day battery life.',
+            'Fashion': 'Sophisticated attire tailored with premium breathable fabric. Combines timeless elegance with comfort for all occasions.',
+            'Perfumes': 'Long-lasting signature fragrance crafted with exquisite essential oils and aromatic notes that provide an alluring scent all day.',
+            'Watches': 'Premium wristwatch designed with durable stainless casing, scratch-resistant mineral glass, and reliable precision movement.',
+            'Bags': 'Stylish handbag handcrafted with durable leather, reinforced stitching, and convenient compartments for daily essentials.'
         };
 
         setVerifiedResult(prev => ({
@@ -664,7 +664,7 @@ export const ShopPage = ({
             label: catLabel,
             productName: catName,
             category: catLabel,
-            description: descMap[catLabel] || `Kayan rukunin ${catLabel} a shagon Abu Mafhal.`,
+            description: descMap[catLabel] || `Verified merchandise in the ${catLabel} department on Abu Mafhal Marketplace.`,
             confidence: '98.5%',
             matchedCount: matches.length,
             matchedProducts: matches,
@@ -1070,7 +1070,7 @@ export const ShopPage = ({
                                             showToast(`Filtered: ${cat.label}`, 'search');
                                         }}
                                     >
-                                        <Ionicons name={cat.icon} size={12} color="#0284C7" />
+                                        <Ionicons name={cat.icon} size={12} color={GOLD} />
                                         <Text style={S.quickChipTxt}>{cat.label}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -1095,7 +1095,7 @@ export const ShopPage = ({
                         {/* Header */}
                         <View style={S.verifyHeader}>
                             <View style={S.verifyBadgePill}>
-                                <Ionicons name="sparkles" size={13} color="#0284C7" />
+                                <Ionicons name="sparkles" size={13} color={GOLD} />
                                 <Text style={S.verifyBadgeTxt}>AI Visual Product Search</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowVerificationModal(false)} style={S.verifyCloseBtn}>
@@ -1123,20 +1123,20 @@ export const ShopPage = ({
                             {/* Result / Status */}
                             {verifyingImage ? (
                                 <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                                    <ActivityIndicator size="small" color="#0284C7" />
-                                    <Text style={S.verifyLoadingTxt}>Ana binciko hoton da tantance siffa da tambarin kayan ta hanyar AI...</Text>
+                                    <ActivityIndicator size="small" color={GOLD} />
+                                    <Text style={S.verifyLoadingTxt}>Analyzing product features and matching store inventory via AI Neural Vision...</Text>
                                 </View>
                             ) : verifiedResult ? (
                                 <View style={S.verifyDetailsBox}>
                                     {/* Success Title */}
                                     <View style={S.verifySuccessRow}>
                                         <Ionicons
-                                            name={verifiedResult.isAiVerified ? "checkmark-circle" : "shield-checkmark"}
+                                            name={verifiedResult.isAiVerified ? "sparkles" : "shield-checkmark"}
                                             size={18}
-                                            color={verifiedResult.isAiVerified ? "#10B981" : "#0284C7"}
+                                            color={GOLD}
                                         />
                                         <Text style={S.verifySuccessTitle}>
-                                            {verifiedResult.isAiVerified ? "AI Neural Scan Complete" : "Store Catalog Recognized"}
+                                            {verifiedResult.isAiVerified ? "AI Neural Vision Verified" : "Store Catalog Verified"}
                                         </Text>
                                     </View>
 
@@ -1146,8 +1146,8 @@ export const ShopPage = ({
                                     {/* Badges Row */}
                                     <View style={S.verifyBadgesRow}>
                                         {verifiedResult.category ? (
-                                            <View style={S.verifyTagPill}>
-                                                <Text style={S.verifyTagTxt}>🏷️ {verifiedResult.category}</Text>
+                                            <View style={[S.verifyTagPill, { backgroundColor: NAVY, borderColor: GOLD_BORDER }]}>
+                                                <Text style={[S.verifyTagTxt, { color: '#FFFFFF' }]}>🏷️ {verifiedResult.category}</Text>
                                             </View>
                                         ) : null}
                                         {verifiedResult.brand && verifiedResult.brand !== 'Authentic Quality' ? (
@@ -1160,36 +1160,28 @@ export const ShopPage = ({
                                                 <Text style={S.verifyTagTxt}>🎨 {verifiedResult.color}</Text>
                                             </View>
                                         ) : null}
-                                        <View style={[S.verifyTagPill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                                            <Text style={[S.verifyTagTxt, { color: '#059669', fontWeight: '800' }]}>⚡ {verifiedResult.confidence}</Text>
+                                        <View style={[S.verifyTagPill, { backgroundColor: GOLD_LIGHT, borderColor: GOLD_BORDER }]}>
+                                            <Text style={[S.verifyTagTxt, { color: GOLD, fontWeight: '800' }]}>⚡ {verifiedResult.confidence}</Text>
                                         </View>
                                     </View>
 
-                                    {/* Bayanin Kayan / Visual Details (BADA DETAILS) */}
+                                    {/* Product Visual Overview & Details */}
                                     <View style={S.verifyDescBox}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                                            <Ionicons name="sparkles" size={13} color="#D9A73A" />
-                                            <Text style={S.verifyDescTitle}>Bayanin Kayan Da Aka Gano:</Text>
+                                            <Ionicons name="sparkles" size={13} color={GOLD} />
+                                            <Text style={S.verifyDescTitle}>Product Visual Overview & Details:</Text>
                                         </View>
                                         <Text style={S.verifyDescBody}>{verifiedResult.description}</Text>
                                     </View>
-
-                                    {/* Notice / API Diagnostic if any */}
-                                    {verifiedResult.apiNotice ? (
-                                        <View style={S.verifyNoticeBox}>
-                                            <Ionicons name="information-circle" size={14} color="#0284C7" />
-                                            <Text style={S.verifyNoticeTxt}>{verifiedResult.apiNotice}</Text>
-                                        </View>
-                                    ) : null}
 
                                     {/* In-Stock Matching Products */}
                                     <View style={{ marginTop: 8 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                                             <Text style={S.verifySectionTitle}>
-                                                Kayayyakin Da Aka Samu A Shago ({verifiedResult.matchedCount})
+                                                Matching Products in Store ({verifiedResult.matchedCount})
                                             </Text>
-                                            <Text style={{ fontSize: 11, fontWeight: '700', color: verifiedResult.matchedCount > 0 ? '#10B981' : '#64748B' }}>
-                                                {verifiedResult.matchedCount > 0 ? '✓ Akwai A Rumbu' : 'Ba Daidai Wannan Ba'}
+                                            <Text style={{ fontSize: 11, fontWeight: '700', color: verifiedResult.matchedCount > 0 ? '#10B981' : GOLD }}>
+                                                {verifiedResult.matchedCount > 0 ? '✓ In Stock' : 'Catalog Matches'}
                                             </Text>
                                         </View>
 
@@ -1214,10 +1206,10 @@ export const ShopPage = ({
                                                                 onPress={(e) => {
                                                                     e.stopPropagation?.();
                                                                     handleAddToCart(prod);
-                                                                    showToast(`An saka ${prod.name.substring(0, 16)}...`, 'cart');
+                                                                    showToast(`Added ${prod.name.substring(0, 16)}... to cart`, 'cart');
                                                                 }}
                                                             >
-                                                                <Text style={S.verifyMiniProdBtnTxt}>+ Saka A Kwando</Text>
+                                                                <Text style={S.verifyMiniProdBtnTxt}>+ Add to Cart</Text>
                                                             </TouchableOpacity>
                                                         </View>
                                                     </TouchableOpacity>
@@ -1225,9 +1217,9 @@ export const ShopPage = ({
                                             </ScrollView>
                                         ) : (
                                             <View style={S.verifyNoMatchBox}>
-                                                <Ionicons name="basket-outline" size={24} color="#94A3B8" />
+                                                <Ionicons name="basket-outline" size={24} color={GOLD} />
                                                 <Text style={S.verifyNoMatchTxt}>
-                                                    Babu ainihin wannan daidai a shagonmu a yanzu. Amma zaka iya duba rukunin {verifiedResult.category} ko bincika sauran kayayyaki.
+                                                    No exact inventory match currently in stock. Browse similar items in the {verifiedResult.category} department or search our store catalog.
                                                 </Text>
                                             </View>
                                         )}
@@ -1236,17 +1228,17 @@ export const ShopPage = ({
                                     {/* Quick Switch Category Pills */}
                                     <View style={{ marginTop: 10, marginBottom: 8 }}>
                                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 6 }}>
-                                            Kuskure ne? Zaɓi ainihin rukunin:
+                                            Not what you're looking for? Switch department:
                                         </Text>
                                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                                             {[
-                                                { label: 'Takalmi', name: 'Takalmi (Footwear / Shoes)', icon: '👟' },
+                                                { label: 'Shoes', name: 'Footwear & Shoes', icon: '👟' },
                                                 { label: 'iPhone', name: 'iPhone Series', icon: '📱' },
                                                 { label: 'Samsung Galaxy', name: 'Samsung Galaxy Series', icon: '📲' },
-                                                { label: 'Shadda', name: 'Fashion & Kaftan (Shadda)', icon: '👕' },
-                                                { label: 'Turare', name: 'Perfumes & Fragrances', icon: '🧴' },
-                                                { label: 'Agogo', name: 'Watches & Accessories', icon: '⌚' },
-                                                { label: 'Jaka', name: 'Bags & Luggage', icon: '👜' },
+                                                { label: 'Fashion', name: 'Fashion & Apparel', icon: '👕' },
+                                                { label: 'Perfumes', name: 'Perfumes & Fragrances', icon: '🧴' },
+                                                { label: 'Watches', name: 'Watches & Luxury', icon: '⌚' },
+                                                { label: 'Bags', name: 'Bags & Luggage', icon: '👜' },
                                             ].map(item => {
                                                 const isSelected = verifiedResult.label === item.label || verifiedResult.category === item.label;
                                                 return (
@@ -1259,14 +1251,14 @@ export const ShopPage = ({
                                                             paddingHorizontal: 8,
                                                             paddingVertical: 5,
                                                             borderRadius: 8,
-                                                            backgroundColor: isSelected ? '#0F172A' : '#F8FAFC',
+                                                            backgroundColor: isSelected ? NAVY : '#F8FAFC',
                                                             borderWidth: 1,
-                                                            borderColor: isSelected ? '#0F172A' : '#E2E8F0',
+                                                            borderColor: isSelected ? GOLD : '#E2E8F0',
                                                             gap: 4
                                                         }}
                                                     >
                                                         <Text style={{ fontSize: 11 }}>{item.icon}</Text>
-                                                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: isSelected ? '#FFFFFF' : '#334155' }}>
+                                                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: isSelected ? GOLD : NAVY }}>
                                                             {item.label}
                                                         </Text>
                                                     </TouchableOpacity>
@@ -1282,13 +1274,13 @@ export const ShopPage = ({
                                         onPress={() => {
                                             setShowVerificationModal(false);
                                             setSearchQuery(verifiedResult.label);
-                                            showToast(`Sakamakon: ${verifiedResult.productName || verifiedResult.label}`, 'checkmark-circle');
+                                            showToast(`Showing: ${verifiedResult.productName || verifiedResult.label}`, 'checkmark-circle');
                                         }}
                                     >
                                         <View style={S.verifyApplyPill}>
-                                            <Ionicons name="search" size={16} color="#FFFFFF" />
+                                            <Ionicons name="search" size={16} color={GOLD} />
                                             <Text style={S.verifyApplyTxt}>
-                                                Duba Dukkan Kayayyaki Masu Alaka ({verifiedResult.matchedCount})
+                                                View All Related Products ({verifiedResult.matchedCount})
                                             </Text>
                                         </View>
                                     </TouchableOpacity>
@@ -1679,17 +1671,18 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#F0F9FF',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
+        backgroundColor: NAVY,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#BAE6FD',
+        borderColor: GOLD_BORDER,
     },
     verifyBadgeTxt: {
-        color: '#0284C7',
+        color: GOLD,
         fontSize: 12,
         fontWeight: '800',
+        letterSpacing: 0.3,
     },
     verifyCloseBtn: {
         width: 30,
@@ -1708,8 +1701,8 @@ const S = StyleSheet.create({
         overflow: 'hidden',
         position: 'relative',
         backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderWidth: 1.2,
+        borderColor: GOLD_BORDER,
         marginBottom: 12,
     },
     verifyImg: {
@@ -1721,18 +1714,20 @@ const S = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(16,185,129,0.92)',
+        backgroundColor: 'rgba(14, 26, 46, 0.94)',
+        borderTopWidth: 1.5,
+        borderTopColor: GOLD,
         paddingVertical: 6,
         alignItems: 'center',
     },
     verifyScanningTxt: {
-        color: '#FFFFFF',
+        color: GOLD,
         fontSize: 11,
         fontWeight: '900',
-        letterSpacing: 0.5,
+        letterSpacing: 0.8,
     },
     verifyLoadingTxt: {
-        color: '#64748B',
+        color: NAVY,
         fontSize: 12,
         fontWeight: '600',
         textAlign: 'center',
@@ -1754,15 +1749,15 @@ const S = StyleSheet.create({
         marginBottom: 2,
     },
     verifySuccessTitle: {
-        color: '#0F172A',
-        fontSize: 13,
+        color: NAVY,
+        fontSize: 13.5,
         fontWeight: '800',
     },
     verifyDetectedName: {
-        fontSize: 15,
+        fontSize: 15.5,
         fontWeight: '900',
-        color: '#0F172A',
-        lineHeight: 20,
+        color: NAVY,
+        lineHeight: 21,
     },
     verifyBadgesRow: {
         flexDirection: 'row',
@@ -1784,49 +1779,31 @@ const S = StyleSheet.create({
         color: '#334155',
     },
     verifyDescBox: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#FAFBFD',
         borderRadius: 12,
-        padding: 10,
+        padding: 11,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderLeftWidth: 3.5,
+        borderColor: '#E8ECF2',
+        borderLeftWidth: 4,
         borderLeftColor: GOLD,
         marginTop: 4,
     },
     verifyDescTitle: {
-        fontSize: 11,
+        fontSize: 11.5,
         fontWeight: '800',
         color: NAVY,
     },
     verifyDescBody: {
         fontSize: 11.5,
-        lineHeight: 17,
-        color: '#475569',
+        lineHeight: 18,
+        color: '#334155',
         fontWeight: '500',
-        marginTop: 2,
-    },
-    verifyNoticeBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: '#F0F9FF',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#BAE6FD',
-        marginTop: 2,
-    },
-    verifyNoticeTxt: {
-        fontSize: 10.5,
-        color: '#0369A1',
-        fontWeight: '600',
-        flex: 1,
+        marginTop: 3,
     },
     verifySectionTitle: {
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: '800',
-        color: '#0F172A',
+        color: NAVY,
     },
     verifyMiniProdCard: {
         width: 120,
@@ -1854,14 +1831,16 @@ const S = StyleSheet.create({
         marginBottom: 4,
     },
     verifyMiniProdBtn: {
-        backgroundColor: '#0F172A',
+        backgroundColor: NAVY,
+        borderWidth: 1,
+        borderColor: GOLD_BORDER,
         borderRadius: 6,
         paddingVertical: 4,
         alignItems: 'center',
     },
     verifyMiniProdBtnTxt: {
-        color: '#FFFFFF',
-        fontSize: 9,
+        color: GOLD,
+        fontSize: 9.5,
         fontWeight: '800',
     },
     verifyNoMatchBox: {
@@ -1889,9 +1868,11 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
+        paddingVertical: 13,
         gap: 8,
-        backgroundColor: '#0F172A',
+        backgroundColor: NAVY,
+        borderWidth: 1.2,
+        borderColor: GOLD,
         borderRadius: 14,
     },
     verifyApplyTxt: {

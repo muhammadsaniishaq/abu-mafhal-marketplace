@@ -477,7 +477,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 if (detailed) {
                     const searchTarget = detailed.searchKeywords?.[0] || detailed.productName || 'Products';
                     setSearchQuery(searchTarget);
-                    showToast(`An gano: ${detailed.productName}`, 'checkmark-circle');
+                    showToast(`Identified: ${detailed.productName}`, 'checkmark-circle');
                     if (onGoToShop) {
                         onGoToShop(searchTarget);
                     }

@@ -857,7 +857,7 @@ export const AdminSettings = ({ navigation }) => {
 
     const handleTestGeminiKey = async () => {
         if (!geminiApiKey || geminiApiKey.trim().length < 10) {
-            Alert.alert('Babu Key', 'Da fatan za a saka Google Gemini API key kafin gwadawa.');
+            Alert.alert('Missing Key', 'Please enter a Google Gemini API key before testing.');
             return;
         }
         setTestingGemini(true);
@@ -866,13 +866,13 @@ export const AdminSettings = ({ navigation }) => {
             const res = await geminiService.testGeminiKey(geminiApiKey);
             setGeminiTestStatus(res);
             if (res.success) {
-                Alert.alert('Nasara! ✅', res.message);
+                Alert.alert('Success! ✅', res.message);
             } else {
-                Alert.alert('Gargadi! ⚠️', res.message);
+                Alert.alert('API Notice ⚠️', res.message);
             }
         } catch (e) {
             setGeminiTestStatus({ success: false, message: e.message });
-            Alert.alert('Kuskure ❌', e.message);
+            Alert.alert('Connection Error ❌', e.message);
         } finally {
             setTestingGemini(false);
         }
@@ -880,7 +880,7 @@ export const AdminSettings = ({ navigation }) => {
 
     const handleTestOpenaiKey = async () => {
         if (!openaiApiKey || openaiApiKey.trim().length < 10) {
-            Alert.alert('Babu Key', 'Da fatan za a saka OpenAI API key kafin gwadawa.');
+            Alert.alert('Missing Key', 'Please enter an OpenAI API key before testing.');
             return;
         }
         setTestingOpenai(true);
@@ -889,13 +889,13 @@ export const AdminSettings = ({ navigation }) => {
             const res = await geminiService.testOpenAIKey(openaiApiKey);
             setOpenaiTestStatus(res);
             if (res.success) {
-                Alert.alert('Nasara! ✅', res.message);
+                Alert.alert('Success! ✅', res.message);
             } else {
-                Alert.alert('Gargadi! ⚠️', res.message);
+                Alert.alert('API Notice ⚠️', res.message);
             }
         } catch (e) {
             setOpenaiTestStatus({ success: false, message: e.message });
-            Alert.alert('Kuskure ❌', e.message);
+            Alert.alert('Connection Error ❌', e.message);
         } finally {
             setTestingOpenai(false);
         }
@@ -2113,7 +2113,7 @@ export const AdminSettings = ({ navigation }) => {
                                     <Ionicons name="hardware-chip-outline" size={14} color="#8B5CF6" />
                                 )}
                                 <Text style={{ fontSize: 11.5, fontWeight: '700', color: darkMode ? '#FFFFFF' : '#1E293B' }}>
-                                    {testingGemini ? 'Ana Gwada Gemini...' : 'Gwada Gemini API Key'}
+                                    {testingGemini ? 'Testing Gemini...' : 'Test Gemini API Key'}
                                 </Text>
                             </TouchableOpacity>
 
@@ -2121,7 +2121,7 @@ export const AdminSettings = ({ navigation }) => {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                                     <View style={[S.dot, { backgroundColor: geminiTestStatus?.success ? '#10B981' : geminiTestStatus?.code === 403 ? '#EF4444' : '#8B5CF6' }]} />
                                     <Text style={{ fontSize: 11, color: geminiTestStatus?.success ? '#10B981' : geminiTestStatus?.code === 403 ? '#EF4444' : '#8B5CF6', fontWeight: '700' }}>
-                                        {geminiTestStatus?.success ? 'Key Yana Aiki ✅' : geminiTestStatus?.code === 403 ? 'Leaked / Ya Lalace ❌' : 'An Saka Key'}
+                                        {geminiTestStatus?.success ? 'Key Active ✅' : geminiTestStatus?.code === 403 ? 'Leaked / Revoked ❌' : 'Key Set'}
                                     </Text>
                                 </View>
                             )}
@@ -2154,7 +2154,7 @@ export const AdminSettings = ({ navigation }) => {
                                 secure={!showOpenaiKey}
                                 placeholder="sk-proj-..."
                                 color="#10B981"
-                                hint="Kiran GPT-4o-mini a matsayin madadin AI (Fallback)"
+                                hint="GPT-4o-mini secondary visual & fallback model"
                             />
                             <TouchableOpacity
                                 onPress={() => setShowOpenaiKey(p => !p)}
@@ -2186,7 +2186,7 @@ export const AdminSettings = ({ navigation }) => {
                                     <Ionicons name="hardware-chip-outline" size={14} color="#10B981" />
                                 )}
                                 <Text style={{ fontSize: 11.5, fontWeight: '700', color: darkMode ? '#FFFFFF' : '#1E293B' }}>
-                                    {testingOpenai ? 'Ana Gwada OpenAI...' : 'Gwada OpenAI API Key'}
+                                    {testingOpenai ? 'Testing OpenAI...' : 'Test OpenAI API Key'}
                                 </Text>
                             </TouchableOpacity>
 
@@ -2194,7 +2194,7 @@ export const AdminSettings = ({ navigation }) => {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                                     <View style={[S.dot, { backgroundColor: openaiTestStatus?.success ? '#10B981' : openaiTestStatus?.code === 429 ? '#F59E0B' : '#10B981' }]} />
                                     <Text style={{ fontSize: 11, color: openaiTestStatus?.success ? '#10B981' : openaiTestStatus?.code === 429 ? '#F59E0B' : '#10B981', fontWeight: '700' }}>
-                                        {openaiTestStatus?.success ? 'Key Yana Aiki ✅' : openaiTestStatus?.code === 429 ? 'Credits Sun Kare ⚠️' : 'An Saka Key'}
+                                        {openaiTestStatus?.success ? 'Key Active ✅' : openaiTestStatus?.code === 429 ? 'Credits Exhausted ⚠️' : 'Key Set'}
                                     </Text>
                                 </View>
                             )}
