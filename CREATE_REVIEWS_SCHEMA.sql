@@ -63,29 +63,44 @@ CREATE OR REPLACE FUNCTION public.sync_review_ratings()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Update Product Average Rating & Review Count
-    IF NEW.product_id IS NOT NULL AND NEW.status = 'approved' THEN
+    IF (TG_OP = 'DELETE' AND OLD.product_id IS NOT NULL) THEN
         UPDATE public.products
         SET 
-            rating = (SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE product_id = NEW.product_id AND status = 'approved'),
+            rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE product_id = OLD.product_id AND status = 'approved'), 5.0),
+            average_rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE product_id = OLD.product_id AND status = 'approved'), 5.0),
+            reviews = (SELECT COUNT(*) FROM public.reviews WHERE product_id = OLD.product_id AND status = 'approved')
+        WHERE id = OLD.product_id;
+    ELSIF (TG_OP <> 'DELETE' AND NEW.product_id IS NOT NULL) THEN
+        UPDATE public.products
+        SET 
+            rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE product_id = NEW.product_id AND status = 'approved'), 5.0),
+            average_rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE product_id = NEW.product_id AND status = 'approved'), 5.0),
             reviews = (SELECT COUNT(*) FROM public.reviews WHERE product_id = NEW.product_id AND status = 'approved')
         WHERE id = NEW.product_id;
     END IF;
 
     -- Update Driver Average Rating
-    IF NEW.driver_id IS NOT NULL AND NEW.status = 'approved' THEN
+    IF (TG_OP = 'DELETE' AND OLD.driver_id IS NOT NULL) THEN
         UPDATE public.drivers
         SET 
-            rating = (SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE driver_id = NEW.driver_id AND status = 'approved')
+            rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE driver_id = OLD.driver_id AND status = 'approved'), 5.0),
+            review_count = (SELECT COUNT(*) FROM public.reviews WHERE driver_id = OLD.driver_id AND status = 'approved')
+        WHERE id = OLD.driver_id;
+    ELSIF (TG_OP <> 'DELETE' AND NEW.driver_id IS NOT NULL) THEN
+        UPDATE public.drivers
+        SET 
+            rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE driver_id = NEW.driver_id AND status = 'approved'), 5.0),
+            review_count = (SELECT COUNT(*) FROM public.reviews WHERE driver_id = NEW.driver_id AND status = 'approved')
         WHERE id = NEW.driver_id;
     END IF;
 
-    RETURN NEW;
+    RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trigger_sync_review_ratings ON public.reviews;
 CREATE TRIGGER trigger_sync_review_ratings
-AFTER INSERT OR UPDATE ON public.reviews
+AFTER INSERT OR UPDATE OR DELETE ON public.reviews
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_review_ratings();
 

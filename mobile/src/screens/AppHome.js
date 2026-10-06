@@ -119,7 +119,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const HOME_CACHE_KEY = '@abumafhal_home_cache_v2';
     const lastFetchRef = useRef(0);
 
-    const PROD_FIELDS = 'id, name, price, compare_at_price, images, image_url, category, rating, average_rating, total_sales, is_new, stock_quantity, status, created_at, updated_at';
+    const PROD_FIELDS = 'id, name, price, compare_at_price, images, image_url, category, rating, average_rating, reviews, total_sales, is_new, stock_quantity, status, created_at, updated_at';
 
     // 1. Instant cache restoration on mount
     useEffect(() => {
@@ -1035,8 +1035,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                         {/* Rating */}
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 }}>
                                             <Ionicons name="star" size={10} color="#F59E0B" />
-                                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>{prod.rating || 4.7}</Text>
-                                            <Text style={{ fontSize: 8.5, color: '#94A3B8' }}>({prod.reviews || '1.2k'})</Text>
+                                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>
+                                                {prod.rating != null ? Number(prod.rating).toFixed(1) : (prod.average_rating != null ? Number(prod.average_rating).toFixed(1) : '5.0')}
+                                            </Text>
+                                            <Text style={{ fontSize: 8.5, color: '#94A3B8' }}>
+                                                ({prod.reviews != null ? prod.reviews : (prod.reviews_count != null ? prod.reviews_count : 0)})
+                                            </Text>
                                         </View>
 
                                         {/* Price & Cart button row */}
@@ -1866,7 +1870,8 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                         <Text style={{ fontWeight: '700', fontSize: 11, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
                                             <Ionicons name="star" size={11} color="#D9A73A" />
-                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#D9A73A' }}>{(item?.average_rating || 5).toFixed(1)}</Text>
+                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#D9A73A' }}>{(Number(item?.rating || item?.average_rating || 5)).toFixed(1)}</Text>
+                                            <Text style={{ fontSize: 9, color: '#8A9BB0' }}>({item?.reviews != null ? item.reviews : (item?.reviews_count != null ? item.reviews_count : 0)})</Text>
                                             <Text style={{ fontSize: 10, color: '#8A9BB0' }}>• ₦{(item?.price || 0).toLocaleString()}</Text>
                                         </View>
                                     </View>
@@ -1892,6 +1897,15 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                     <Image source={{ uri: getProductImage(item) }} style={{ width: 108, height: 95, borderRadius: 12, backgroundColor: '#F5F3EB' }} resizeMode="cover" />
                                     <View style={{ marginTop: 1.5, paddingHorizontal: 1 }}>
                                         <Text style={{ marginTop: 5, fontSize: 11, fontWeight: '700', color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                                            <Ionicons name="star" size={9} color="#D9A73A" />
+                                            <Text style={{ fontSize: 9, fontWeight: '700', color: '#0E1A2E' }}>
+                                                {(Number(item?.rating || item?.average_rating || 5)).toFixed(1)}
+                                            </Text>
+                                            <Text style={{ fontSize: 8.5, color: '#8A9BB0' }}>
+                                                ({item?.reviews != null ? item.reviews : (item?.reviews_count != null ? item.reviews_count : 0)})
+                                            </Text>
+                                        </View>
                                         <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#D9A73A', marginTop: 2 }}>₦{item?.price?.toLocaleString() || '0'}</Text>
                                     </View>
                                 </TouchableOpacity>
@@ -1914,7 +1928,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             <TouchableOpacity key={i} style={{ width: '49%', marginBottom: 10, borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', borderRadius: 12, padding: 7, backgroundColor: 'white' }} onPress={() => onProductClick(item)}>
                                 <Image source={{ uri: getProductImage(item) }} style={{ width: '100%', height: 95, borderRadius: 8, backgroundColor: '#F5F3EB', marginBottom: 7 }} resizeMode="cover" />
                                 <View style={{ paddingHorizontal: 2 }}>
-                                    <Text style={{ fontSize: 11, color: '#0E1A2E', marginBottom: 3 }} numberOfLines={1}>{item?.name}</Text>
+                                    <Text style={{ fontSize: 11, color: '#0E1A2E', marginBottom: 2 }} numberOfLines={1}>{item?.name}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
+                                        <Ionicons name="star" size={9} color="#D9A73A" />
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#0E1A2E' }}>
+                                            {(Number(item?.rating || item?.average_rating || 5)).toFixed(1)}
+                                        </Text>
+                                        <Text style={{ fontSize: 8.5, color: '#8A9BB0' }}>
+                                            ({item?.reviews != null ? item.reviews : (item?.reviews_count != null ? item.reviews_count : 0)})
+                                        </Text>
+                                    </View>
                                     <Text style={{ fontSize: 12, fontWeight: '900', color: '#D9A73A' }}>₦{item?.price?.toLocaleString() || '0'}</Text>
                                 </View>
                             </TouchableOpacity>

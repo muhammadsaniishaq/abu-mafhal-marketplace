@@ -258,7 +258,102 @@ export const reviewsService = {
             await saveFallbackReviews(updated);
         } catch (_) {}
 
+        // 4. Live Synchronization of Product & Driver Rating Counters
+        if (dbPayload.product_id) {
+            reviewsService.syncProductRating(dbPayload.product_id).catch(() => {});
+        }
+        if (dbPayload.driver_id) {
+            reviewsService.syncDriverRating(dbPayload.driver_id).catch(() => {});
+        }
+
         return { success: true, data: savedRecord };
+    },
+
+    /**
+     * Re-calculate and sync approved review average rating and count to the 'products' table
+     */
+    syncProductRating: async (productId) => {
+        if (!productId) return;
+        try {
+            const { data: revs } = await supabase
+                .from('reviews')
+                .select('rating')
+                .eq('product_id', productId)
+                .eq('status', 'approved');
+
+            let count = 0;
+            let avg = 5.0;
+
+            if (revs && revs.length > 0) {
+                count = revs.length;
+                const sum = revs.reduce((a, b) => a + (Number(b.rating) || 5), 0);
+                avg = Number((sum / count).toFixed(1));
+            } else {
+                const fallbackList = await getFallbackReviews();
+                const matched = fallbackList.filter(r => String(r.product_id) === String(productId) && (r.status || 'approved') === 'approved');
+                if (matched.length > 0) {
+                    count = matched.length;
+                    const sum = matched.reduce((a, b) => a + (Number(b.rating) || 5), 0);
+                    avg = Number((sum / count).toFixed(1));
+                }
+            }
+
+            // Sync to products table with fallbacks
+            try {
+                await supabase
+                    .from('products')
+                    .update({
+                        rating: avg,
+                        average_rating: avg,
+                        reviews: count,
+                        reviews_count: count
+                    })
+                    .eq('id', productId);
+            } catch (_) {
+                try {
+                    await supabase
+                        .from('products')
+                        .update({
+                            rating: avg,
+                            reviews: count
+                        })
+                        .eq('id', productId);
+                } catch (_) {}
+            }
+        } catch (e) {
+            console.warn('ReviewsService: failed to sync product rating:', e);
+        }
+    },
+
+    /**
+     * Re-calculate and sync approved driver rating to the 'drivers' table
+     */
+    syncDriverRating: async (driverId) => {
+        if (!driverId) return;
+        try {
+            const { data: revs } = await supabase
+                .from('reviews')
+                .select('rating')
+                .eq('driver_id', driverId)
+                .eq('status', 'approved');
+
+            let count = 0;
+            let avg = 5.0;
+
+            if (revs && revs.length > 0) {
+                count = revs.length;
+                const sum = revs.reduce((a, b) => a + (Number(b.rating) || 5), 0);
+                avg = Number((sum / count).toFixed(1));
+            }
+
+            await supabase
+                .from('drivers')
+                .update({
+                    rating: avg,
+                    review_count: count
+                })
+                .eq('id', driverId);
+        } catch (_) {}
     },
 
     /**
@@ -336,15 +431,22 @@ export const reviewsService = {
      * Update review status
      */
     updateReviewStatus: async (reviewId, newStatus) => {
+        let revItem = null;
         try {
+            const { data } = await supabase.from('reviews').select('product_id, driver_id').eq('id', reviewId).maybeSingle();
+            revItem = data;
             await supabase.from('reviews').update({ status: newStatus }).eq('id', reviewId);
         } catch (_) {}
 
         try {
             const existing = await getFallbackReviews();
+            if (!revItem) revItem = existing.find(r => r.id === reviewId);
             const updated = existing.map(r => r.id === reviewId ? { ...r, status: newStatus } : r);
             await saveFallbackReviews(updated);
         } catch (_) {}
+
+        if (revItem?.product_id) reviewsService.syncProductRating(revItem.product_id).catch(() => {});
+        if (revItem?.driver_id) reviewsService.syncDriverRating(revItem.driver_id).catch(() => {});
 
         return true;
     },
@@ -353,15 +455,22 @@ export const reviewsService = {
      * Delete a review permanently
      */
     deleteReview: async (reviewId) => {
+        let revItem = null;
         try {
+            const { data } = await supabase.from('reviews').select('product_id, driver_id').eq('id', reviewId).maybeSingle();
+            revItem = data;
             await supabase.from('reviews').delete().eq('id', reviewId);
         } catch (_) {}
 
         try {
             const existing = await getFallbackReviews();
+            if (!revItem) revItem = existing.find(r => r.id === reviewId);
             const updated = existing.filter(r => r.id !== reviewId);
             await saveFallbackReviews(updated);
         } catch (_) {}
+
+        if (revItem?.product_id) reviewsService.syncProductRating(revItem.product_id).catch(() => {});
+        if (revItem?.driver_id) reviewsService.syncDriverRating(revItem.driver_id).catch(() => {});
 
         return true;
     },

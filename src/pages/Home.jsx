@@ -1089,6 +1089,7 @@ const Home = () => {
                           <div className="flex items-center gap-1 text-amber-500 font-black">
                             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                             <span>{rating}</span>
+                            <span className="text-slate-400 font-normal text-[9px]">({product.reviews ?? product.reviews_count ?? 0})</span>
                           </div>
                         </div>
 

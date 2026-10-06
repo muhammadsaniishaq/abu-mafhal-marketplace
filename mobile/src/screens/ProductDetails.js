@@ -503,6 +503,28 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                         }
                     };
                 });
+
+                // Immediately update local product rating & review count state
+                setProduct(prev => {
+                    if (!prev) return prev;
+                    const prevCount = prev.reviews || prev.reviews_count || 0;
+                    const prevAvg = Number(prev.rating || prev.average_rating || 5);
+                    const updatedCount = prevCount + 1;
+                    const updatedAvg = Number(((prevAvg * prevCount + userReviewRating) / updatedCount).toFixed(1));
+                    const updatedProduct = {
+                        ...prev,
+                        rating: updatedAvg,
+                        average_rating: updatedAvg,
+                        reviews: updatedCount,
+                        reviews_count: updatedCount
+                    };
+                    try {
+                        if (typeof window !== 'undefined' && window.localStorage) {
+                            window.localStorage.setItem('@abumafhal_last_product_data', JSON.stringify(updatedProduct));
+                        }
+                    } catch (_) {}
+                    return updatedProduct;
+                });
             }
 
             setWriteReviewModal(false);
