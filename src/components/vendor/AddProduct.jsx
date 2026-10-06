@@ -36,7 +36,25 @@ const AddProduct = () => {
   const [video, setVideo] = useState(null);
   const [videoPreview, setVideoPreview] = useState(null);
 
-  const categories = ['Electronics', 'Fashion', 'Home', 'Sports', 'Books', 'Beauty', 'Toys', 'Food', 'Other'];
+  const [categories, setCategories] = useState([
+    'Phones & Tablets', 'Fashion & Apparel', 'Electronics & Gadgets',
+    'Shoes & Footwear', 'Beauty & Health', 'Home & Living',
+    'Sports & Fitness', 'Books & Media', 'Toys & Kids',
+    'Groceries & Food', 'Automotive', 'Other'
+  ]);
+
+  useEffect(() => {
+    supabase
+      .from('categories')
+      .select('name')
+      .neq('is_active', false)
+      .order('display_order', { ascending: true, nullsFirst: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setCategories(data.map(c => c.name));
+        }
+      });
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

@@ -386,7 +386,7 @@ export const CategoriesPage = ({
         if (!silent) setLoading(true);
         try {
             const [cr, pr] = await Promise.allSettled([
-                supabase.from("categories").select("*").eq("is_active", true).order("display_order", { ascending: true, nullsFirst: false }),
+                supabase.from("categories").select("*").neq("is_active", false).order("display_order", { ascending: true, nullsFirst: false }),
                 supabase.from("products").select("id,name,description,price,compare_at_price,image_url,images,category,rating,reviews,stock,total_sales,status,created_at").eq("status", "approved").order("created_at", { ascending: false }).limit(150),
             ]);
             const cl = cr.status === "fulfilled" && Array.isArray(cr.value?.data) ? cr.value.data : [];

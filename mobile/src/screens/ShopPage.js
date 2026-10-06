@@ -300,8 +300,8 @@ export const ShopPage = ({
             const { data: catData } = await supabase
                 .from('categories')
                 .select('*')
-                .eq('is_active', true)
-                .order('display_order', { ascending: true });
+                .neq('is_active', false)
+                .order('display_order', { ascending: true, nullsFirst: false });
 
             if (catData?.length) {
                 setCategories([
@@ -364,6 +364,7 @@ export const ShopPage = ({
         const ch = supabase
             .channel('shop-rt-v3')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchData)
             .subscribe();
         return () => supabase.removeChannel(ch);
     }, [fetchData]);

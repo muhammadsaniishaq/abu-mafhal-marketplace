@@ -1,10 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../config/supabase';
 import { 
   Layers, Plus, Search, Edit2, Trash2, CheckCircle, 
   XCircle, Image as ImageIcon, ArrowUpDown, RefreshCw, Eye,
-  Package, ExternalLink, Filter, Check, X
+  Package, ExternalLink, Filter, Check, X, UploadCloud,
+  Sparkles, ShieldCheck
 } from 'lucide-react';
+
+const invalidateWebCaches = () => {
+  try {
+    const keys = [
+      '@abumafhal_home_cache_v2',
+      '@abumafhal_shop_cache',
+      'abumafhal_categories_cache',
+      '@abumafhal_categories_v2'
+    ];
+    if (typeof window !== 'undefined' && window.localStorage) {
+      keys.forEach(k => {
+        try { window.localStorage.removeItem(k); } catch (_) {}
+      });
+    }
+  } catch (e) {
+    console.error('Error clearing web cache:', e);
+  }
+};
 
 const AdminCategories = () => {
   const [categories, setCategories] = useState([]);
@@ -15,14 +34,16 @@ const AdminCategories = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const fileInputRef = useRef(null);
 
   const [form, setForm] = useState({
     name: '',
     slug: '',
     icon: '',
     image_url: '',
-    display_order: 0,
+    display_order: 1,
     is_active: true
   });
 
@@ -30,8 +51,11 @@ const AdminCategories = () => {
     fetchCategoriesAndCounts();
 
     const channel = supabase
-      .channel('web-admin-categories-sync')
+      .channel('web-admin-categories-sync-v5')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+        fetchCategoriesAndCounts(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
         fetchCategoriesAndCounts(true);
       })
       .subscribe();
@@ -80,14 +104,52 @@ const AdminCategories = () => {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop() || 'png';
+      const fileName = `cat_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `category_images/${fileName}`;
+
+      let uploadRes = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadRes.error) {
+        // Try fallback bucket 'products'
+        uploadRes = await supabase.storage
+          .from('products')
+          .upload(filePath, file);
+      }
+
+      if (uploadRes.error) throw uploadRes.error;
+
+      const { data: publicUrlData } = supabase.storage
+        .from(uploadRes.data?.fullPath ? uploadRes.data.fullPath.split('/')[0] : 'product-images')
+        .getPublicUrl(filePath);
+
+      setForm(prev => ({ ...prev, image_url: publicUrlData.publicUrl }));
+      showToast('success', 'Image uploaded successfully!');
+    } catch (err) {
+      console.error('Upload error:', err);
+      showToast('error', 'Could not upload image: ' + (err.message || 'Storage error'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleOpenAdd = () => {
     setEditingCategory(null);
+    const maxOrder = categories.reduce((max, c) => Math.max(max, parseInt(c.display_order, 10) || 0), 0);
     setForm({
       name: '',
       slug: '',
       icon: 'Tag',
       image_url: '',
-      display_order: categories.length + 1,
+      display_order: maxOrder + 1,
       is_active: true
     });
     setShowModal(true);
@@ -100,7 +162,7 @@ const AdminCategories = () => {
       slug: cat.slug || '',
       icon: cat.icon || '',
       image_url: cat.image_url || '',
-      display_order: cat.display_order ?? 0,
+      display_order: cat.display_order ?? 1,
       is_active: cat.is_active !== false
     });
     setShowModal(true);
@@ -132,10 +194,10 @@ const AdminCategories = () => {
           .update({
             name: form.name.trim(),
             slug,
-            icon: form.icon,
+            icon: form.icon || 'Tag',
             image_url: form.image_url.trim() || null,
             display_order: parseInt(form.display_order, 10) || 0,
-            is_active: form.is_active
+            is_active: form.is_active === true
           })
           .eq('id', editingCategory.id)
           .select()
@@ -143,7 +205,8 @@ const AdminCategories = () => {
 
         if (error) throw error;
         setCategories(prev => prev.map(c => c.id === editingCategory.id ? data : c));
-        showToast('success', 'Category updated successfully!');
+        invalidateWebCaches();
+        showToast('success', `Category "${form.name.trim()}" updated and live!`);
       } else {
         // Insert
         const { data, error } = await supabase
@@ -151,19 +214,21 @@ const AdminCategories = () => {
           .insert([{
             name: form.name.trim(),
             slug,
-            icon: form.icon,
+            icon: form.icon || 'Tag',
             image_url: form.image_url.trim() || null,
             display_order: parseInt(form.display_order, 10) || 0,
-            is_active: form.is_active
+            is_active: form.is_active === true
           }])
           .select()
           .single();
 
         if (error) throw error;
         setCategories(prev => [...prev, data]);
-        showToast('success', 'New category created successfully!');
+        invalidateWebCaches();
+        showToast('success', `New category "${form.name.trim()}" created and live!`);
       }
       setShowModal(false);
+      fetchCategoriesAndCounts(true);
     } catch (err) {
       console.error('Save category error:', err);
       showToast('error', 'Failed to save category: ' + err.message);
@@ -173,7 +238,7 @@ const AdminCategories = () => {
   };
 
   const handleToggleStatus = async (cat) => {
-    const nextStatus = !cat.is_active;
+    const nextStatus = cat.is_active === false ? true : false;
     // Optimistic UI update
     setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: nextStatus } : c));
 
@@ -184,6 +249,7 @@ const AdminCategories = () => {
         .eq('id', cat.id);
 
       if (error) throw error;
+      invalidateWebCaches();
       showToast('success', `Category set to ${nextStatus ? 'Active' : 'Inactive'}`);
     } catch (err) {
       console.error(err);
@@ -207,6 +273,7 @@ const AdminCategories = () => {
 
       if (error) throw error;
       setCategories(prev => prev.filter(c => c.id !== cat.id));
+      invalidateWebCaches();
       showToast('success', 'Category deleted successfully');
     } catch (err) {
       console.error(err);
@@ -225,74 +292,112 @@ const AdminCategories = () => {
     return true;
   });
 
+  // Key performance indicators
+  const totalCategories = categories.length;
+  const activeCategories = categories.filter(c => c.is_active !== false).length;
+  const inactiveCategories = categories.filter(c => c.is_active === false).length;
+  const totalLinkedProducts = Object.values(productCounts).reduce((acc, curr) => acc + curr, 0);
+
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-sky-600 uppercase tracking-wider mb-1">
-            <Layers className="w-4 h-4" />
-            <span>Store Taxonomy Suite</span>
+      {/* Header Banner - Luxury Navy & Gold Aesthetic */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#071422] via-[#0A192F] to-[#0E2340] p-6 sm:p-8 text-white shadow-xl border border-[#D9A73A]/30">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#D9A73A]/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9A73A]/15 border border-[#D9A73A]/40 text-[#D9A73A] text-xs font-black tracking-widest uppercase mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-[#D9A73A]" />
+              <span>Abu Mafhal Taxonomy Suite</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              Category Management
+            </h1>
+            <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-xl">
+              Organize marketplace departments, display sequence, and visibility with instant live catalog synchronization.
+            </p>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Category Management</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage marketplace departments, priority orders, and customer visibility.</p>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fetchCategoriesAndCounts()}
+              className="p-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-all hover:scale-105 active:scale-95 shadow-sm"
+              title="Refresh categories"
+            >
+              <RefreshCw className={`w-4 h-4 text-[#D9A73A] ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#D9A73A] to-[#B8860B] hover:from-[#E5B548] hover:to-[#C69213] text-[#071422] font-black text-xs sm:text-sm rounded-2xl shadow-lg shadow-[#D9A73A]/25 transition-all hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Add New Category</span>
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => fetchCategoriesAndCounts()}
-            className="p-2.5 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-all"
-            title="Refresh categories"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-sky-600' : ''}`} />
-          </button>
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0284C7] hover:bg-sky-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-sky-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Category</span>
-          </button>
+
+        {/* 4 KPI Metrics Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
+          <div className="bg-white/5 rounded-2xl p-3.5 border border-white/10 backdrop-blur-sm">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Departments</p>
+            <p className="text-xl sm:text-2xl font-black text-white mt-0.5">{totalCategories}</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-3.5 border border-emerald-500/20 backdrop-blur-sm">
+            <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Active & Visible</p>
+            <p className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">{activeCategories}</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-3.5 border border-white/10 backdrop-blur-sm">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Inactive / Hidden</p>
+            <p className="text-xl sm:text-2xl font-black text-slate-300 mt-0.5">{inactiveCategories}</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-3.5 border border-[#D9A73A]/20 backdrop-blur-sm">
+            <p className="text-[11px] font-bold text-[#D9A73A] uppercase tracking-wider">Linked Products</p>
+            <p className="text-xl sm:text-2xl font-black text-[#D9A73A] mt-0.5">{totalLinkedProducts}</p>
+          </div>
         </div>
       </div>
 
       {/* Toast Alert */}
       {message.text && (
-        <div className={`p-4 rounded-2xl text-sm font-bold border flex items-center justify-between animate-fadeIn ${
+        <div className={`p-4 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between animate-fadeIn ${
           message.type === 'success' 
             ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
             : 'bg-rose-50 text-rose-800 border-rose-200'
         }`}>
-          <span>{message.text}</span>
-          <button onClick={() => setMessage({ type: '', text: '' })} className="text-xs opacity-70 hover:opacity-100 font-bold">×</button>
+          <div className="flex items-center gap-2">
+            {message.type === 'success' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-rose-600" />}
+            <span>{message.text}</span>
+          </div>
+          <button onClick={() => setMessage({ type: '', text: '' })} className="text-xs opacity-70 hover:opacity-100 font-bold px-2">✕</button>
         </div>
       )}
 
       {/* Search Bar & Filter Tabs */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#D9A73A] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search category name or slug..."
+            placeholder="Search department name or slug..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all text-slate-800 placeholder-slate-400 font-medium"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#D9A73A]/30 focus:border-[#D9A73A] transition-all text-slate-800 placeholder-slate-400 font-medium"
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           {[
-            { key: 'all', label: `All (${categories.length})` },
-            { key: 'active', label: `Active (${categories.filter(c => c.is_active !== false).length})` },
-            { key: 'inactive', label: `Inactive (${categories.filter(c => c.is_active === false).length})` },
+            { key: 'all', label: `All (${totalCategories})` },
+            { key: 'active', label: `Active (${activeCategories})` },
+            { key: 'inactive', label: `Inactive (${inactiveCategories})` },
           ].map(tab => (
             <button
               key={tab.key}
               onClick={() => setStatusFilter(tab.key)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap ${
                 statusFilter === tab.key
-                  ? 'bg-[#0A192F] text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-[#0A192F] text-white shadow-sm border border-[#D9A73A]/40'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-transparent'
               }`}
             >
               {tab.label}
@@ -303,29 +408,31 @@ const AdminCategories = () => {
 
       {/* Categories Table */}
       {loading ? (
-        <div className="p-16 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200/80 shadow-sm text-center">
-          <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mb-3"></div>
-          <p className="text-sm font-bold text-slate-600">Loading catalog taxonomy...</p>
+        <div className="p-16 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 shadow-sm text-center">
+          <div className="w-10 h-10 border-4 border-[#D9A73A] border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p className="text-xs sm:text-sm font-bold text-slate-600">Loading catalog taxonomy...</p>
         </div>
       ) : filteredCategories.length === 0 ? (
-        <div className="p-16 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200/80 shadow-sm text-center">
-          <div className="w-16 h-16 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-4">
+        <div className="p-16 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 shadow-sm text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#FEF3C7] text-[#D9A73A] flex items-center justify-center mb-4">
             <Layers className="w-8 h-8" />
           </div>
           <h3 className="text-lg font-black text-slate-900">No categories found</h3>
-          <p className="text-sm text-slate-500 max-w-sm mt-1">Click "Add Category" above to create your first department.</p>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-sm mt-1">
+            {searchTerm ? 'No results matched your search terms.' : 'Click "Add New Category" above to configure your first marketplace department.'}
+          </p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <th className="py-3.5 px-5">Category (Name & Slug)</th>
-                  <th className="py-3.5 px-4 text-center">Display Order</th>
-                  <th className="py-3.5 px-4 text-center">Linked Products</th>
-                  <th className="py-3.5 px-4 text-center">Visibility Status</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
+                  <th className="py-4 px-5">Department (Name & Slug)</th>
+                  <th className="py-4 px-4 text-center">Display Order</th>
+                  <th className="py-4 px-4 text-center">Linked Products</th>
+                  <th className="py-4 px-4 text-center">Visibility Status</th>
+                  <th className="py-4 px-5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -334,30 +441,30 @@ const AdminCategories = () => {
                   const count = productCounts[(cat.name || '').toLowerCase().trim()] || 0;
 
                   return (
-                    <tr key={cat.id} className="hover:bg-slate-50/70 transition-colors group">
+                    <tr key={cat.id} className="hover:bg-slate-50/80 transition-colors group">
                       <td className="py-4 px-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
                             {cat.image_url ? (
                               <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
                             ) : (
-                              <Layers className="w-5 h-5 text-sky-600" />
+                              <Layers className="w-6 h-6 text-[#D9A73A]" />
                             )}
                           </div>
                           <div>
-                            <p className="font-black text-slate-900 group-hover:text-sky-600 transition-colors">{cat.name}</p>
+                            <p className="font-black text-slate-900 group-hover:text-[#D9A73A] transition-colors">{cat.name}</p>
                             <p className="text-xs text-slate-400 font-mono">/{cat.slug || 'category'}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-4 px-4 text-center font-bold text-slate-700">
-                        <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200/60 text-xs font-black">
+                        <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black">
                           #{cat.display_order ?? 0}
                         </span>
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-100">
-                          <Package className="w-3.5 h-3.5 text-sky-600" />
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                          <Package className="w-3.5 h-3.5 text-[#D9A73A]" />
                           <span>{count} Products</span>
                         </span>
                       </td>
@@ -369,8 +476,9 @@ const AdminCategories = () => {
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
                               : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
                           }`}
+                          title={isActive ? 'Click to deactivate' : 'Click to activate'}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                           {isActive ? 'ACTIVE' : 'INACTIVE'}
                         </button>
                       </td>
@@ -378,7 +486,7 @@ const AdminCategories = () => {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEdit(cat)}
-                            className="p-2 rounded-xl text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-all"
+                            className="p-2 rounded-xl text-slate-500 hover:text-[#0A192F] hover:bg-slate-100 transition-all"
                             title="Edit Category"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -404,43 +512,79 @@ const AdminCategories = () => {
       {/* Add / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-slate-200 relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#071422] to-[#0A192F] px-6 py-5 flex items-center justify-between text-white border-b border-[#D9A73A]/20">
               <div>
-                <h3 className="text-lg font-black text-slate-900">
+                <h3 className="text-lg font-black text-white">
                   {editingCategory ? 'Edit Category' : 'Add New Category'}
                 </h3>
-                <p className="text-xs text-slate-500">Configure department details, priority order and icon.</p>
+                <p className="text-xs text-slate-300">Configure marketplace department details, priority and image.</p>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              {/* Image Preview & URL */}
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              {/* Image Preview & Upload */}
               <div>
-                <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
-                  Category Image URL
+                <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
+                  Category Image
                 </label>
-                <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+                <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm relative">
                     {form.image_url ? (
                       <img src={form.image_url} alt="Preview" className="w-full h-full object-cover" />
                     ) : (
-                      <ImageIcon className="w-6 h-6 text-slate-400" />
+                      <ImageIcon className="w-7 h-7 text-[#D9A73A]" />
+                    )}
+                    {uploading && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="w-5 h-5 border-2 border-[#D9A73A] border-t-transparent rounded-full animate-spin"></div>
+                      </div>
                     )}
                   </div>
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={form.image_url}
-                    onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 font-medium"
-                  />
+
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="px-3 py-1.5 bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5 text-[#D9A73A]" />
+                        <span>{uploading ? 'Uploading...' : 'Choose File'}</span>
+                      </button>
+                      {form.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, image_url: '' })}
+                          className="text-xs text-rose-600 hover:underline font-bold"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      placeholder="Or paste direct image URL (https://...)"
+                      value={form.image_url}
+                      onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[#D9A73A]"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -454,7 +598,7 @@ const AdminCategories = () => {
                   placeholder="e.g. Phones & Tablets"
                   value={form.name}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 font-bold"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#D9A73A]/20 focus:border-[#D9A73A] font-bold"
                 />
               </div>
 
@@ -468,7 +612,7 @@ const AdminCategories = () => {
                     placeholder="e.g. phones-tablets"
                     value={form.slug}
                     onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 font-mono"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#D9A73A]/20 focus:border-[#D9A73A] font-mono"
                   />
                 </div>
                 <div>
@@ -479,7 +623,7 @@ const AdminCategories = () => {
                     type="number"
                     value={form.display_order}
                     onChange={(e) => setForm({ ...form, display_order: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 font-black"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#D9A73A]/20 focus:border-[#D9A73A] font-black"
                   />
                 </div>
               </div>
@@ -490,10 +634,10 @@ const AdminCategories = () => {
                   id="cat_active"
                   checked={form.is_active}
                   onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                  className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
+                  className="w-4 h-4 text-[#D9A73A] rounded border-slate-300 focus:ring-[#D9A73A]"
                 />
                 <label htmlFor="cat_active" className="text-xs font-bold text-slate-700 cursor-pointer">
-                  Activate Category (Visible on customer mobile app & website)
+                  Activate Category (Publish live on customer mobile app & website)
                 </label>
               </div>
 
@@ -507,10 +651,10 @@ const AdminCategories = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="px-5 py-2.5 rounded-xl bg-[#0284C7] hover:bg-sky-700 text-white text-xs font-black shadow-lg shadow-sky-600/20 transition-all disabled:opacity-50"
+                  disabled={saving || uploading}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#D9A73A] to-[#B8860B] hover:from-[#E5B548] hover:to-[#C69213] text-[#071422] text-xs font-black shadow-lg shadow-[#D9A73A]/25 transition-all disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : (editingCategory ? 'Update Category' : 'Create Category')}
+                  {saving ? 'Saving...' : (editingCategory ? 'Update Category' : 'Create & Publish Category')}
                 </button>
               </div>
             </form>

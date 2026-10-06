@@ -18,18 +18,22 @@ const SB_H = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
 const NAVY = '#0E1A2E';
 const GOLD = '#D9A73A';
 
-const CATEGORIES = [
-    { label: 'Electronics',  icon: 'phone-portrait',   color: '#3B82F6' },
-    { label: 'Fashion',      icon: 'shirt',             color: '#EC4899' },
-    { label: 'Home',         icon: 'home',              color: '#10B981' },
-    { label: 'Beauty',       icon: 'flower',            color: '#F472B6' },
-    { label: 'Sports',       icon: 'football',          color: '#F59E0B' },
-    { label: 'Books',        icon: 'book',              color: '#8B5CF6' },
-    { label: 'Toys',         icon: 'game-controller',   color: '#EF4444' },
-    { label: 'Food',         icon: 'fast-food',         color: '#F97316' },
-    { label: 'Automotive',   icon: 'car',               color: '#6366F1' },
-    { label: 'Other',        icon: 'grid',              color: '#64748B' },
+const DEFAULT_CATEGORIES = [
+    { label: 'Phones & Tablets',     icon: 'phone-portrait',   color: '#3B82F6' },
+    { label: 'Fashion & Apparel',    icon: 'shirt',            color: '#EC4899' },
+    { label: 'Electronics & Gadgets',icon: 'laptop',           color: '#6366F1' },
+    { label: 'Shoes & Footwear',     icon: 'footsteps',        color: '#F59E0B' },
+    { label: 'Beauty & Health',      icon: 'flower',           color: '#F472B6' },
+    { label: 'Home & Living',        icon: 'home',             color: '#10B981' },
+    { label: 'Sports & Fitness',     icon: 'football',         color: '#06B6D4' },
+    { label: 'Books & Media',        icon: 'book',             color: '#8B5CF6' },
+    { label: 'Toys & Kids',          icon: 'game-controller',  color: '#EF4444' },
+    { label: 'Groceries & Food',     icon: 'fast-food',        color: '#F97316' },
+    { label: 'Automotive',           icon: 'car',              color: '#0284C7' },
+    { label: 'Other',                icon: 'grid',             color: '#64748B' },
 ];
+
+const PALETTE_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316', '#6366F1', '#14B8A6', '#0284C7', '#D9A73A'];
 
 const TABS = [
     { id: 'vital',    label: 'Info',      icon: 'information-circle' },
@@ -94,6 +98,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         initialData?.images?.map(uri => ({ uri, status: 'success', url: uri })) || []
     );
     const [video, setVideo] = useState(initialData?.metadata?.video || initialData?.video_url || null);
+    const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES);
     const [vendors, setVendors]         = useState([]);
     const [vendorSearch, setVendorSearch] = useState('');
     const [showVendorModal, setShowVendorModal] = useState(false);
@@ -141,6 +146,45 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
 
     // Helper to pass to Inp/ToggleRow (stable reference)
     const onSet = set;
+
+    // ── Load categories dynamically ──────────────────────────────
+    useEffect(() => {
+        loadCategories();
+        const ch = supabase.channel('admin-addprod-cat-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+                loadCategories();
+            })
+            .subscribe();
+        return () => {
+            supabase.removeChannel(ch);
+        };
+    }, []);
+
+    const loadCategories = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('categories')
+                .select('*')
+                .neq('is_active', false)
+                .order('display_order', { ascending: true, nullsFirst: false });
+
+            if (!error && Array.isArray(data) && data.length > 0) {
+                const mapped = data.map((c, i) => ({
+                    label: c.name,
+                    icon: c.icon || 'pricetag',
+                    color: PALETTE_COLORS[i % PALETTE_COLORS.length] || '#0A192F',
+                    image_url: c.image_url
+                }));
+                // If initial category exists and isn't present, preserve it
+                if (initialData?.category && !mapped.some(m => m.label.toLowerCase() === initialData.category.toLowerCase())) {
+                    mapped.push({ label: initialData.category, icon: 'grid', color: '#64748B' });
+                }
+                setAvailableCategories(mapped);
+            }
+        } catch (err) {
+            console.log('Error loading categories:', err);
+        }
+    };
 
     // ── Load vendors ───────────────────────────────────────────
     useEffect(() => {
@@ -647,7 +691,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                 <Text style={SS.cardTitle}>Category</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
-                    {CATEGORIES.map(cat => (
+                    {availableCategories.map(cat => (
                         <TouchableOpacity key={cat.label} onPress={() => set('category', cat.label)}
                             style={[SS.catChip, form.category === cat.label && { backgroundColor: cat.color, borderColor: cat.color }]}>
                             <Ionicons name={cat.icon} size={12} color={form.category === cat.label ? 'white' : cat.color} />

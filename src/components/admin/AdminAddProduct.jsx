@@ -19,9 +19,11 @@ const TABS = [
   { id: 'shipping', label: 'SEO & Meta', icon: <FiSearch /> },
 ];
 
-const CATEGORIES = [
-  'Electronics', 'Fashion', 'Home', 'Beauty', 'Sports', 
-  'Books', 'Toys', 'Food', 'Automotive', 'Other'
+const DEFAULT_CATEGORIES = [
+  'Phones & Tablets', 'Fashion & Apparel', 'Electronics & Gadgets', 
+  'Shoes & Footwear', 'Beauty & Health', 'Home & Living', 
+  'Sports & Fitness', 'Books & Media', 'Toys & Kids', 
+  'Groceries & Food', 'Automotive', 'Other'
 ];
 
 const AdminAddProduct = () => {
@@ -73,9 +75,47 @@ const AdminAddProduct = () => {
     freeShipping: false,
   });
 
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [video, setVideo] = useState(null);
+
+  useEffect(() => {
+    loadCategories();
+    const catChannel = supabase
+      .channel('admin-add-prod-cats-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+        loadCategories();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(catChannel);
+    };
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('name')
+        .neq('is_active', false)
+        .order('display_order', { ascending: true, nullsFirst: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const names = data.map(c => c.name);
+        setCategories(prev => {
+          const merged = [...names];
+          if (form.category && !merged.includes(form.category)) {
+            merged.push(form.category);
+          }
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.error('Error loading dynamic categories:', err);
+    }
+  };
 
   useEffect(() => {
     loadVendors();
@@ -452,7 +492,7 @@ const AdminAddProduct = () => {
                       className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer font-medium"
                     >
                       <option value="" disabled>Select Segment</option>
-                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>

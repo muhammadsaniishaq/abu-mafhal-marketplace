@@ -2,18 +2,24 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, Image, Alert,
     Modal, TextInput, ActivityIndicator, RefreshControl, StyleSheet,
-    ScrollView, Platform, Switch
+    ScrollView, Platform, Switch, Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 
 const BRAND = {
+    navyDark: '#071422',
     navy: '#0A192F',
-    navyLight: '#0E223D',
+    navyLight: '#0E2340',
+    navyCard: '#112240',
     gold: '#D9A73A',
     goldLight: '#FEF3C7',
+    goldGlow: '#F5C842',
+    goldDark: '#A07820',
     emerald: '#10B981',
     emeraldLight: '#ECFDF5',
     sky: '#0284C7',
@@ -23,10 +29,30 @@ const BRAND = {
     bg: '#F8FAFC',
     card: '#FFFFFF',
     border: '#E2E8F0',
+    borderGold: 'rgba(217, 167, 58, 0.35)',
     danger: '#EF4444',
 };
 
-export const AdminCategories = ({ navigation }) => {
+const invalidateClientCaches = async () => {
+    try {
+        const keys = [
+            '@abumafhal_home_cache_v2',
+            '@abumafhal_shop_cache',
+            'abumafhal_categories_cache',
+            '@abumafhal_categories_v2'
+        ];
+        await Promise.allSettled(keys.map(k => AsyncStorage.removeItem(k)));
+        if (typeof window !== 'undefined' && window.localStorage) {
+            keys.forEach(k => {
+                try { window.localStorage.removeItem(k); } catch (_) {}
+            });
+        }
+    } catch (e) {
+        console.log('Cache invalidation err:', e);
+    }
+};
+
+export const AdminCategories = ({ navigation, onBack }) => {
     const [categories, setCategories] = useState([]);
     const [productCounts, setProductCounts] = useState({});
     const [loading, setLoading] = useState(true);
@@ -41,7 +67,7 @@ export const AdminCategories = ({ navigation }) => {
     const [formName, setFormName] = useState('');
     const [formSlug, setFormSlug] = useState('');
     const [formImageUrl, setFormImageUrl] = useState('');
-    const [formDisplayOrder, setFormDisplayOrder] = useState('0');
+    const [formDisplayOrder, setFormDisplayOrder] = useState('1');
     const [formIsActive, setFormIsActive] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -49,8 +75,11 @@ export const AdminCategories = ({ navigation }) => {
         fetchCategoriesAndCounts();
 
         const channel = supabase
-            .channel('admin-categories-realtime-v4')
+            .channel('admin-categories-realtime-v5')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+                fetchCategoriesAndCounts(true);
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
                 fetchCategoriesAndCounts(true);
             })
             .subscribe();
@@ -101,7 +130,7 @@ export const AdminCategories = ({ navigation }) => {
                 mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [1, 1],
-                quality: 0.8,
+                quality: 0.85,
                 base64: true
             });
 
@@ -109,7 +138,7 @@ export const AdminCategories = ({ navigation }) => {
                 const asset = result.assets[0];
                 if (asset.base64) {
                     setUploading(true);
-                    const fileName = `cat_${Date.now()}.png`;
+                    const fileName = `cat_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
                     const { error: uploadError } = await supabase.storage
                         .from('product-images')
                         .upload(fileName, decode(asset.base64), {
@@ -123,6 +152,7 @@ export const AdminCategories = ({ navigation }) => {
                             .getPublicUrl(fileName);
                         setFormImageUrl(publicUrlData.publicUrl);
                     } else {
+                        // Fallback to asset URI
                         setFormImageUrl(asset.uri);
                     }
                 } else if (asset.uri) {
@@ -131,7 +161,7 @@ export const AdminCategories = ({ navigation }) => {
             }
         } catch (err) {
             console.error('Image pick error:', err);
-            Alert.alert('Upload Error', 'Could not process selected image.');
+            Alert.alert('Upload Error', 'Could not process selected image. You can also paste an image URL directly.');
         } finally {
             setUploading(false);
         }
@@ -142,7 +172,8 @@ export const AdminCategories = ({ navigation }) => {
         setFormName('');
         setFormSlug('');
         setFormImageUrl('');
-        setFormDisplayOrder(String(categories.length + 1));
+        const maxOrder = categories.reduce((max, c) => Math.max(max, parseInt(c.display_order, 10) || 0), 0);
+        setFormDisplayOrder(String(maxOrder + 1));
         setFormIsActive(true);
         setModalVisible(true);
     };
@@ -185,12 +216,13 @@ export const AdminCategories = ({ navigation }) => {
                         slug,
                         image_url: formImageUrl.trim() || null,
                         display_order: displayOrder,
-                        is_active: formIsActive
+                        is_active: formIsActive === true
                     })
                     .eq('id', editingCategory.id);
 
                 if (error) throw error;
-                Alert.alert('Success', 'Category updated successfully.');
+                await invalidateClientCaches();
+                Alert.alert('Success', `Category "${formName.trim()}" updated successfully.`);
             } else {
                 // Insert
                 const { error } = await supabase
@@ -200,25 +232,26 @@ export const AdminCategories = ({ navigation }) => {
                         slug,
                         image_url: formImageUrl.trim() || null,
                         display_order: displayOrder,
-                        is_active: formIsActive
+                        is_active: formIsActive === true
                     }]);
 
                 if (error) throw error;
-                Alert.alert('Success', 'New category created successfully.');
+                await invalidateClientCaches();
+                Alert.alert('Success', `New category "${formName.trim()}" created and live!`);
             }
 
             setModalVisible(false);
             fetchCategoriesAndCounts();
         } catch (err) {
-            Alert.alert('Error Saving', err.message || 'Failed to save category.');
+            Alert.alert('Save Failed', err.message || 'Failed to save category. Please try again.');
         } finally {
             setSaving(false);
         }
     };
 
     const handleToggleStatus = async (cat) => {
-        const nextStatus = !cat.is_active;
-        // Optimistic update
+        const nextStatus = cat.is_active === false ? true : false;
+        // Optimistic UI update
         setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: nextStatus } : c));
 
         try {
@@ -230,7 +263,9 @@ export const AdminCategories = ({ navigation }) => {
             if (error) {
                 // Revert on error
                 setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: !nextStatus } : c));
-                Alert.alert('Error', 'Could not update category status.');
+                Alert.alert('Status Error', 'Could not update category visibility status.');
+            } else {
+                await invalidateClientCaches();
             }
         } catch (err) {
             console.error(err);
@@ -239,7 +274,7 @@ export const AdminCategories = ({ navigation }) => {
 
     const deleteCat = (cat) => {
         const count = productCounts[(cat.name || '').toLowerCase().trim()] || 0;
-        const warning = count > 0 ? ` This category currently has ${count} linked products.` : '';
+        const warning = count > 0 ? ` WARNING: This category currently has ${count} linked products.` : '';
 
         Alert.alert(
             'Delete Category',
@@ -253,9 +288,10 @@ export const AdminCategories = ({ navigation }) => {
                         const { error } = await supabase.from('categories').delete().eq('id', cat.id);
                         if (!error) {
                             setCategories(prev => prev.filter(c => c.id !== cat.id));
+                            await invalidateClientCaches();
                             Alert.alert('Deleted', 'Category removed successfully.');
                         } else {
-                            Alert.alert('Error', error.message);
+                            Alert.alert('Delete Failed', error.message);
                         }
                     }
                 }
@@ -274,33 +310,83 @@ export const AdminCategories = ({ navigation }) => {
         return true;
     });
 
+    // Stats
+    const totalCategories = categories.length;
+    const activeCategories = categories.filter(c => c.is_active !== false).length;
+    const inactiveCategories = categories.filter(c => c.is_active === false).length;
+    const totalLinkedProds = Object.values(productCounts).reduce((sum, n) => sum + n, 0);
+
     return (
         <View style={s.container}>
-            {/* Header Area */}
-            <View style={s.header}>
+            {/* Header Area with Luxury Navy & Gold styling */}
+            <LinearGradient
+                colors={[BRAND.navyDark, BRAND.navy, BRAND.navyLight]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={s.header}
+            >
                 <View style={s.headerTopRow}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={s.headerTitle}>
-                            Category Management
-                        </Text>
+                    {(onBack || navigation?.goBack) && (
+                        <TouchableOpacity
+                            onPress={onBack || (() => navigation?.goBack())}
+                            style={s.backBtn}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Ionicons name="arrow-back" size={20} color={BRAND.gold} />
+                        </TouchableOpacity>
+                    )}
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                        <View style={s.badgePill}>
+                            <Ionicons name="sparkles" size={11} color={BRAND.gold} />
+                            <Text style={s.badgePillTxt}>ABU MAFHAL TAXONOMY</Text>
+                        </View>
+                        <Text style={s.headerTitle}>Category Management</Text>
                         <Text style={s.headerSubtitle}>
-                            Manage marketplace departments, order priority & status
+                            Departments, order priority & live catalog propagation
                         </Text>
                     </View>
 
                     <TouchableOpacity
                         onPress={openAddModal}
                         style={s.addBtn}
-                        activeOpacity={0.8}
+                        activeOpacity={0.85}
                     >
-                        <Ionicons name="add" size={18} color="#FFFFFF" />
-                        <Text style={s.addBtnTxt}>Add Category</Text>
+                        <LinearGradient
+                            colors={[BRAND.gold, '#B8860B']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={s.addBtnGrad}
+                        >
+                            <Ionicons name="add" size={18} color="#071422" />
+                            <Text style={s.addBtnTxt}>Add New</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
+                </View>
+
+                {/* 4 Top KPI Metric Cards */}
+                <View style={s.kpiRow}>
+                    <View style={s.kpiCard}>
+                        <Text style={s.kpiValue}>{totalCategories}</Text>
+                        <Text style={s.kpiLabel}>Total</Text>
+                    </View>
+                    <View style={s.kpiCard}>
+                        <Text style={[s.kpiValue, { color: BRAND.emerald }]}>{activeCategories}</Text>
+                        <Text style={s.kpiLabel}>Active</Text>
+                    </View>
+                    <View style={s.kpiCard}>
+                        <Text style={[s.kpiValue, { color: BRAND.slate }]}>{inactiveCategories}</Text>
+                        <Text style={s.kpiLabel}>Inactive</Text>
+                    </View>
+                    <View style={s.kpiCard}>
+                        <Text style={[s.kpiValue, { color: BRAND.gold }]}>{totalLinkedProds}</Text>
+                        <Text style={s.kpiLabel}>Products</Text>
+                    </View>
                 </View>
 
                 {/* Search Bar */}
                 <View style={s.searchBar}>
-                    <Ionicons name="search" size={17} color={BRAND.slate} style={{ marginRight: 8 }} />
+                    <Ionicons name="search" size={16} color={BRAND.gold} style={{ marginRight: 8 }} />
                     <TextInput
                         placeholder="Search category name or slug..."
                         value={searchQuery}
@@ -318,15 +404,15 @@ export const AdminCategories = ({ navigation }) => {
                 {/* Filter Pills Row */}
                 <View style={s.filterPillsRow}>
                     {[
-                        { key: 'all', label: `All (${categories.length})` },
-                        { key: 'active', label: `Active (${categories.filter(c => c.is_active !== false).length})` },
-                        { key: 'inactive', label: `Inactive (${categories.filter(c => c.is_active === false).length})` },
+                        { key: 'all', label: `All (${totalCategories})` },
+                        { key: 'active', label: `Active (${activeCategories})` },
+                        { key: 'inactive', label: `Inactive (${inactiveCategories})` },
                     ].map(f => (
                         <TouchableOpacity
                             key={f.key}
                             onPress={() => setStatusFilter(f.key)}
                             style={[s.filterPill, statusFilter === f.key && s.filterPillActive]}
-                            activeOpacity={0.75}
+                            activeOpacity={0.8}
                         >
                             <Text style={[s.filterPillTxt, statusFilter === f.key && s.filterPillTxtActive]}>
                                 {f.label}
@@ -334,19 +420,23 @@ export const AdminCategories = ({ navigation }) => {
                         </TouchableOpacity>
                     ))}
                 </View>
-            </View>
+            </LinearGradient>
 
             {/* Content List */}
             {loading && !refreshing ? (
                 <View style={s.loadingCenter}>
-                    <ActivityIndicator size="large" color={BRAND.navy} />
+                    <ActivityIndicator size="large" color={BRAND.gold} />
                     <Text style={s.loadingTxt}>Loading taxonomy categories...</Text>
                 </View>
             ) : filteredCategories.length === 0 ? (
                 <View style={s.emptyBox}>
-                    <Ionicons name="layers-outline" size={44} color="#94A3B8" />
+                    <View style={s.emptyIconCircle}>
+                        <Ionicons name="layers-outline" size={38} color={BRAND.gold} />
+                    </View>
                     <Text style={s.emptyTitle}>No categories found</Text>
-                    <Text style={s.emptySub}>Try adjusting your search query or add a new category.</Text>
+                    <Text style={s.emptySub}>
+                        {searchQuery ? 'Try adjusting your search terms.' : 'Click "Add New" above to create your first category.'}
+                    </Text>
                 </View>
             ) : (
                 <FlatList
@@ -354,7 +444,12 @@ export const AdminCategories = ({ navigation }) => {
                     keyExtractor={item => String(item.id)}
                     contentContainerStyle={s.listContent}
                     refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchCategoriesAndCounts(); }} colors={[BRAND.sky, BRAND.navy]} />
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={() => { setRefreshing(true); fetchCategoriesAndCounts(); }}
+                            colors={[BRAND.gold, BRAND.navy]}
+                            tintColor={BRAND.gold}
+                        />
                     }
                     renderItem={({ item }) => {
                         const count = productCounts[(item.name || '').toLowerCase().trim()] || 0;
@@ -368,12 +463,12 @@ export const AdminCategories = ({ navigation }) => {
                                         {item.image_url ? (
                                             <Image source={{ uri: item.image_url }} style={s.catThumbImg} />
                                         ) : (
-                                            <Ionicons name="folder-outline" size={24} color={BRAND.sky} />
+                                            <Ionicons name="layers" size={24} color={BRAND.gold} />
                                         )}
                                     </View>
 
                                     {/* Info */}
-                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                    <View style={{ flex: 1, marginRight: 6 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                             <Text numberOfLines={1} style={s.catName}>
                                                 {item.name}
@@ -392,13 +487,13 @@ export const AdminCategories = ({ navigation }) => {
                                         {/* Micro stats */}
                                         <View style={s.catMetaRow}>
                                             <View style={s.metaItem}>
-                                                <Ionicons name="cube-outline" size={12} color={BRAND.slate} />
+                                                <Ionicons name="cube-outline" size={12} color={BRAND.gold} />
                                                 <Text style={s.metaTxt}>{count} products</Text>
                                             </View>
                                             <Text style={s.metaDot}>•</Text>
                                             <View style={s.metaItem}>
                                                 <Ionicons name="swap-vertical-outline" size={12} color={BRAND.slate} />
-                                                <Text style={s.metaTxt}>Order: #{item.display_order ?? 0}</Text>
+                                                <Text style={s.metaTxt}>Order #{item.display_order ?? 0}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -410,12 +505,12 @@ export const AdminCategories = ({ navigation }) => {
                                     <TouchableOpacity
                                         onPress={() => handleToggleStatus(item)}
                                         style={[s.toggleBtn, isActive ? s.toggleBtnActive : s.toggleBtnInactive]}
-                                        title="Toggle Active Status"
-                                        activeOpacity={0.7}
+                                        activeOpacity={0.75}
+                                        title={isActive ? 'Deactivate Category' : 'Activate Category'}
                                     >
                                         <Ionicons
-                                            name={isActive ? "checkmark-circle" : "ellipse-outline"}
-                                            size={15}
+                                            name={isActive ? "checkmark-circle" : "pause-circle-outline"}
+                                            size={17}
                                             color={isActive ? BRAND.emerald : BRAND.slate}
                                         />
                                     </TouchableOpacity>
@@ -424,7 +519,7 @@ export const AdminCategories = ({ navigation }) => {
                                     <TouchableOpacity
                                         onPress={() => openEditModal(item)}
                                         style={s.editBtn}
-                                        activeOpacity={0.7}
+                                        activeOpacity={0.75}
                                     >
                                         <Ionicons name="pencil" size={14} color={BRAND.navy} />
                                     </TouchableOpacity>
@@ -433,7 +528,7 @@ export const AdminCategories = ({ navigation }) => {
                                     <TouchableOpacity
                                         onPress={() => deleteCat(item)}
                                         style={s.delBtn}
-                                        activeOpacity={0.7}
+                                        activeOpacity={0.75}
                                     >
                                         <Ionicons name="trash-outline" size={14} color={BRAND.danger} />
                                     </TouchableOpacity>
@@ -454,19 +549,24 @@ export const AdminCategories = ({ navigation }) => {
                 <View style={s.modalBackdrop}>
                     <View style={s.modalSheet}>
                         {/* Modal Header */}
-                        <View style={s.modalHeader}>
+                        <LinearGradient
+                            colors={[BRAND.navyDark, BRAND.navy]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={s.modalHeader}
+                        >
                             <View>
                                 <Text style={s.modalTitle}>
                                     {editingCategory ? 'Edit Category' : 'Add New Category'}
                                 </Text>
                                 <Text style={s.modalSub}>
-                                    Configure department display details and live icon
+                                    Live marketplace department configuration
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={s.closeBtn}>
-                                <Ionicons name="close" size={20} color={BRAND.slate} />
+                                <Ionicons name="close" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
-                        </View>
+                        </LinearGradient>
 
                         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 18 }}>
                             {/* Image Preview & Picker */}
@@ -475,11 +575,11 @@ export const AdminCategories = ({ navigation }) => {
                                     {formImageUrl ? (
                                         <Image source={{ uri: formImageUrl }} style={s.imagePreviewImg} />
                                     ) : (
-                                        <Ionicons name="image-outline" size={36} color="#94A3B8" />
+                                        <Ionicons name="image-outline" size={34} color={BRAND.gold} />
                                     )}
                                     {uploading && (
                                         <View style={s.uploadingOverlay}>
-                                            <ActivityIndicator color="#FFFFFF" />
+                                            <ActivityIndicator color={BRAND.gold} />
                                         </View>
                                     )}
                                 </View>
@@ -489,11 +589,11 @@ export const AdminCategories = ({ navigation }) => {
                                         onPress={handlePickImage}
                                         disabled={uploading}
                                         style={s.pickImageBtn}
-                                        activeOpacity={0.8}
+                                        activeOpacity={0.85}
                                     >
-                                        <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />
+                                        <Ionicons name="cloud-upload-outline" size={15} color="#071422" />
                                         <Text style={s.pickImageTxt}>
-                                            {uploading ? 'Uploading...' : 'Choose Image'}
+                                            {uploading ? 'Uploading...' : 'Choose Image File'}
                                         </Text>
                                     </TouchableOpacity>
 
@@ -555,14 +655,14 @@ export const AdminCategories = ({ navigation }) => {
 
                             {/* Active Toggle */}
                             <View style={s.switchFieldRow}>
-                                <View>
-                                    <Text style={s.fieldLabel}>Active Status</Text>
-                                    <Text style={s.switchSubTxt}>Visible to customers on the app & web</Text>
+                                <View style={{ flex: 1, paddingRight: 12 }}>
+                                    <Text style={s.fieldLabel}>Active Visibility</Text>
+                                    <Text style={s.switchSubTxt}>Publish live on customer mobile app & website</Text>
                                 </View>
                                 <Switch
                                     value={formIsActive}
                                     onValueChange={setFormIsActive}
-                                    trackColor={{ false: '#CBD5E1', true: BRAND.sky }}
+                                    trackColor={{ false: '#CBD5E1', true: BRAND.emerald }}
                                     thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
                                 />
                             </View>
@@ -572,18 +672,25 @@ export const AdminCategories = ({ navigation }) => {
                                 onPress={handleSave}
                                 disabled={saving}
                                 style={s.submitBtn}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
                             >
-                                {saving ? (
-                                    <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
-                                        <Text style={s.submitBtnTxt}>
-                                            {editingCategory ? 'Update Category' : 'Create Category'}
-                                        </Text>
-                                    </>
-                                )}
+                                <LinearGradient
+                                    colors={[BRAND.gold, '#B8860B']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={s.submitBtnGrad}
+                                >
+                                    {saving ? (
+                                        <ActivityIndicator color="#071422" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="checkmark-circle" size={18} color="#071422" />
+                                            <Text style={s.submitBtnTxt}>
+                                                {editingCategory ? 'Update Category' : 'Create & Publish Category'}
+                                            </Text>
+                                        </>
+                                    )}
+                                </LinearGradient>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
@@ -599,59 +706,121 @@ const s = StyleSheet.create({
         backgroundColor: '#F8FAFC',
     },
     header: {
-        padding: 16,
-        backgroundColor: '#FFFFFF',
+        paddingTop: 16,
+        paddingHorizontal: 16,
+        paddingBottom: 14,
         borderBottomWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: BRAND.borderGold,
     },
     headerTopRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 14,
+    },
+    backBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+        borderWidth: 1,
+        borderColor: BRAND.borderGold,
+    },
+    badgePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        alignSelf: 'flex-start',
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 0.8,
+        borderColor: 'rgba(217, 167, 58, 0.4)',
+        marginBottom: 4,
+    },
+    badgePillTxt: {
+        color: BRAND.gold,
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 0.6,
     },
     headerTitle: {
-        fontSize: 18,
+        fontSize: 19,
         fontWeight: '900',
-        color: BRAND.navy,
+        color: '#FFFFFF',
+        letterSpacing: 0.3,
     },
     headerSubtitle: {
-        color: BRAND.slate,
-        fontSize: 11.5,
+        color: '#94A3B8',
+        fontSize: 11,
         marginTop: 2,
     },
     addBtn: {
+        borderRadius: 12,
+        overflow: 'hidden',
+        elevation: 3,
+        shadowColor: BRAND.gold,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+    },
+    addBtnGrad: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        backgroundColor: BRAND.navy,
         paddingHorizontal: 13,
-        paddingVertical: 8,
-        borderRadius: 12,
-        shadowColor: BRAND.navy,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 4,
-        elevation: 2,
+        paddingVertical: 9,
     },
     addBtnTxt: {
-        color: '#FFFFFF',
-        fontWeight: '800',
+        color: '#071422',
+        fontWeight: '900',
         fontSize: 12,
+    },
+    kpiRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 12,
+    },
+    kpiCard: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.07)',
+        borderRadius: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 6,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    kpiValue: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    kpiLabel: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: '#94A3B8',
+        marginTop: 1,
+        textTransform: 'uppercase',
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         paddingHorizontal: 12,
         height: 42,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderWidth: 1.5,
+        borderColor: BRAND.borderGold,
     },
     searchInput: {
         flex: 1,
-        fontSize: 13,
+        fontSize: 12.5,
         color: BRAND.slateDark,
         fontWeight: '600',
     },
@@ -662,21 +831,25 @@ const s = StyleSheet.create({
         marginTop: 10,
     },
     filterPill: {
-        backgroundColor: '#F1F5F9',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         paddingHorizontal: 12,
         paddingVertical: 5,
-        borderRadius: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
     },
     filterPillActive: {
-        backgroundColor: BRAND.navy,
+        backgroundColor: BRAND.gold,
+        borderColor: BRAND.gold,
     },
     filterPillTxt: {
         fontSize: 11,
         fontWeight: '700',
-        color: BRAND.slate,
+        color: '#CBD5E1',
     },
     filterPillTxtActive: {
-        color: '#FFFFFF',
+        color: '#071422',
+        fontWeight: '900',
     },
     loadingCenter: {
         flex: 1,
@@ -694,11 +867,19 @@ const s = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
     },
+    emptyIconCircle: {
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+    },
     emptyTitle: {
-        fontSize: 15,
-        fontWeight: '800',
+        fontSize: 16,
+        fontWeight: '900',
         color: BRAND.slateDark,
-        marginTop: 10,
     },
     emptySub: {
         fontSize: 12,
@@ -722,7 +903,7 @@ const s = StyleSheet.create({
         justifyContent: 'space-between',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
+        shadowOpacity: 0.04,
         shadowRadius: 4,
         elevation: 1,
     },
@@ -737,8 +918,8 @@ const s = StyleSheet.create({
         height: 52,
         borderRadius: 14,
         backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderWidth: 1.2,
+        borderColor: BRAND.borderGold,
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
@@ -761,7 +942,7 @@ const s = StyleSheet.create({
     statusPill: {
         paddingHorizontal: 6,
         paddingVertical: 1.5,
-        borderRadius: 6,
+        borderRadius: 5,
     },
     statusPillActive: {
         backgroundColor: '#ECFDF5',
@@ -770,7 +951,7 @@ const s = StyleSheet.create({
         backgroundColor: '#F1F5F9',
     },
     statusPillTxt: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '900',
     },
     statusPillTxtActive: {
@@ -836,38 +1017,40 @@ const s = StyleSheet.create({
     // Modal
     modalBackdrop: {
         flex: 1,
-        backgroundColor: 'rgba(10, 25, 47, 0.65)',
+        backgroundColor: 'rgba(7, 20, 34, 0.75)',
         justifyContent: 'flex-end',
     },
     modalSheet: {
         backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
+        borderTopLeftRadius: 26,
+        borderTopRightRadius: 26,
         maxHeight: '90%',
+        overflow: 'hidden',
     },
     modalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 18,
+        paddingHorizontal: 18,
+        paddingVertical: 16,
         borderBottomWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: BRAND.borderGold,
     },
     modalTitle: {
-        fontSize: 17,
+        fontSize: 16.5,
         fontWeight: '900',
-        color: BRAND.slateDark,
+        color: '#FFFFFF',
     },
     modalSub: {
-        fontSize: 11.5,
-        color: BRAND.slate,
+        fontSize: 11,
+        color: '#94A3B8',
         marginTop: 2,
     },
     closeBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#F1F5F9',
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(255, 255, 255, 0.12)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -887,8 +1070,8 @@ const s = StyleSheet.create({
         height: 72,
         borderRadius: 16,
         backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#CBD5E1',
+        borderWidth: 1.5,
+        borderColor: BRAND.borderGold,
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
@@ -900,7 +1083,7 @@ const s = StyleSheet.create({
     },
     uploadingOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.4)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -909,15 +1092,15 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        backgroundColor: BRAND.navy,
+        backgroundColor: BRAND.gold,
         paddingHorizontal: 14,
         paddingVertical: 8,
         borderRadius: 10,
     },
     pickImageTxt: {
-        color: '#FFFFFF',
+        color: '#071422',
         fontSize: 12,
-        fontWeight: '800',
+        fontWeight: '900',
     },
     imageHintTxt: {
         fontSize: 10.5,
@@ -940,7 +1123,7 @@ const s = StyleSheet.create({
         fontSize: 13,
         color: BRAND.slateDark,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#CBD5E1',
         fontWeight: '600',
     },
     switchFieldRow: {
@@ -956,23 +1139,25 @@ const s = StyleSheet.create({
         marginTop: 1,
     },
     submitBtn: {
+        borderRadius: 14,
+        overflow: 'hidden',
+        marginTop: 6,
+        marginBottom: 26,
+        elevation: 3,
+        shadowColor: BRAND.gold,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+    },
+    submitBtnGrad: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        backgroundColor: BRAND.navy,
         paddingVertical: 14,
-        borderRadius: 14,
-        marginTop: 6,
-        marginBottom: 24,
-        shadowColor: BRAND.navy,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 3,
     },
     submitBtnTxt: {
-        color: '#FFFFFF',
+        color: '#071422',
         fontSize: 14,
         fontWeight: '900',
     },
