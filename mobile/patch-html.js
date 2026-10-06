@@ -31,51 +31,7 @@ const fontConfigs = [
   },
   {
     fileName: 'MaterialCommunityIcons.ttf',
-    families: ['MaterialCommunityIcons', 'material-community', 'Material Community Icons']
-  },
-  {
-    fileName: 'MaterialIcons.ttf',
-    families: ['MaterialIcons', 'material', 'Material Icons']
-  },
-  {
-    fileName: 'Feather.ttf',
-    families: ['Feather', 'feather']
-  },
-  {
-    fileName: 'FontAwesome.ttf',
-    families: ['FontAwesome', 'fontawesome']
-  },
-  {
-    fileName: 'FontAwesome5_Solid.ttf',
-    families: ['FontAwesome5Free-Solid', 'FontAwesome5_Solid', 'FontAwesome5Solid']
-  },
-  {
-    fileName: 'FontAwesome5_Regular.ttf',
-    families: ['FontAwesome5Free-Regular', 'FontAwesome5_Regular', 'FontAwesome5Regular']
-  },
-  {
-    fileName: 'FontAwesome5_Brands.ttf',
-    families: ['FontAwesome5Brands-Regular', 'FontAwesome5_Brands', 'FontAwesome5Free-Brand']
-  },
-  {
-    fileName: 'AntDesign.ttf',
-    families: ['AntDesign', 'anticon']
-  },
-  {
-    fileName: 'Entypo.ttf',
-    families: ['Entypo', 'entypo']
-  },
-  {
-    fileName: 'EvilIcons.ttf',
-    families: ['EvilIcons', 'evilicons']
-  },
-  {
-    fileName: 'Octicons.ttf',
-    families: ['Octicons', 'octicons']
-  },
-  {
-    fileName: 'SimpleLineIcons.ttf',
-    families: ['SimpleLineIcons', 'simple-line-icons']
+    families: ['MaterialCommunityIcons']
   }
 ];
 
