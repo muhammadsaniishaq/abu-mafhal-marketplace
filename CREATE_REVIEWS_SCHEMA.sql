@@ -16,11 +16,15 @@ CREATE TABLE IF NOT EXISTS public.reviews (
     comment TEXT,
     images JSONB DEFAULT '[]'::jsonb,
     user_name TEXT,
+    user_avatar TEXT,
     status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'rejected')),
     helpful INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Ensure user_avatar column exists if table was already created
+ALTER TABLE IF EXISTS public.reviews ADD COLUMN IF NOT EXISTS user_avatar TEXT;
 
 -- 2. CREATE INDEXES FOR OPTIMAL PERFORMANCE
 CREATE INDEX IF NOT EXISTS idx_reviews_product_id ON public.reviews(product_id);

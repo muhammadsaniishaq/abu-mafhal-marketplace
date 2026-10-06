@@ -36,6 +36,38 @@ const saveFallbackReviews = async (reviewsList) => {
 };
 
 /**
+ * Helper to enrich reviews with live profile avatars & full names
+ */
+const enrichReviewsWithProfiles = async (reviews) => {
+    if (!Array.isArray(reviews) || reviews.length === 0) return reviews || [];
+    try {
+        const userIds = [...new Set(reviews.filter(r => r.user_id).map(r => r.user_id))];
+        if (userIds.length === 0) return reviews;
+
+        const { data: profs, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, username')
+            .in('id', userIds);
+
+        if (error || !profs) return reviews;
+
+        const map = {};
+        profs.forEach(p => { map[p.id] = p; });
+
+        return reviews.map(r => {
+            const profile = r.user_id ? map[r.user_id] : null;
+            return {
+                ...r,
+                user_name: profile?.full_name || profile?.username || r.user_name || 'Verified Customer',
+                user_avatar: profile?.avatar_url || r.user_avatar || null
+            };
+        });
+    } catch (_) {
+        return reviews;
+    }
+};
+
+/**
  * Helper to compute average and rating distribution
  */
 const calculateReviewStats = (reviewsList) => {
@@ -78,7 +110,7 @@ const calculateReviewStats = (reviewsList) => {
 
 export const reviewsService = {
     /**
-     * Fetch approved reviews for a specific product with full breakdown stats
+     * Fetch approved reviews for a specific product with full breakdown stats and live user avatars
      */
     fetchProductReviews: async (productId) => {
         if (!productId) {
@@ -101,8 +133,9 @@ export const reviewsService = {
                 .order('created_at', { ascending: false });
 
             if (!error && Array.isArray(data)) {
-                const stats = calculateReviewStats(data);
-                return { reviews: data, ...stats };
+                const enriched = await enrichReviewsWithProfiles(data);
+                const stats = calculateReviewStats(enriched);
+                return { reviews: enriched, ...stats };
             }
         } catch (_) {}
 
@@ -111,8 +144,9 @@ export const reviewsService = {
         const filtered = fallback.filter(
             r => String(r.product_id) === String(productId) && (r.status === 'approved' || !r.status)
         );
-        const stats = calculateReviewStats(filtered);
-        return { reviews: filtered, ...stats };
+        const enrichedFallback = await enrichReviewsWithProfiles(filtered);
+        const stats = calculateReviewStats(enrichedFallback);
+        return { reviews: enrichedFallback, ...stats };
     },
 
     /**
@@ -138,8 +172,9 @@ export const reviewsService = {
                 .order('created_at', { ascending: false });
 
             if (!error && Array.isArray(data)) {
-                const stats = calculateReviewStats(data);
-                return { reviews: data, ...stats };
+                const enriched = await enrichReviewsWithProfiles(data);
+                const stats = calculateReviewStats(enriched);
+                return { reviews: enriched, ...stats };
             }
         } catch (_) {}
 
@@ -147,15 +182,15 @@ export const reviewsService = {
         const filtered = fallback.filter(
             r => String(r.driver_id) === String(driverId) && (r.status === 'approved' || !r.status)
         );
-        const stats = calculateReviewStats(filtered);
-        return { reviews: filtered, ...stats };
+        const enrichedFallback = await enrichReviewsWithProfiles(filtered);
+        const stats = calculateReviewStats(enrichedFallback);
+        return { reviews: enrichedFallback, ...stats };
     },
 
     /**
-     * Submit a review (Product or Driver) with automatic UUID generation
+     * Submit a review (Product or Driver) with automatic profile linking & avatar
      */
     submitReview: async (reviewPayload) => {
-        // Prepare database-safe payload (omits explicit id so Postgres generates valid UUID)
         const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
         const dbPayload = {
@@ -175,35 +210,48 @@ export const reviewsService = {
 
         let savedRecord = null;
 
-        // 1. Insert directly to Supabase 'reviews' table
+        // 1. Try inserting to Supabase 'reviews' table
         try {
-            const { data, error } = await supabase
-                .from('reviews')
-                .insert(dbPayload)
-                .select();
+            // First try with user_avatar if provided
+            let insertObj = { ...dbPayload };
+            if (reviewPayload.user_avatar) {
+                insertObj.user_avatar = reviewPayload.user_avatar;
+            }
+
+            let { data, error } = await supabase.from('reviews').insert(insertObj).select();
+
+            // If user_avatar column doesn't exist yet on SQL table (PGRST204), retry without it
+            if (error && error.code === 'PGRST204') {
+                delete insertObj.user_avatar;
+                const retry = await supabase.from('reviews').insert(insertObj).select();
+                data = retry.data;
+                error = retry.error;
+            }
 
             if (!error && data && data.length > 0) {
-                savedRecord = data[0];
-            } else if (error) {
-                console.warn('ReviewsService: Direct DB insert notice:', error.message);
+                savedRecord = {
+                    ...data[0],
+                    user_avatar: reviewPayload.user_avatar || data[0].user_avatar || null
+                };
             }
         } catch (err) {
-            console.warn('ReviewsService: DB insert exception:', err);
+            console.warn('ReviewsService: Direct DB insert exception:', err);
         }
 
-        // 2. If direct insert couldn't return record, construct one for state and fallback
+        // 2. Fallback memory record
         if (!savedRecord) {
             savedRecord = {
                 ...dbPayload,
                 id: 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
                 product_id: reviewPayload.product_id || null,
                 driver_id: reviewPayload.driver_id || null,
+                user_avatar: reviewPayload.user_avatar || null,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
         }
 
-        // 3. Always mirror to app_settings as secondary layer
+        // 3. Mirror to app_settings as fallback persistence
         try {
             const existing = await getFallbackReviews();
             const updated = [savedRecord, ...existing.filter(r => r.id !== savedRecord.id)];
@@ -224,7 +272,6 @@ export const reviewsService = {
                 .from('reviews')
                 .select(`
                     *,
-                    profiles(full_name, email, username),
                     drivers(name),
                     products(name)
                 `)
@@ -240,7 +287,8 @@ export const reviewsService = {
 
             const { data, error } = await query;
             if (!error && Array.isArray(data)) {
-                return data;
+                list = await enrichReviewsWithProfiles(data);
+                return list;
             }
         } catch (_) {}
 
@@ -268,9 +316,10 @@ export const reviewsService = {
             list = list.map(r => ({
                 ...r,
                 products: r.product_id && prodMap[r.product_id] ? { name: prodMap[r.product_id] } : null,
-                drivers: r.driver_id && driverMap[r.driver_id] ? { name: driverMap[r.driver_id] } : null,
-                profiles: { full_name: r.user_name || 'Customer' }
+                drivers: r.driver_id && driverMap[r.driver_id] ? { name: driverMap[r.driver_id] } : null
             }));
+
+            list = await enrichReviewsWithProfiles(list);
         } catch (_) {}
 
         if (statusFilter !== 'all') {
@@ -322,15 +371,18 @@ export const reviewsService = {
      */
     markHelpful: async (reviewId) => {
         try {
-            await supabase.rpc('increment_review_helpful', { review_id: reviewId });
-        } catch (_) {
-            try {
-                const { data } = await supabase.from('reviews').select('helpful').eq('id', reviewId).maybeSingle();
-                if (data) {
-                    await supabase.from('reviews').update({ helpful: (data.helpful || 0) + 1 }).eq('id', reviewId);
-                }
-            } catch (_) {}
-        }
+            const { data } = await supabase.from('reviews').select('helpful').eq('id', reviewId).maybeSingle();
+            if (data) {
+                await supabase.from('reviews').update({ helpful: (data.helpful || 0) + 1 }).eq('id', reviewId);
+            }
+        } catch (_) {}
+
+        try {
+            const existing = await getFallbackReviews();
+            const updated = existing.map(r => r.id === reviewId ? { ...r, helpful: (r.helpful || 0) + 1 } : r);
+            await saveFallbackReviews(updated);
+        } catch (_) {}
+
         return true;
     }
 };

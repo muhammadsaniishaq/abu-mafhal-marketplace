@@ -239,6 +239,8 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
         distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
         percentages: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
     });
+    const [helpfulVotedIds, setHelpfulVotedIds] = useState(new Set());
+    const [userProfileData, setUserProfileData] = useState(null);
     const [writeReviewModal, setWriteReviewModal] = useState(false);
     const [submittingReview, setSubmittingReview] = useState(false);
     const [userReviewRating, setUserReviewRating] = useState(5);
@@ -364,6 +366,22 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
         } catch (_) {}
     };
 
+    // ── Load Saved Helpful Votes (Single Vote Enforcement) ───────────────────
+    useEffect(() => {
+        const loadHelpfulVotes = async () => {
+            try {
+                const stored = await AsyncStorage.getItem('@abumafhal_helpful_voted');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) {
+                        setHelpfulVotedIds(new Set(parsed));
+                    }
+                }
+            } catch (_) {}
+        };
+        loadHelpfulVotes();
+    }, []);
+
     // ── Fetch Real Reviews ────────────────────────────────────────────────────
     const fetchReviews = async (currentId) => {
         const targetId = currentId || product?.id || productId || resolveProductId(route);
@@ -390,19 +408,52 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
             if (authUser) {
-                const defName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || '';
-                if (!userReviewName && defName) setUserReviewName(defName);
+                let prof = null;
+                try {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, username, avatar_url')
+                        .eq('id', authUser.id)
+                        .maybeSingle();
+                    prof = data;
+                } catch (_) {}
+
+                const realName = prof?.full_name || prof?.username || authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Verified Customer';
+                const realAvatar = prof?.avatar_url || authUser?.user_metadata?.avatar_url || null;
+
+                setUserProfileData({
+                    userId: authUser.id,
+                    name: realName,
+                    avatar: realAvatar
+                });
+                setUserReviewName(realName);
             }
         } catch (_) {}
         setWriteReviewModal(true);
     };
 
     const handleMarkHelpful = async (revId) => {
+        if (!revId) return;
+        if (helpfulVotedIds.has(revId)) {
+            showToast('Kayi liking a baya! (Already voted helpful) 👍');
+            return;
+        }
+
+        // Lock vote immediately so user cannot multi-click (1 vote per user)
+        const updated = new Set(helpfulVotedIds);
+        updated.add(revId);
+        setHelpfulVotedIds(updated);
+        try {
+            await AsyncStorage.setItem('@abumafhal_helpful_voted', JSON.stringify([...updated]));
+        } catch (_) {}
+
         try {
             await reviewsService.markHelpful(revId);
             setReviewsList(prev => prev.map(r => r.id === revId ? { ...r, helpful: (r.helpful || 0) + 1 } : r));
-            showToast('Thank you for your feedback! 👍');
-        } catch (_) {}
+            showToast('Mun gode da ra\'ayinka! (Thank you!) 👍');
+        } catch (_) {
+            setReviewsList(prev => prev.map(r => r.id === revId ? { ...r, helpful: (r.helpful || 0) + 1 } : r));
+        }
     };
 
     const handleSubmitProductReview = async () => {
@@ -414,13 +465,15 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
             const fallbackName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Verified Customer';
-            const finalName = userReviewName.trim() || fallbackName;
+            const finalName = userProfileData?.name || userReviewName.trim() || fallbackName;
+            const finalAvatar = userProfileData?.avatar || authUser?.user_metadata?.avatar_url || null;
             const targetProductId = product?.id || productId || resolveProductId(route);
 
             const result = await reviewsService.submitReview({
                 product_id: targetProductId,
-                user_id: authUser?.id || null,
+                user_id: authUser?.id || userProfileData?.userId || null,
                 user_name: finalName,
+                user_avatar: finalAvatar,
                 rating: userReviewRating,
                 title: userReviewTitle.trim() || 'Verified Product Review',
                 comment: userReviewComment.trim(),
@@ -1457,11 +1510,19 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                                     <View key={rev.id || ('rev-' + rIdx)} style={s.modernReviewCard}>
                                         <View style={s.modernRevHeader}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                <View style={s.modernAvatarCircle}>
-                                                    <Text style={s.modernAvatarTxt}>
-                                                        {(rev.user_name || 'U').charAt(0).toUpperCase()}
-                                                    </Text>
-                                                </View>
+                                                {rev.user_avatar ? (
+                                                    <Image
+                                                        source={{ uri: rev.user_avatar }}
+                                                        style={s.modernAvatarImg}
+                                                        resizeMode="cover"
+                                                    />
+                                                ) : (
+                                                    <View style={s.modernAvatarCircle}>
+                                                        <Text style={s.modernAvatarTxt}>
+                                                            {(rev.user_name || 'U').charAt(0).toUpperCase()}
+                                                        </Text>
+                                                    </View>
+                                                )}
                                                 <View>
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                         <Text style={s.modernRevUserName}>{rev.user_name || 'Verified Customer'}</Text>
@@ -1496,14 +1557,25 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                                         ) : null}
 
                                         <View style={s.modernRevFooter}>
-                                            <TouchableOpacity
-                                                style={s.helpfulBtn}
-                                                onPress={() => handleMarkHelpful(rev.id)}
-                                                activeOpacity={0.7}
-                                            >
-                                                <Ionicons name="thumbs-up-outline" size={13} color="#64748B" />
-                                                <Text style={s.helpfulBtnTxt}>Helpful ({rev.helpful || 0})</Text>
-                                            </TouchableOpacity>
+                                            {(() => {
+                                                const isVoted = helpfulVotedIds.has(rev.id);
+                                                return (
+                                                    <TouchableOpacity
+                                                        style={[s.helpfulBtn, isVoted && s.helpfulBtnActive]}
+                                                        onPress={() => handleMarkHelpful(rev.id)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <Ionicons
+                                                            name={isVoted ? "thumbs-up" : "thumbs-up-outline"}
+                                                            size={13}
+                                                            color={isVoted ? "#059669" : "#64748B"}
+                                                        />
+                                                        <Text style={[s.helpfulBtnTxt, isVoted && s.helpfulBtnTxtActive]}>
+                                                            {isVoted ? `Helpful (${rev.helpful || 0}) ✓` : `Helpful (${rev.helpful || 0})`}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })()}
                                         </View>
                                     </View>
                                 ))}
@@ -1742,16 +1814,46 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                                 ))}
                             </View>
 
-                            {/* Name Input */}
-                            <Text style={s.fieldLabel}>Your Name (Displayed on review)</Text>
-                            <TextInput
-                                style={s.modernInputField}
-                                placeholder="e.g. Alhaji Sani / Fatima"
-                                placeholderTextColor="#94A3B8"
-                                value={userReviewName}
-                                onChangeText={setUserReviewName}
-                                maxLength={50}
-                            />
+                            {/* Reviewer Identity / Name Input */}
+                            {userProfileData ? (
+                                <View style={s.reviewerIdentityCard}>
+                                    {userProfileData.avatar ? (
+                                        <Image
+                                            source={{ uri: userProfileData.avatar }}
+                                            style={s.identityAvatarImg}
+                                            resizeMode="cover"
+                                        />
+                                    ) : (
+                                        <View style={s.identityAvatarCircle}>
+                                            <Text style={s.identityAvatarTxt}>
+                                                {(userProfileData.name || 'U').charAt(0).toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={s.identityNameTxt}>{userProfileData.name}</Text>
+                                            <View style={s.identityVerifiedPill}>
+                                                <Ionicons name="checkmark-circle" size={11} color="#059669" />
+                                                <Text style={s.identityVerifiedPillTxt}>Linked Profile</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={s.identityStatusTxt}>Posting automatically as verified member</Text>
+                                    </View>
+                                </View>
+                            ) : (
+                                <>
+                                    <Text style={s.fieldLabel}>Your Name (Displayed on review)</Text>
+                                    <TextInput
+                                        style={s.modernInputField}
+                                        placeholder="e.g. Alhaji Sani / Fatima"
+                                        placeholderTextColor="#94A3B8"
+                                        value={userReviewName}
+                                        onChangeText={setUserReviewName}
+                                        maxLength={50}
+                                    />
+                                </>
+                            )}
 
                             {/* Title Input */}
                             <Text style={s.fieldLabel}>Review Headline</Text>
@@ -2971,10 +3073,77 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
+    helpfulBtnActive: {
+        backgroundColor: '#ECFDF5',
+        borderColor: '#A7F3D0',
+    },
     helpfulBtnTxt: {
         fontSize: 11,
         fontWeight: '600',
         color: '#64748B',
+    },
+    helpfulBtnTxtActive: {
+        color: '#059669',
+        fontWeight: '700',
+    },
+    modernAvatarImg: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#E2E8F0',
+    },
+    reviewerIdentityCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 16,
+    },
+    identityAvatarImg: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#E2E8F0',
+    },
+    identityAvatarCircle: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: BRAND.navy,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    identityAvatarTxt: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    identityNameTxt: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: BRAND.navy,
+    },
+    identityVerifiedPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    identityVerifiedPillTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#059669',
+    },
+    identityStatusTxt: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2,
     },
 
     // ── Empty State Card ──

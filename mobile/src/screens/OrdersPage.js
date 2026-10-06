@@ -410,6 +410,7 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             const reviewData = {
                 user_id: user?.id || user?.sub,
                 user_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Verified Customer',
+                user_avatar: user?.user_metadata?.avatar_url || null,
                 product_id: isDriver ? null : reviewModal.item?.product_id,
                 driver_id: isDriver ? reviewModal.order?.driver_id : null,
                 order_id: reviewModal.order?.id,

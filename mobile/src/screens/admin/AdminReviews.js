@@ -88,7 +88,8 @@ export const AdminReviews = () => {
     );
 
     const renderItem = ({ item }) => {
-        const userName = item.profiles?.full_name || item.profiles?.username || item.profiles?.email || 'Anonymous User';
+        const userName = item.user_name || item.profiles?.full_name || item.profiles?.username || item.profiles?.email || 'Customer';
+        const userAvatar = item.user_avatar || item.profiles?.avatar_url || null;
         const targetName = item.review_type === 'driver'
             ? (item.drivers?.name || 'Delivery Driver')
             : (item.products?.name || 'Store Product');
@@ -96,18 +97,27 @@ export const AdminReviews = () => {
         return (
             <View style={s.card}>
                 <View style={s.cardHeader}>
-                    <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <Text style={s.userName} numberOfLines={1}>{userName}</Text>
-                            <View style={[s.typeBadge, { backgroundColor: item.review_type === 'driver' ? '#FFFBEB' : '#EFF6FF' }]}>
-                                <Text style={[s.typeBadgeText, { color: item.review_type === 'driver' ? '#D97706' : '#2563EB' }]}>
-                                    {item.review_type === 'driver' ? 'DRIVER' : 'PRODUCT'}
-                                </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10, paddingRight: 8 }}>
+                        {userAvatar ? (
+                            <Image source={{ uri: userAvatar }} style={s.avatarImg} />
+                        ) : (
+                            <View style={s.avatarCircle}>
+                                <Text style={s.avatarCircleTxt}>{(userName || 'U').charAt(0).toUpperCase()}</Text>
                             </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <Text style={s.userName} numberOfLines={1}>{userName}</Text>
+                                <View style={[s.typeBadge, { backgroundColor: item.review_type === 'driver' ? '#FFFBEB' : '#EFF6FF' }]}>
+                                    <Text style={[s.typeBadgeText, { color: item.review_type === 'driver' ? '#D97706' : '#2563EB' }]}>
+                                        {item.review_type === 'driver' ? 'DRIVER' : 'PRODUCT'}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Text numberOfLines={1} style={s.targetInfo}>
+                                For: <Text style={{ color: NAVY, fontWeight: '700' }}>{targetName}</Text>
+                            </Text>
                         </View>
-                        <Text numberOfLines={1} style={s.targetInfo}>
-                            For: <Text style={{ color: NAVY, fontWeight: '700' }}>{targetName}</Text>
-                        </Text>
                     </View>
                     {renderStars(item.rating || 5)}
                 </View>
@@ -338,6 +348,25 @@ const s = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         marginBottom: 10
+    },
+    avatarImg: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#E2E8F0',
+    },
+    avatarCircle: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: NAVY,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarCircleTxt: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontWeight: '800',
     },
     userName: {
         fontWeight: '800',
