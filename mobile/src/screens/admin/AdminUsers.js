@@ -14,121 +14,140 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminUserDetails } from './AdminUserDetails';
 import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-const ROLES = {
-    admin: { label: 'ADMIN', color: '#7C3AED', icon: 'shield-checkmark', bg: '#F5F3FF' },
-    vendor: { label: 'VENDOR', color: '#EA580C', icon: 'storefront', bg: '#FFF7ED' },
-    driver: { label: 'DRIVER', color: '#0EA5E9', icon: 'bicycle', bg: '#F0F9FF' },
-    customer: { label: 'CUSTOMER', color: '#059669', icon: 'person', bg: '#ECFDF5' },
+// ─── Theme Tokens (Deep Luxury Navy & Gold) ──────────────────────────────────
+const C = {
+    bgDark: '#071422',
+    bgCardDark: '#0B1B2F',
+    navyMuted: '#132844',
+    gold: '#D9A73A',
+    goldLight: '#F3C96A',
+    goldMuted: 'rgba(217, 167, 58, 0.15)',
+    emerald: '#10B981',
+    emeraldBg: 'rgba(16, 185, 129, 0.12)',
+    crimson: '#EF4444',
+    crimsonBg: 'rgba(239, 68, 68, 0.12)',
+    sky: '#0EA5E9',
+    skyBg: 'rgba(14, 165, 233, 0.12)',
+    purple: '#8B5CF6',
+    purpleBg: 'rgba(139, 92, 246, 0.12)',
+    amber: '#F59E0B',
+    amberBg: 'rgba(245, 158, 11, 0.12)',
+    textPrimary: '#FFFFFF',
+    textSecondary: '#94A3B8',
+    borderDark: 'rgba(217, 167, 58, 0.18)',
+    borderSubtle: 'rgba(255, 255, 255, 0.08)',
 };
-const rc = (role) => ROLES[role] || ROLES.customer;
 
+// ─── Roles Configuration ─────────────────────────────────────────────────────
+const ROLES = {
+    admin: { label: 'ADMIN', color: '#A855F7', icon: 'shield-checkmark', bg: 'rgba(168, 85, 247, 0.16)' },
+    vendor: { label: 'VENDOR', color: '#F97316', icon: 'storefront', bg: 'rgba(249, 115, 22, 0.16)' },
+    driver: { label: 'DRIVER', color: '#0EA5E9', icon: 'bicycle', bg: 'rgba(14, 165, 233, 0.16)' },
+    customer: { label: 'CUSTOMER', color: '#10B981', icon: 'person', bg: 'rgba(16, 185, 129, 0.16)' },
+};
+const getRoleCfg = (role) => ROLES[role] || ROLES.customer;
+
+// ─── Spending Tiers ──────────────────────────────────────────────────────────
 const TIERS = [
-    { min: 1000000, label: '💎 Diamond', color: '#7C3AED' },
-    { min: 250000, label: '🥇 Gold', color: '#D97706' },
-    { min: 50000, label: '🥈 Silver', color: '#64748B' },
-    { min: 0, label: '🥉 Bronze', color: '#92400E' },
+    { min: 1000000, label: '💎 Diamond VIP', color: '#A855F7', bg: 'rgba(168, 85, 247, 0.15)' },
+    { min: 250000, label: '🥇 Gold Tier', color: '#D9A73A', bg: 'rgba(217, 167, 58, 0.15)' },
+    { min: 50000, label: '🥈 Silver Tier', color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.15)' },
+    { min: 0, label: '🥉 Bronze Tier', color: '#D97706', bg: 'rgba(217, 119, 6, 0.15)' },
 ];
-const getTier = (n = 0) => TIERS.find(t => n >= t.min) || TIERS[3];
-const fmtAmt = (n) => { if (!n) return '₦0'; if (n >= 1e6) return `₦${(n / 1e6).toFixed(1)}M`; if (n >= 1e3) return `₦${(n / 1e3).toFixed(0)}K`; return `₦${n}`; };
-const timeAgo = (d) => {
-    if (!d) return 'Never';
-    const s = Math.floor((Date.now() - new Date(d)) / 1000);
-    if (s < 60) return 'Just now';
-    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-    return `${Math.floor(s / 86400)}d ago`;
+const getTier = (spend = 0) => TIERS.find(t => spend >= t.min) || TIERS[3];
+
+const fmtAmt = (val) => {
+    if (!val || isNaN(val)) return '₦0';
+    const num = Number(val);
+    if (num >= 1e6) return `₦${(num / 1e6).toFixed(1)}M`;
+    if (num >= 1e3) return `₦${(num / 1e3).toLocaleString('en-US', { maximumFractionDigits: 1 })}K`;
+    return `₦${num.toLocaleString('en-US')}`;
+};
+
+const timeAgo = (dateStr) => {
+    if (!dateStr) return 'Never';
+    const sec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (sec < 60) return 'Just now';
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
 };
 
 const PRESET_TAGS = [
-    { id: 'vip', label: '⭐ VIP', color: '#7C3AED', bg: '#F5F3FF' },
-    { id: 'loyal', label: '❤️ Loyal', color: '#E11D48', bg: '#FFF1F2' },
-    { id: 'risk', label: '⚠️ At Risk', color: '#D97706', bg: '#FFFBEB' },
-    { id: 'fraud', label: '🚨 Fraud', color: '#EF4444', bg: '#FEF2F2' },
-    { id: 'new', label: '🆕 New', color: '#0EA5E9', bg: '#F0F9FF' },
-    { id: 'inactive', label: '😴 Inactive', color: '#64748B', bg: '#F8FAFC' },
-    { id: 'partner', label: '🤝 Partner', color: '#059669', bg: '#ECFDF5' },
+    { id: 'vip', label: '⭐ VIP Client', color: '#D9A73A', bg: 'rgba(217, 167, 58, 0.18)' },
+    { id: 'wholesale', label: '📦 Wholesale', color: '#0EA5E9', bg: 'rgba(14, 165, 233, 0.18)' },
+    { id: 'loyal', label: '❤️ High Loyalty', color: '#EC4899', bg: 'rgba(236, 72, 153, 0.18)' },
+    { id: 'risk', label: '⚠️ Suspicious', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.18)' },
+    { id: 'fraud', label: '🚨 Fraud Alert', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.18)' },
+    { id: 'partner', label: '🤝 Strategic Partner', color: '#10B981', bg: 'rgba(16, 185, 129, 0.18)' },
+    { id: 'new', label: '🆕 Fresh Account', color: '#38BDF8', bg: 'rgba(56, 189, 248, 0.18)' },
 ];
 
-// ─── Skeleton Card ───────────────────────────────────────────────────────────
-const SkeletonCard = ({ anim }) => {
-    const bg = anim.interpolate({ inputRange: [0, 1], outputRange: ['#E2E8F0', '#F8FAFC'] });
-    const base = (w, h, br = 8) => <Animated.View style={{ width: w, height: h, borderRadius: br, backgroundColor: bg, marginBottom: 6 }} />;
-    return (
-        <View style={[S.card, { marginBottom: 8 }]}>
-            <Animated.View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: bg, marginRight: 12 }} />
-            <View style={{ flex: 1 }}>
-                {base('60%', 14, 6)}
-                {base('80%', 10, 6)}
-                <View style={{ flexDirection: 'row', gap: 6 }}>{base(50, 18, 9)}{base(60, 18, 9)}</View>
-            </View>
-        </View>
-    );
-};
-
-// ─── Filter Pill ─────────────────────────────────────────────────────────────
-const Pill = ({ id, title, count, active, onSelect }) => (
-    <TouchableOpacity onPress={() => onSelect(id)} style={[S.pill, active === id && S.pillOn]}>
-        <Text style={[S.pillTxt, active === id && S.pillTxtOn]}>{title}</Text>
-        {count !== undefined && (
-            <View style={[S.pillBadge, active === id && { backgroundColor: 'rgba(255,255,255,0.28)' }]}>
-                <Text style={[S.pillBadgeTxt, active === id && { color: '#fff' }]}>{count}</Text>
-            </View>
-        )}
-    </TouchableOpacity>
-);
-
-// ─── Quick Action Btn ─────────────────────────────────────────────────────────
-const QBtn = ({ icon, label, color, bg, onPress }) => (
-    <TouchableOpacity onPress={onPress} style={S.qBtn}>
-        <View style={[S.qIcon, { backgroundColor: bg || `${color}18` }]}>
-            <Ionicons name={icon} size={20} color={color} />
-        </View>
-        <Text style={[S.qLabel, { color }]}>{label}</Text>
-    </TouchableOpacity>
-);
-
-// ─── Main ────────────────────────────────────────────────────────────────────
 export const AdminUsers = ({ navigation: propNav }) => {
     const nav = propNav || useNavigation();
     const insets = useSafeAreaInsets();
     const shimmer = React.useRef(new Animated.Value(0)).current;
 
+    // Data State
     const [users, setUsers] = React.useState([]);
-    const [stats, setStats] = React.useState({ total: 0, vendors: 0, drivers: 0, customers: 0, banned: 0, verified: 0, totalBal: 0, todayNew: 0 });
+    const [stats, setStats] = React.useState({
+        total: 0,
+        vendors: 0,
+        drivers: 0,
+        customers: 0,
+        admins: 0,
+        banned: 0,
+        verified: 0,
+        totalBal: 0,
+        todayNew: 0,
+    });
     const [loading, setLoading] = React.useState(true);
     const [refreshing, setRefreshing] = React.useState(false);
+
+    // Filters and Search
     const [search, setSearch] = React.useState('');
     const [filter, setFilter] = React.useState('all');
     const [sortBy, setSortBy] = React.useState('newest');
 
-    // Modals & actionable state
+    // Modals & Actionable
     const [selUser, setSelUser] = React.useState(null);
     const [detailVis, setDetailVis] = React.useState(false);
     const [sheetVis, setSheetVis] = React.useState(false);
     const [actUser, setActUser] = React.useState(null);
+
+    // Wallet adjustment modal
+    const [walVis, setWalVis] = React.useState(false);
+    const [walAmt, setWalAmt] = React.useState('');
+    const [walReason, setWalReason] = React.useState('');
+
+    // Role, Note, Tag, Direct Message modals
+    const [roleVis, setRoleVis] = React.useState(false);
+    const [tagVis, setTagVis] = React.useState(false);
+    const [noteVis, setNoteVis] = React.useState(false);
+    const [noteText, setNoteText] = React.useState('');
+    const [directMsgVis, setDirectMsgVis] = React.useState(false);
+    const [directTitle, setDirectTitle] = React.useState('');
+    const [directBody, setDirectBody] = React.useState('');
+
+    // Broadcast modal
     const [bcastVis, setBcastVis] = React.useState(false);
     const [bTitle, setBTitle] = React.useState('');
     const [bMsg, setBMsg] = React.useState('');
-    const [roleVis, setRoleVis] = React.useState(false);
-    const [noteVis, setNoteVis] = React.useState(false);
-    const [noteText, setNoteText] = React.useState('');
-    const [walVis, setWalVis] = React.useState(false);
-    const [walAmt, setWalAmt] = React.useState('');
-    const [tagVis, setTagVis] = React.useState(false);
+    const [bcastSending, setBcastSending] = React.useState(false);
 
+    // WhatsApp modal
     const [whatsappVisible, setWhatsappVisible] = React.useState(false);
     const [whatsappPhone, setWhatsappPhone] = React.useState('');
     const [whatsappUserId, setWhatsappUserId] = React.useState(null);
     const [whatsappRecipientName, setWhatsappRecipientName] = React.useState('User');
 
-    // Bulk
+    // Bulk Actions
     const [selMode, setSelMode] = React.useState(false);
     const [selIds, setSelIds] = React.useState([]);
 
-    const sheetY = React.useRef(new Animated.Value(600)).current;
+    const sheetY = React.useRef(new Animated.Value(700)).current;
 
-    // shimmer loop
+    // Shimmer effect
     React.useEffect(() => {
         const loop = Animated.loop(Animated.sequence([
             Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: false }),
@@ -143,151 +162,321 @@ export const AdminUsers = ({ navigation: propNav }) => {
         setSheetVis(true);
         Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 70, friction: 11 }).start();
     };
+
     const closeSheet = (cb) => {
-        Animated.timing(sheetY, { toValue: 600, duration: 200, useNativeDriver: true, easing: Easing.in(Easing.ease) }).start(() => {
+        Animated.timing(sheetY, { toValue: 700, duration: 220, useNativeDriver: true, easing: Easing.in(Easing.ease) }).start(() => {
             setSheetVis(false);
             if (cb) cb();
         });
     };
 
-    React.useEffect(() => { load(); }, []);
+    React.useEffect(() => {
+        loadData();
+    }, []);
 
-    // ── FETCH ────────────────────────────────────────────────────────────
-    const load = async () => {
+    // ── Fetch Users & Ecosystem Data ─────────────────────────────────────────
+    const loadData = async () => {
         setLoading(true);
         try {
-            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
             const [pRes, wRes, dRes] = await Promise.all([
-                supabase.from('profiles').select('*').order('created_at', { ascending: false }).range(0, 300),
-                supabase.from('wallets').select('user_id,balance,pending_balance'),
-                supabase.from('drivers').select('user_id,vehicle_type,plate_number,vehicle_color,driver_license,status,name'),
+                supabase.from('profiles').select('*').order('created_at', { ascending: false }).range(0, 500),
+                supabase.from('wallets').select('user_id, balance, pending_balance'),
+                supabase.from('drivers').select('user_id, vehicle_type, plate_number, vehicle_color, status, name'),
             ]);
+
             const wMap = {};
-            (wRes.data || []).forEach(w => wMap[w.user_id] = w);
+            (wRes.data || []).forEach(w => { wMap[w.user_id] = w; });
+
             const dMap = {};
-            (dRes.data || []).forEach(d => dMap[d.user_id] = d);
+            (dRes.data || []).forEach(d => { dMap[d.user_id] = d; });
 
             const list = (pRes.data || []).map(u => ({
                 ...u,
-                is_online: u.last_seen ? (Date.now() - new Date(u.last_seen)) < 300000 : false,
+                is_online: u.last_seen ? (Date.now() - new Date(u.last_seen).getTime()) < 300000 : false,
                 wallet: wMap[u.id] || null,
                 tier: getTier(u.total_spend || 0),
-                role_cfg: rc(u.role),
+                role_cfg: getRoleCfg(u.role),
                 tags: u.admin_tags || [],
                 driver_info: dMap[u.id] || null,
             }));
 
-            const totalBal = list.reduce((s, u) => s + (u.wallet?.balance || 0), 0);
+            const totalBal = list.reduce((sum, u) => sum + (u.wallet?.balance || 0), 0);
             const todayNew = list.filter(u => new Date(u.created_at) >= today).length;
+
             setUsers(list);
             setStats({
                 total: list.length,
                 vendors: list.filter(u => u.role === 'vendor').length,
                 drivers: list.filter(u => u.role === 'driver').length,
                 customers: list.filter(u => !u.role || u.role === 'customer').length,
+                admins: list.filter(u => u.role === 'admin').length,
                 banned: list.filter(u => u.is_banned).length,
                 verified: list.filter(u => u.is_verified).length,
-                totalBal, todayNew,
+                totalBal,
+                todayNew,
             });
-        } catch { Alert.alert('Error', 'Could not load users.'); }
-        finally { setLoading(false); setRefreshing(false); }
+        } catch (err) {
+            console.error('Error fetching admin users:', err);
+            Alert.alert('Network Notice', 'Could not refresh user database. Please retry.');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
     };
 
-    // ── FILTERS ──────────────────────────────────────────────────────────
+    // ── Filters & Search ─────────────────────────────────────────────────────
     const filtered = React.useMemo(() => {
         let list = users;
         if (filter === 'vendor') list = list.filter(u => u.role === 'vendor');
-        if (filter === 'driver') list = list.filter(u => u.role === 'driver');
-        if (filter === 'customer') list = list.filter(u => !u.role || u.role === 'customer');
-        if (filter === 'admin') list = list.filter(u => u.role === 'admin');
-        if (filter === 'banned') list = list.filter(u => u.is_banned);
-        if (filter === 'verified') list = list.filter(u => u.is_verified);
-        if (filter === 'vip') list = list.filter(u => (u.total_spend || 0) >= 250000);
-        if (filter === 'wallet') list = list.filter(u => (u.wallet?.balance || 0) > 0);
-        if (filter === 'online') list = list.filter(u => u.is_online);
-        if (filter === 'new') list = list.filter(u => { const d = new Date(); d.setDate(d.getDate() - 7); return new Date(u.created_at) >= d; });
-        if (search) {
-            const q = search.toLowerCase();
-            list = list.filter(u => u.email?.toLowerCase().includes(q) || u.full_name?.toLowerCase().includes(q) || u.phone?.includes(q));
+        else if (filter === 'driver') list = list.filter(u => u.role === 'driver');
+        else if (filter === 'customer') list = list.filter(u => !u.role || u.role === 'customer');
+        else if (filter === 'admin') list = list.filter(u => u.role === 'admin');
+        else if (filter === 'banned') list = list.filter(u => u.is_banned);
+        else if (filter === 'verified') list = list.filter(u => u.is_verified);
+        else if (filter === 'vip') list = list.filter(u => (u.total_spend || 0) >= 250000);
+        else if (filter === 'wallet') list = list.filter(u => (u.wallet?.balance || 0) > 0);
+        else if (filter === 'online') list = list.filter(u => u.is_online);
+        else if (filter === 'new') {
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            list = list.filter(u => new Date(u.created_at) >= lastWeek);
+        }
+
+        if (search.trim()) {
+            const q = search.trim().toLowerCase();
+            list = list.filter(u =>
+                (u.email || '').toLowerCase().includes(q) ||
+                (u.full_name || '').toLowerCase().includes(q) ||
+                (u.phone || '').includes(q) ||
+                (u.role || '').toLowerCase().includes(q)
+            );
         }
         return list;
     }, [users, filter, search]);
 
-    const sorted = React.useMemo(() => [...filtered].sort((a, b) => {
-        if (sortBy === 'name') return (a.full_name || '').localeCompare(b.full_name || '');
-        if (sortBy === 'spend') return (b.total_spend || 0) - (a.total_spend || 0);
-        if (sortBy === 'balance') return (b.wallet?.balance || 0) - (a.wallet?.balance || 0);
-        if (sortBy === 'active') return new Date(b.last_seen || 0) - new Date(a.last_seen || 0);
-        return new Date(b.created_at) - new Date(a.created_at);
-    }), [filtered, sortBy]);
+    const sorted = React.useMemo(() => {
+        return [...filtered].sort((a, b) => {
+            if (sortBy === 'name') return (a.full_name || '').localeCompare(b.full_name || '');
+            if (sortBy === 'spend') return (b.total_spend || 0) - (a.total_spend || 0);
+            if (sortBy === 'balance') return (b.wallet?.balance || 0) - (a.wallet?.balance || 0);
+            if (sortBy === 'active') return new Date(b.last_seen || 0) - new Date(a.last_seen || 0);
+            return new Date(b.created_at) - new Date(a.created_at);
+        });
+    }, [filtered, sortBy]);
 
-    // ── ACTIONS ──────────────────────────────────────────────────────────
-    const toggleVerify = async (u) => { await supabase.from('profiles').update({ is_verified: !u.is_verified }).eq('id', u.id); load(); };
-    const toggleRestrict = async (u) => { await supabase.from('profiles').update({ is_restricted: !(u.is_restricted || false) }).eq('id', u.id); load(); };
+    // ── Quick Administrative Actions ─────────────────────────────────────────
+    const toggleVerify = async (u) => {
+        try {
+            const next = !u.is_verified;
+            await supabase.from('profiles').update({ is_verified: next }).eq('id', u.id);
+            Alert.alert('Status Updated', `${u.full_name || 'User'} is now ${next ? 'Verified' : 'Unverified'}.`);
+            loadData();
+        } catch {
+            Alert.alert('Error', 'Unable to toggle verification.');
+        }
+    };
+
+    const toggleRestrict = async (u) => {
+        try {
+            const next = !(u.is_restricted || false);
+            await supabase.from('profiles').update({ is_restricted: next }).eq('id', u.id);
+            Alert.alert('Access Updated', `${u.full_name || 'User'} is now ${next ? 'Restricted' : 'Unrestricted'}.`);
+            loadData();
+        } catch {
+            Alert.alert('Error', 'Unable to update restriction.');
+        }
+    };
+
     const toggleBan = (u) => {
-        const ban = !u.is_banned;
-        Alert.alert(ban ? 'Ban User' : 'Unban User', ban ? `Ban ${u.full_name}?` : `Unban ${u.full_name}?`, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: ban ? 'Ban' : 'Unban', style: ban ? 'destructive' : 'default', onPress: async () => { await supabase.from('profiles').update({ is_banned: ban }).eq('id', u.id); load(); } }
-        ]);
+        const nextBan = !u.is_banned;
+        Alert.alert(
+            nextBan ? 'Confirm Suspension' : 'Confirm Restoration',
+            nextBan ? `Are you sure you want to suspend ${u.full_name || 'this user'}?` : `Restore full access for ${u.full_name || 'this user'}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: nextBan ? 'Suspend Account' : 'Restore Account',
+                    style: nextBan ? 'destructive' : 'default',
+                    onPress: async () => {
+                        await supabase.from('profiles').update({ is_banned: nextBan }).eq('id', u.id);
+                        loadData();
+                    }
+                }
+            ]
+        );
     };
-    const changeRole = async (u, role) => {
-        await supabase.from('profiles').update({ role }).eq('id', u.id);
-        Alert.alert('✅ Done', `${u.full_name} is now ${role}`);
-        setRoleVis(false); load();
+
+    const changeRole = async (u, newRole) => {
+        try {
+            await supabase.from('profiles').update({ role: newRole }).eq('id', u.id);
+            setRoleVis(false);
+            Alert.alert('Role Updated', `${u.full_name || 'User'} is now assigned as ${newRole.toUpperCase()}.`);
+            loadData();
+        } catch {
+            Alert.alert('Error', 'Could not assign new role.');
+        }
     };
+
     const makeDriver = async (u) => {
-        const { data } = await supabase.from('drivers').select('id').eq('user_id', u.id).single();
-        if (data) { Alert.alert('Already Driver'); return; }
-        await supabase.from('drivers').insert({ name: u.full_name, phone: u.phone, vehicle_type: 'Bike', user_id: u.id });
-        await supabase.from('profiles').update({ role: 'driver' }).eq('id', u.id);
-        Alert.alert('✅ Done!', `${u.full_name} is now a driver!`); load();
+        try {
+            const { data } = await supabase.from('drivers').select('id').eq('user_id', u.id).maybeSingle();
+            if (data) {
+                Alert.alert('Notice', 'User is already registered as an active driver.');
+                return;
+            }
+            await supabase.from('drivers').insert({
+                name: u.full_name || 'Fleet Driver',
+                phone: u.phone,
+                vehicle_type: 'Motorcycle',
+                user_id: u.id,
+                status: 'active'
+            });
+            await supabase.from('profiles').update({ role: 'driver' }).eq('id', u.id);
+            Alert.alert('Fleet Updated', `${u.full_name || 'User'} has been promoted to Active Driver.`);
+            loadData();
+        } catch (err) {
+            Alert.alert('Error', 'Failed to promote user to driver.');
+        }
     };
-    const saveNote = async () => {
-        if (!noteText.trim()) return;
-        await supabase.from('profiles').update({ admin_note: noteText.trim() }).eq('id', actUser.id);
-        setNoteVis(false); setNoteText(''); load();
-    };
+
     const adjustWallet = async (type) => {
         const amt = parseFloat(walAmt);
-        if (isNaN(amt) || amt <= 0) { Alert.alert('Invalid', 'Enter a valid amount.'); return; }
-        if (!actUser?.wallet) {
-            await supabase.from('wallets').insert({ user_id: actUser.id, balance: type === 'add' ? amt : 0, pending_balance: 0 });
-        } else {
-            const nb = type === 'add' ? (actUser.wallet.balance || 0) + amt : Math.max(0, (actUser.wallet.balance || 0) - amt);
-            await supabase.from('wallets').update({ balance: nb }).eq('user_id', actUser.id);
+        if (isNaN(amt) || amt <= 0) {
+            Alert.alert('Validation Error', 'Please enter a valid numeric amount.');
+            return;
         }
-        setWalVis(false); setWalAmt('');
-        Alert.alert('✅ Done', `Wallet ${type === 'add' ? 'credited' : 'debited'} ${fmtAmt(amt)}`);
-        load();
+
+        try {
+            if (!actUser?.wallet) {
+                await supabase.from('wallets').insert({
+                    user_id: actUser.id,
+                    balance: type === 'credit' ? amt : 0,
+                    pending_balance: 0
+                });
+            } else {
+                const current = actUser.wallet.balance || 0;
+                const nextBal = type === 'credit' ? current + amt : Math.max(0, current - amt);
+                await supabase.from('wallets').update({ balance: nextBal }).eq('user_id', actUser.id);
+            }
+
+            // Record transaction history if table exists
+            try {
+                await supabase.from('wallet_transactions').insert({
+                    user_id: actUser.id,
+                    amount: amt,
+                    type: type === 'credit' ? 'admin_credit' : 'admin_debit',
+                    description: walReason.trim() || `Admin manual ${type}`,
+                    status: 'completed'
+                });
+            } catch (ignore) {}
+
+            setWalVis(false);
+            setWalAmt('');
+            setWalReason('');
+            Alert.alert('Wallet Updated', `Successfully ${type === 'credit' ? 'credited' : 'debited'} ${fmtAmt(amt)}.`);
+            loadData();
+        } catch {
+            Alert.alert('Error', 'Failed to adjust user wallet.');
+        }
     };
+
     const toggleTag = async (u, tagId) => {
-        const curr = u.admin_tags || [];
-        const next = curr.includes(tagId) ? curr.filter(t => t !== tagId) : [...curr, tagId];
+        const current = u.admin_tags || [];
+        const next = current.includes(tagId) ? current.filter(t => t !== tagId) : [...current, tagId];
         await supabase.from('profiles').update({ admin_tags: next }).eq('id', u.id);
-        load();
+        loadData();
     };
+
+    const saveNote = async () => {
+        if (!noteText.trim() && !actUser?.admin_note) return;
+        await supabase.from('profiles').update({ admin_note: noteText.trim() }).eq('id', actUser.id);
+        setNoteVis(false);
+        setNoteText('');
+        Alert.alert('Success', 'Admin note saved.');
+        loadData();
+    };
+
+    const sendDirectMessage = async () => {
+        if (!directTitle.trim() || !directBody.trim()) {
+            Alert.alert('Missing Fields', 'Please fill in both title and message body.');
+            return;
+        }
+        try {
+            await NotificationService.send({
+                userId: actUser.id,
+                title: directTitle.trim(),
+                message: directBody.trim(),
+                type: 'admin_direct',
+                email: actUser.email
+            });
+            setDirectMsgVis(false);
+            setDirectTitle('');
+            setDirectBody('');
+            Alert.alert('Message Sent', `Notification delivered to ${actUser.full_name || 'user'}.`);
+        } catch {
+            Alert.alert('Error', 'Unable to dispatch direct message.');
+        }
+    };
+
     const handleBulk = async (action) => {
         if (!selIds.length) return;
         let update = {};
         if (action === 'verify') update = { is_verified: true };
         if (action === 'ban') update = { is_banned: true };
         if (action === 'unban') update = { is_banned: false };
-        Alert.alert('Confirm', `Apply "${action}" to ${selIds.length} users?`, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Apply', style: 'destructive', onPress: async () => { await supabase.from('profiles').update(update).in('id', selIds); setSelMode(false); setSelIds([]); load(); } }
-        ]);
-    };
-    const sendBcast = async () => {
-        if (!bTitle.trim() || !bMsg.trim()) { Alert.alert('', 'Fill title and message.'); return; }
-        setLoading(true);
-        for (const u of filtered) await NotificationService.send({ userId: u.id, title: bTitle, message: bMsg, type: 'system', email: u.email });
-        setLoading(false); setBcastVis(false); setBTitle(''); setBMsg('');
-        Alert.alert('✅ Sent!', `Broadcast sent to ${filtered.length} users.`);
+
+        Alert.alert(
+            'Batch Execution',
+            `Apply action "${action.toUpperCase()}" to ${selIds.length} selected accounts?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Confirm',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await supabase.from('profiles').update(update).in('id', selIds);
+                        setSelMode(false);
+                        setSelIds([]);
+                        loadData();
+                    }
+                }
+            ]
+        );
     };
 
-    // ── USER CARD ─────────────────────────────────────────────────────────
-    const renderItem = ({ item }) => {
+    const sendBroadcast = async () => {
+        if (!bTitle.trim() || !bMsg.trim()) {
+            Alert.alert('Validation Error', 'Please supply both a broadcast title and message.');
+            return;
+        }
+        setBcastSending(true);
+        try {
+            const targets = filtered.slice(0, 100); // safety cap
+            for (const u of targets) {
+                await NotificationService.send({
+                    userId: u.id,
+                    title: bTitle.trim(),
+                    message: bMsg.trim(),
+                    type: 'system_broadcast',
+                    email: u.email
+                });
+            }
+            setBcastVis(false);
+            setBTitle('');
+            setBMsg('');
+            Alert.alert('Broadcast Sent', `Delivered notification to ${targets.length} users.`);
+        } catch {
+            Alert.alert('Error', 'Some broadcast dispatches failed.');
+        } finally {
+            setBcastSending(false);
+        }
+    };
+
+    // ── User Card Component ──────────────────────────────────────────────────
+    const renderUserCard = ({ item }) => {
         const isSel = selIds.includes(item.id);
         const cfg = item.role_cfg;
         const bal = item.wallet?.balance || 0;
@@ -297,279 +486,441 @@ export const AdminUsers = ({ navigation: propNav }) => {
         return (
             <Pressable
                 onLongPress={() => !selMode && openSheet(item)}
-                onPress={() => selMode
-                    ? setSelIds(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id])
-                    : (setSelUser(item), setDetailVis(true))
-                }
-                style={({ pressed }) => [S.card, pressed && { transform: [{ scale: 0.985 }], opacity: 0.9 }, item.is_banned && S.cardBanned, isSel && S.cardSel]}
+                onPress={() => {
+                    if (selMode) {
+                        setSelIds(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
+                    } else {
+                        setSelUser(item);
+                        setDetailVis(true);
+                    }
+                }}
+                style={({ pressed }) => [
+                    S.card,
+                    pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] },
+                    item.is_banned && S.cardBanned,
+                    isSel && S.cardSelected,
+                ]}
             >
-                {/* Left accent bar */}
-                <View style={[S.cardAccent, { backgroundColor: cfg.color }]} />
+                {/* Glow bar accent on left */}
+                <View style={[S.cardAccentBar, { backgroundColor: cfg.color }]} />
 
-                {selMode && <Ionicons name={isSel ? 'checkbox' : 'square-outline'} size={21} color={isSel ? '#6366F1' : '#CBD5E1'} style={{ marginRight: 8 }} />}
+                {selMode && (
+                    <Ionicons
+                        name={isSel ? 'checkbox' : 'square-outline'}
+                        size={22}
+                        color={isSel ? C.gold : C.textSecondary}
+                        style={{ marginRight: 10, marginLeft: 6 }}
+                    />
+                )}
 
-                {/* Avatar */}
-                <View style={S.avWrap}>
-                    <View style={[S.avRing, { borderColor: `${cfg.color}40` }]}>
+                {/* Avatar with status indicator */}
+                <View style={S.avContainer}>
+                    <View style={[S.avRing, { borderColor: `${cfg.color}55` }]}>
                         <UserAvatar user={item} size={48} />
                     </View>
-                    <View style={[S.dot,
-                    item.is_banned ? { backgroundColor: '#EF4444' } :
-                        item.is_restricted ? { backgroundColor: '#F59E0B' } :
-                            item.is_online ? { backgroundColor: '#22C55E' } :
-                                { backgroundColor: '#CBD5E1' }
+                    <View style={[
+                        S.statusDot,
+                        item.is_banned ? { backgroundColor: C.crimson } :
+                        item.is_restricted ? { backgroundColor: C.amber } :
+                        item.is_online ? { backgroundColor: C.emerald } :
+                        { backgroundColor: '#475569' }
                     ]}>
-                        {item.is_banned && <Ionicons name="ban" size={7} color="white" />}
-                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={7} color="white" />}
+                        {item.is_banned && <Ionicons name="ban" size={8} color="#FFFFFF" />}
+                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={8} color="#FFFFFF" />}
                     </View>
                 </View>
 
-                {/* Info */}
-                <View style={{ flex: 1, minWidth: 0 }}>
-                    {/* Name + verified */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 1 }}>
-                        <Text style={S.cName} numberOfLines={1}>{item.full_name || 'No Name'}</Text>
-                        {item.is_verified && <Ionicons name="checkmark-circle" size={13} color="#3B82F6" />}
+                {/* Primary Information */}
+                <View style={S.infoContainer}>
+                    <View style={S.nameRow}>
+                        <Text style={S.userName} numberOfLines={1}>
+                            {item.full_name || 'Anonymous User'}
+                        </Text>
+                        {item.is_verified && (
+                            <Ionicons name="checkmark-circle" size={15} color="#38BDF8" style={{ marginLeft: 4 }} />
+                        )}
                     </View>
-                    <Text style={S.cEmail} numberOfLines={1}>{item.email}</Text>
 
-                    {/* Badges */}
-                    <View style={S.badgeRow}>
-                        <View style={[S.badge, { backgroundColor: cfg.bg }]}>
-                            <Ionicons name={cfg.icon} size={8} color={cfg.color} style={{ marginRight: 2 }} />
-                            <Text style={[S.bdgTxt, { color: cfg.color }]}>{cfg.label}</Text>
+                    <Text style={S.userEmail} numberOfLines={1}>
+                        {item.email || (item.phone ? item.phone : 'No contact specified')}
+                    </Text>
+
+                    {/* Role & Tier Tags */}
+                    <View style={S.tagRow}>
+                        <View style={[S.chip, { backgroundColor: cfg.bg, borderColor: `${cfg.color}40` }]}>
+                            <Ionicons name={cfg.icon} size={9} color={cfg.color} style={{ marginRight: 3 }} />
+                            <Text style={[S.chipTxt, { color: cfg.color }]}>{cfg.label}</Text>
                         </View>
-                        <View style={[S.badge, { backgroundColor: `${item.tier.color}15` }]}>
-                            <Text style={[S.bdgTxt, { color: item.tier.color }]}>{item.tier.label}</Text>
+
+                        <View style={[S.chip, { backgroundColor: item.tier.bg, borderColor: `${item.tier.color}40` }]}>
+                            <Text style={[S.chipTxt, { color: item.tier.color }]}>{item.tier.label}</Text>
                         </View>
-                        {userTags.slice(0, 1).map(t => (
-                            <View key={t.id} style={[S.badge, { backgroundColor: t.bg }]}>
-                                <Text style={[S.bdgTxt, { color: t.color }]}>{t.label}</Text>
+
+                        {userTags.slice(0, 1).map(tag => (
+                            <View key={tag.id} style={[S.chip, { backgroundColor: tag.bg, borderColor: `${tag.color}40` }]}>
+                                <Text style={[S.chipTxt, { color: tag.color }]}>{tag.label}</Text>
                             </View>
                         ))}
-                        {item.admin_note && <Ionicons name="document-text" size={11} color="#D97706" />}
+
+                        {item.admin_note ? (
+                            <Ionicons name="document-text" size={13} color={C.gold} style={{ marginLeft: 2 }} />
+                        ) : null}
                     </View>
 
-                    {/* Wallet + time */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
-                        <View style={[S.walChip, { backgroundColor: bal > 0 ? '#ECFDF5' : '#F8FAFC', borderColor: bal > 0 ? '#A7F3D0' : '#E2E8F0' }]}>
-                            <Ionicons name="wallet" size={9} color={bal > 0 ? '#059669' : '#CBD5E1'} />
-                            <Text style={[S.walBal, { color: bal > 0 ? '#059669' : '#94A3B8', fontSize: 10 }]}>{fmtAmt(bal)}</Text>
-                            {pend > 0 && <Text style={S.walPend}>+{fmtAmt(pend)}</Text>}
-                        </View>
-                        <Text style={S.lastSeen}>{timeAgo(item.last_seen)}</Text>
-                    </View>
-
-                    {/* Driver Info */}
-                    {item.role === 'driver' && item.driver_info && (
-                        <View style={S.driverInfoRow}>
-                            <Ionicons name="bicycle" size={10} color="#0EA5E9" />
-                            <Text style={S.driverInfoTxt} numberOfLines={1}>
-                                {item.driver_info.vehicle_type || 'Unknown'}
-                                {item.driver_info.plate_number ? ` · ${item.driver_info.plate_number}` : ''}
+                    {/* Financial & Time Strip */}
+                    <View style={S.bottomStrip}>
+                        <View style={[
+                            S.walletPill,
+                            bal > 0 ? { backgroundColor: C.emeraldBg, borderColor: 'rgba(16, 185, 129, 0.3)' } : { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: C.borderSubtle }
+                        ]}>
+                            <Ionicons name="wallet-outline" size={11} color={bal > 0 ? C.emerald : C.textSecondary} />
+                            <Text style={[S.walletText, { color: bal > 0 ? C.emerald : C.textSecondary }]}>
+                                {fmtAmt(bal)}
                             </Text>
-                            <View style={[S.driverStatus, { backgroundColor: item.driver_info.status === 'active' ? '#DCFCE7' : '#F1F5F9' }]}>
-                                <Text style={{ fontSize: 8, fontWeight: '800', color: item.driver_info.status === 'active' ? '#16A34A' : '#94A3B8' }}>
-                                    {(item.driver_info.status || 'inactive').toUpperCase()}
+                            {pend > 0 && <Text style={S.walletPending}>+{fmtAmt(pend)}</Text>}
+                        </View>
+
+                        <Text style={S.lastActiveText}>
+                            {timeAgo(item.last_seen || item.created_at)}
+                        </Text>
+                    </View>
+
+                    {/* Driver details if role is driver */}
+                    {item.role === 'driver' && item.driver_info && (
+                        <View style={S.driverStrip}>
+                            <Ionicons name="bicycle" size={11} color={C.sky} />
+                            <Text style={S.driverStripText} numberOfLines={1}>
+                                {item.driver_info.vehicle_type || 'Vehicle'} · {item.driver_info.plate_number || 'No Plate'}
+                            </Text>
+                            <View style={[
+                                S.driverStatusBadge,
+                                { backgroundColor: item.driver_info.status === 'active' ? C.emeraldBg : 'rgba(255,255,255,0.06)' }
+                            ]}>
+                                <Text style={{ fontSize: 8, fontWeight: '800', color: item.driver_info.status === 'active' ? C.emerald : C.textSecondary }}>
+                                    {(item.driver_info.status || 'OFFLINE').toUpperCase()}
                                 </Text>
                             </View>
                         </View>
                     )}
                 </View>
 
-                {/* Right: chat + chevron */}
+                {/* Right Interactive Quick Actions */}
                 {!selMode && (
-                    <View style={{ alignItems: 'center', gap: 8, marginLeft: 4 }}>
-                        <TouchableOpacity onPress={() => nav.navigate('Chat', { vendorId: item.id, vendorName: item.full_name })} style={S.chatBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <Ionicons name="chatbubble-ellipses" size={15} color="#6366F1" />
+                    <View style={S.cardActions}>
+                        <TouchableOpacity
+                            onPress={() => openSheet(item)}
+                            style={S.quickActionBtn}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Ionicons name="ellipsis-vertical" size={16} color={C.gold} />
                         </TouchableOpacity>
-                        <Ionicons name="chevron-forward" size={13} color="#CBD5E1" />
                     </View>
                 )}
             </Pressable>
         );
     };
 
-    // ── HEADER STAT CHIP ────────────────────────────────────────────────
-    const HChip = ({ label, val, color, icon }) => (
-        <View style={[S.hChip, { borderColor: `${color}55` }]}>
-            <Ionicons name={icon} size={13} color={color} style={{ marginBottom: 3 }} />
-            <Text style={[S.hChipVal, { color }]}>{val}</Text>
-            <Text style={S.hChipLbl}>{label}</Text>
-        </View>
-    );
-
-    // ── RENDER ────────────────────────────────────────────────────────────
     return (
-        <View style={S.root}>
-            <StatusBar barStyle="dark-content" />
+        <View style={S.container}>
+            <StatusBar barStyle="light-content" backgroundColor={C.bgDark} />
 
-            {/* HEADER */}
-            <View style={[S.hdr, { paddingTop: 10 }]}>
-
-                {/* Top row */}
-                <View style={S.hdrRow}>
-                    <TouchableOpacity onPress={() => selMode ? (setSelMode(false), setSelIds([])) : nav.goBack()} style={S.iconCircle}>
-                        <Ionicons name={selMode ? 'close' : 'arrow-back'} size={19} color="#0E1A2E" />
+            {/* ── LUXURY HEADER ────────────────────────────────────────────── */}
+            <LinearGradient
+                colors={['#06111C', '#0B1B2F', '#071422']}
+                style={[S.header, { paddingTop: Math.max(insets.top, 12) + 6 }]}
+            >
+                <View style={S.headerTopRow}>
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (selMode) {
+                                setSelMode(false);
+                                setSelIds([]);
+                            } else {
+                                nav.goBack();
+                            }
+                        }}
+                        style={S.headerIconBtn}
+                    >
+                        <Ionicons name={selMode ? 'close' : 'arrow-back'} size={20} color={C.gold} />
                     </TouchableOpacity>
 
-                    <View style={{ flex: 1, paddingHorizontal: 10 }}>
-                        {selMode ? (
-                            <Text style={S.hdrTitle}>{selIds.length} Selected</Text>
-                        ) : (
-                            <>
-                                <Text style={S.hdrTitle}>User Management</Text>
-                                <Text style={S.hdrSub}>{stats.total} users · {stats.todayNew} new today · {fmtAmt(stats.totalBal)} total</Text>
-                            </>
-                        )}
+                    <View style={S.headerTitleBox}>
+                        <Text style={S.headerTitle}>
+                            {selMode ? `${selIds.length} Selected` : 'User Directory'}
+                        </Text>
+                        <Text style={S.headerSubtitle}>
+                            {stats.total} accounts · {stats.todayNew} registered today
+                        </Text>
                     </View>
 
                     {!selMode ? (
-                        <View style={{ flexDirection: 'row', gap: 7 }}>
-                            <TouchableOpacity onPress={() => setBcastVis(true)} style={S.iconCircle}><Ionicons name="megaphone" size={17} color="#D9A73A" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => Share.share({ message: filtered.map(u => `${u.full_name},${u.email},${u.role}`).join('\n') })} style={S.iconCircle}><Ionicons name="cloud-download-outline" size={17} color="#0E1A2E" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => setSelMode(true)} style={S.iconCircle}><Ionicons name="checkbox-outline" size={17} color="#0E1A2E" /></TouchableOpacity>
+                        <View style={S.headerActions}>
+                            <TouchableOpacity
+                                onPress={() => setBcastVis(true)}
+                                style={S.headerIconBtn}
+                                title="Broadcast"
+                            >
+                                <Ionicons name="megaphone" size={17} color={C.gold} />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => {
+                                    const csv = filtered.map(u => `${u.full_name},${u.email},${u.phone},${u.role},${u.wallet?.balance || 0}`).join('\n');
+                                    Share.share({ message: `Name,Email,Phone,Role,Balance\n${csv}` });
+                                }}
+                                style={S.headerIconBtn}
+                            >
+                                <Ionicons name="share-outline" size={17} color={C.gold} />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => setSelMode(true)}
+                                style={S.headerIconBtn}
+                            >
+                                <Ionicons name="checkbox-outline" size={17} color={C.gold} />
+                            </TouchableOpacity>
                         </View>
                     ) : (
-                        <View style={{ flexDirection: 'row', gap: 7 }}>
-                            <TouchableOpacity onPress={() => handleBulk('verify')} style={[S.iconCircle, { backgroundColor: '#ECFDF5', borderColor: '#BBF7D0' }]}><Ionicons name="checkmark-done" size={17} color="#16A34A" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleBulk('ban')} style={[S.iconCircle, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}><Ionicons name="ban" size={17} color="#DC2626" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleBulk('unban')} style={[S.iconCircle, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}><Ionicons name="shield-checkmark" size={17} color="#2563EB" /></TouchableOpacity>
+                        <View style={S.headerActions}>
+                            <TouchableOpacity
+                                onPress={() => handleBulk('verify')}
+                                style={[S.headerIconBtn, { backgroundColor: C.emeraldBg, borderColor: C.emerald }]}
+                            >
+                                <Ionicons name="checkmark-done" size={17} color={C.emerald} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => handleBulk('ban')}
+                                style={[S.headerIconBtn, { backgroundColor: C.crimsonBg, borderColor: C.crimson }]}
+                            >
+                                <Ionicons name="ban" size={17} color={C.crimson} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => handleBulk('unban')}
+                                style={[S.headerIconBtn, { backgroundColor: C.skyBg, borderColor: C.sky }]}
+                            >
+                                <Ionicons name="shield-checkmark" size={17} color={C.sky} />
+                            </TouchableOpacity>
                         </View>
                     )}
                 </View>
 
-                {/* Compact stat pills */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
+                {/* ── KPI METRICS STRIP ────────────────────────────────────── */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={S.kpiScroll}
+                >
                     {[
-                        { icon: 'people', label: 'Total', val: stats.total, color: '#0E1A2E', bg: '#F1F5F9' },
-                        { icon: 'storefront', label: 'Vendors', val: stats.vendors, color: '#D97706', bg: '#FFFBEB' },
-                        { icon: 'bicycle', label: 'Drivers', val: stats.drivers, color: '#0284C7', bg: '#F0F9FF' },
-                        { icon: 'person', label: 'Customers', val: stats.customers, color: '#059669', bg: '#ECFDF5' },
-                        { icon: 'checkmark-circle', label: 'Verified', val: stats.verified, color: '#16A34A', bg: '#F0FDF4' },
-                        { icon: 'ban', label: 'Banned', val: stats.banned, color: '#DC2626', bg: '#FEF2F2' },
-                    ].map(c => (
-                        <View key={c.label} style={[S.statPill, { borderColor: '#E2E8F0', backgroundColor: c.bg }]}>
-                            <Ionicons name={c.icon} size={11} color={c.color} />
-                            <Text style={[S.statPillVal, { color: c.color }]}>{c.val}</Text>
-                            <Text style={S.statPillLbl}>{c.label}</Text>
+                        { label: 'Total Users', val: stats.total, icon: 'people', color: C.gold },
+                        { label: 'Vendors', val: stats.vendors, icon: 'storefront', color: '#F97316' },
+                        { label: 'Drivers', val: stats.drivers, icon: 'bicycle', color: C.sky },
+                        { label: 'Customers', val: stats.customers, icon: 'person', color: C.emerald },
+                        { label: 'Total Wallet', val: fmtAmt(stats.totalBal), icon: 'wallet', color: C.goldLight },
+                        { label: 'Verified', val: stats.verified, icon: 'checkmark-circle', color: '#38BDF8' },
+                        { label: 'Suspended', val: stats.banned, icon: 'ban', color: C.crimson },
+                    ].map((k, i) => (
+                        <View key={i} style={S.kpiCard}>
+                            <View style={S.kpiCardTop}>
+                                <Ionicons name={k.icon} size={13} color={k.color} />
+                                <Text style={[S.kpiVal, { color: k.color }]}>{k.val}</Text>
+                            </View>
+                            <Text style={S.kpiLabel}>{k.label}</Text>
                         </View>
                     ))}
                 </ScrollView>
-            </View>
+            </LinearGradient>
 
-            {/* SEARCH */}
-            <View style={S.searchWrap}>
-                <View style={S.searchIcon}>
-                    <Ionicons name="search" size={15} color="#6366F1" />
-                </View>
-                <TextInput
-                    placeholder="Search name, email, phone…"
-                    placeholderTextColor="#CBD5E1"
-                    value={search} onChangeText={setSearch}
-                    style={S.searchIn}
-                />
-                {search.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearch('')} style={{ padding: 2 }}>
-                        <Ionicons name="close-circle" size={18} color="#CBD5E1" />
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            {/* FILTER PILLS */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9' }} contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, gap: 8 }}>
-                {[
-                    { id: 'all', title: 'All', count: stats.total },
-                    { id: 'customer', title: 'Customers', count: stats.customers },
-                    { id: 'vendor', title: 'Vendors', count: stats.vendors },
-                    { id: 'driver', title: 'Drivers', count: stats.drivers },
-                    { id: 'admin', title: 'Admins' },
-                    { id: 'online', title: '🟢 Online' },
-                    { id: 'new', title: '🆕 This Week' },
-                    { id: 'wallet', title: '💰 Has Balance' },
-                    { id: 'banned', title: '🔴 Banned', count: stats.banned },
-                    { id: 'verified', title: '✅ Verified' },
-                    { id: 'vip', title: '💎 VIP' },
-                ].map(f => <Pill key={f.id} {...f} active={filter} onSelect={setFilter} />)}
-            </ScrollView>
-
-            {/* SORT ROW */}
-            <View style={S.sortRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#6366F1' }} />
-                    <Text style={S.sortCount}>{sorted.length} <Text style={{ color: '#94A3B8' }}>users</Text></Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {[{ k: 'newest', l: 'Recent', icon: 'time' }, { k: 'active', l: 'Active', icon: 'flash' }, { k: 'name', l: 'Name', icon: 'text' }, { k: 'spend', l: 'Spend', icon: 'cash' }, { k: 'balance', l: 'Balance', icon: 'wallet' }].map(s => (
-                        <TouchableOpacity key={s.k} onPress={() => setSortBy(s.k)} style={[S.sChip, sortBy === s.k && S.sChipOn]}>
-                            <Ionicons name={s.icon} size={10} color={sortBy === s.k ? '#6366F1' : '#94A3B8'} />
-                            <Text style={[S.sChipTxt, sortBy === s.k && { color: '#6366F1', fontWeight: '800' }]}>{s.l}</Text>
+            {/* ── SEARCH & FILTER CONTROLS ─────────────────────────────────── */}
+            <View style={S.searchContainer}>
+                <View style={S.searchBox}>
+                    <Ionicons name="search" size={16} color={C.gold} style={{ marginRight: 8 }} />
+                    <TextInput
+                        placeholder="Search by name, email, phone, or role…"
+                        placeholderTextColor="#64748B"
+                        value={search}
+                        onChangeText={setSearch}
+                        style={S.searchInput}
+                    />
+                    {search.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearch('')}>
+                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
                         </TouchableOpacity>
-                    ))}
+                    )}
+                </View>
+            </View>
+
+            {/* ── HORIZONTAL ROLE PILLS ────────────────────────────────────── */}
+            <View style={S.filterBar}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={S.filterScroll}
+                >
+                    {[
+                        { id: 'all', title: 'All Accounts', count: stats.total },
+                        { id: 'customer', title: 'Customers', count: stats.customers },
+                        { id: 'vendor', title: 'Vendors', count: stats.vendors },
+                        { id: 'driver', title: 'Drivers', count: stats.drivers },
+                        { id: 'admin', title: 'Admins', count: stats.admins },
+                        { id: 'verified', title: 'Verified' },
+                        { id: 'vip', title: 'VIP Tiers' },
+                        { id: 'wallet', title: 'Has Balance' },
+                        { id: 'online', title: 'Online Now' },
+                        { id: 'new', title: 'New This Week' },
+                        { id: 'banned', title: 'Suspended', count: stats.banned },
+                    ].map((p) => {
+                        const active = filter === p.id;
+                        return (
+                            <TouchableOpacity
+                                key={p.id}
+                                onPress={() => setFilter(p.id)}
+                                style={[S.pill, active && S.pillActive]}
+                            >
+                                <Text style={[S.pillText, active && S.pillTextActive]}>
+                                    {p.title}
+                                </Text>
+                                {p.count !== undefined && (
+                                    <View style={[S.pillBadge, active && S.pillBadgeActive]}>
+                                        <Text style={[S.pillBadgeText, active && S.pillBadgeTextActive]}>
+                                            {p.count}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
 
-            {/* LIST */}
+            {/* ── SORT & TOTALS RIBBON ─────────────────────────────────────── */}
+            <View style={S.sortRibbon}>
+                <View style={S.sortTotal}>
+                    <View style={S.indicatorDot} />
+                    <Text style={S.sortTotalText}>
+                        {sorted.length} <Text style={{ color: C.textSecondary }}>results</Text>
+                    </Text>
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.sortOptions}>
+                    {[
+                        { key: 'newest', label: 'Recent', icon: 'time-outline' },
+                        { key: 'balance', label: 'Balance', icon: 'wallet-outline' },
+                        { key: 'spend', label: 'Top Spend', icon: 'cash-outline' },
+                        { key: 'active', label: 'Active', icon: 'flash-outline' },
+                        { key: 'name', label: 'A-Z', icon: 'text-outline' },
+                    ].map(s => {
+                        const active = sortBy === s.key;
+                        return (
+                            <TouchableOpacity
+                                key={s.key}
+                                onPress={() => setSortBy(s.key)}
+                                style={[S.sortChip, active && S.sortChipActive]}
+                            >
+                                <Ionicons name={s.icon} size={11} color={active ? C.gold : C.textSecondary} />
+                                <Text style={[S.sortChipText, active && S.sortChipTextActive]}>{s.label}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            </View>
+
+            {/* ── USER LIST ────────────────────────────────────────────────── */}
             {loading ? (
-                <FlatList data={[1, 2, 3, 4, 5, 6]} keyExtractor={i => `${i}`} renderItem={() => <SkeletonCard anim={shimmer} />} contentContainerStyle={{ padding: 14 }} />
+                <View style={S.loadingContainer}>
+                    <ActivityIndicator size="large" color={C.gold} />
+                    <Text style={S.loadingText}>Synchronizing user ledger…</Text>
+                </View>
             ) : (
                 <FlatList
                     data={sorted}
-                    keyExtractor={i => i.id}
-                    renderItem={renderItem}
-                    contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor="#6366F1" />}
+                    keyExtractor={item => item.id}
+                    renderItem={renderUserCard}
+                    contentContainerStyle={S.listContent}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={() => {
+                                setRefreshing(true);
+                                loadData();
+                            }}
+                            tintColor={C.gold}
+                            colors={[C.gold]}
+                        />
+                    }
                     ListEmptyComponent={
-                        <View style={{ alignItems: 'center', paddingTop: 80, gap: 12 }}>
-                            <Ionicons name="people-outline" size={52} color="#CBD5E1" />
-                            <Text style={{ color: '#94A3B8', fontSize: 14, fontWeight: '600' }}>No users found</Text>
+                        <View style={S.emptyContainer}>
+                            <Ionicons name="people-outline" size={54} color="#334155" />
+                            <Text style={S.emptyTitle}>No matching accounts</Text>
+                            <Text style={S.emptySubtitle}>Try adjusting your search query or role filter.</Text>
                         </View>
                     }
                 />
             )}
 
-            {/* ══ QUICK ACTIONS SHEET ══ */}
-            <Modal visible={sheetVis} transparent animationType="none" onRequestClose={() => closeSheet()}>
-                <TouchableOpacity style={S.overlay} activeOpacity={1} onPress={() => closeSheet()} />
-                <Animated.View style={[S.sheet, { transform: [{ translateY: sheetY }] }]}>
-                    <View style={S.drag} />
+            {/* ── BOTTOM ACTION SHEET (MODERN LUXURY) ──────────────────────── */}
+            <Modal
+                visible={sheetVis}
+                transparent
+                animationType="none"
+                onRequestClose={() => closeSheet()}
+            >
+                <TouchableOpacity
+                    style={S.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => closeSheet()}
+                />
+                <Animated.View style={[S.actionSheet, { transform: [{ translateY: sheetY }] }]}>
+                    <View style={S.dragHandle} />
+
                     {actUser && (
                         <>
-                            {/* User info row */}
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
-                                <UserAvatar user={actUser} size={44} />
-                                <View style={{ marginLeft: 12, flex: 1 }}>
-                                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>{actUser.full_name || 'Unknown'}</Text>
-                                    <Text style={{ fontSize: 11, color: '#94A3B8' }}>{actUser.email}</Text>
+                            {/* User Header in Sheet */}
+                            <View style={S.sheetUserHeader}>
+                                <UserAvatar user={actUser} size={48} />
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={S.sheetUserName} numberOfLines={1}>
+                                            {actUser.full_name || 'Anonymous User'}
+                                        </Text>
+                                        {actUser.is_verified && (
+                                            <Ionicons name="checkmark-circle" size={15} color="#38BDF8" style={{ marginLeft: 4 }} />
+                                        )}
+                                    </View>
+                                    <Text style={S.sheetUserEmail} numberOfLines={1}>{actUser.email || actUser.phone}</Text>
                                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                                        <View style={[S.badge, { backgroundColor: actUser.role_cfg.bg }]}>
-                                            <Text style={[S.bdgTxt, { color: actUser.role_cfg.color }]}>{actUser.role_cfg.label}</Text>
+                                        <View style={[S.chip, { backgroundColor: actUser.role_cfg.bg, borderColor: `${actUser.role_cfg.color}40` }]}>
+                                            <Text style={[S.chipTxt, { color: actUser.role_cfg.color }]}>{actUser.role_cfg.label}</Text>
                                         </View>
-                                        {actUser.is_verified && <Ionicons name="checkmark-circle" size={14} color="#3B82F6" />}
+                                        <View style={[S.chip, { backgroundColor: actUser.tier.bg, borderColor: `${actUser.tier.color}40` }]}>
+                                            <Text style={[S.chipTxt, { color: actUser.tier.color }]}>{actUser.tier.label}</Text>
+                                        </View>
                                     </View>
                                 </View>
-                                <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                                    <Text style={{ fontSize: 8, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase' }}>Wallet</Text>
-                                    <Text style={{ fontSize: 17, fontWeight: '900', color: '#059669' }}>{fmtAmt(actUser.wallet?.balance || 0)}</Text>
-                                    {(actUser.wallet?.pending_balance || 0) > 0 && <Text style={{ fontSize: 9, color: '#D97706', fontWeight: '600' }}>+{fmtAmt(actUser.wallet.pending_balance)} pend.</Text>}
+
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={{ fontSize: 9, color: C.textSecondary, textTransform: 'uppercase', fontWeight: '700' }}>Balance</Text>
+                                    <Text style={{ fontSize: 17, fontWeight: '900', color: C.emerald }}>{fmtAmt(actUser.wallet?.balance || 0)}</Text>
                                 </View>
                             </View>
 
-                            {actUser.admin_note && (
-                                <View style={{ flexDirection: 'row', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 8, marginBottom: 10, alignItems: 'center', gap: 6 }}>
-                                    <Ionicons name="document-text" size={13} color="#B45309" />
-                                    <Text style={{ fontSize: 11, color: '#B45309', flex: 1, fontWeight: '600' }} numberOfLines={2}>{actUser.admin_note}</Text>
+                            {/* Internal Note snippet */}
+                            {actUser.admin_note ? (
+                                <View style={S.sheetNoteCard}>
+                                    <Ionicons name="document-text" size={14} color={C.gold} />
+                                    <Text style={S.sheetNoteText} numberOfLines={2}>{actUser.admin_note}</Text>
                                 </View>
-                            )}
+                            ) : null}
 
-                            {/* Action buttons */}
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-                                <QBtn icon="chatbubble" label="Chat" color="#6366F1" onPress={() => closeSheet(() => nav.navigate('Chat', { vendorId: actUser.id, vendorName: actUser.full_name }))} />
+                            {/* Quick Action Grid */}
+                            <Text style={S.sheetSectionTitle}>Management Controls</Text>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={S.sheetActionsScroll}
+                            >
+                                {/* Direct WhatsApp */}
                                 {actUser.phone ? (
-                                    <QBtn 
-                                        icon="logo-whatsapp" 
-                                        label="WhatsApp" 
-                                        color="#22C55E" 
+                                    <TouchableOpacity
                                         onPress={() => {
                                             closeSheet(() => {
                                                 setWhatsappPhone(actUser.phone);
@@ -577,115 +928,428 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                                 setWhatsappRecipientName(actUser.full_name || 'User');
                                                 setWhatsappVisible(true);
                                             });
-                                        }} 
-                                    />
+                                        }}
+                                        style={S.sheetActionItem}
+                                    >
+                                        <View style={[S.sheetActionIcon, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                                            <Ionicons name="logo-whatsapp" size={20} color="#22C55E" />
+                                        </View>
+                                        <Text style={[S.sheetActionLabel, { color: '#22C55E' }]}>WhatsApp</Text>
+                                    </TouchableOpacity>
                                 ) : null}
-                                <QBtn icon="person-outline" label="Profile" color="#0EA5E9" onPress={() => closeSheet(() => { setSelUser(actUser); setDetailVis(true); })} />
-                                <QBtn icon={actUser.is_verified ? 'close-circle-outline' : 'checkmark-circle'} label={actUser.is_verified ? 'Unverify' : 'Verify'} color={actUser.is_verified ? '#64748B' : '#22C55E'} onPress={() => closeSheet(() => toggleVerify(actUser))} />
-                                <QBtn icon={actUser.is_banned ? 'shield-checkmark' : 'ban'} label={actUser.is_banned ? 'Unban' : 'Ban'} color={actUser.is_banned ? '#22C55E' : '#EF4444'} onPress={() => closeSheet(() => toggleBan(actUser))} />
-                                <QBtn icon={actUser.is_restricted ? 'lock-open-outline' : 'lock-closed-outline'} label={actUser.is_restricted ? 'Unrestrict' : 'Restrict'} color="#F59E0B" onPress={() => closeSheet(() => toggleRestrict(actUser))} />
-                                <QBtn icon="swap-horizontal" label="Role" color="#8B5CF6" onPress={() => { setRoleVis(true); }} />
-                                <QBtn icon="bicycle" label="→ Driver" color="#0EA5E9" onPress={() => closeSheet(() => makeDriver(actUser))} />
-                                <QBtn icon="wallet" label="Wallet" color="#059669" onPress={() => setWalVis(true)} />
-                                <QBtn icon="pricetag" label="Tags" color="#D97706" onPress={() => setTagVis(true)} />
-                                <QBtn icon="create" label="Note" color="#6366F1" onPress={() => { setNoteText(actUser.admin_note || ''); setNoteVis(true); }} />
+
+                                {/* Direct Phone Call */}
+                                {actUser.phone ? (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            closeSheet(() => Linking.openURL(`tel:${actUser.phone}`));
+                                        }}
+                                        style={S.sheetActionItem}
+                                    >
+                                        <View style={[S.sheetActionIcon, { backgroundColor: C.skyBg }]}>
+                                            <Ionicons name="call" size={20} color={C.sky} />
+                                        </View>
+                                        <Text style={[S.sheetActionLabel, { color: C.sky }]}>Direct Call</Text>
+                                    </TouchableOpacity>
+                                ) : null}
+
+                                {/* Direct In-App Message */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => setDirectMsgVis(true));
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: C.goldMuted }]}>
+                                        <Ionicons name="paper-plane" size={20} color={C.gold} />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: C.gold }]}>Direct Alert</Text>
+                                </TouchableOpacity>
+
+                                {/* Full Profile */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => {
+                                            setSelUser(actUser);
+                                            setDetailVis(true);
+                                        });
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: C.purpleBg }]}>
+                                        <Ionicons name="person" size={20} color={C.purple} />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: C.purple }]}>Full Profile</Text>
+                                </TouchableOpacity>
+
+                                {/* Wallet Adjustment */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => setWalVis(true));
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: C.emeraldBg }]}>
+                                        <Ionicons name="wallet" size={20} color={C.emerald} />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: C.emerald }]}>Wallet Fund</Text>
+                                </TouchableOpacity>
+
+                                {/* Change Role */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => setRoleVis(true));
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: 'rgba(249, 115, 22, 0.15)' }]}>
+                                        <Ionicons name="swap-horizontal" size={20} color="#F97316" />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: '#F97316' }]}>Switch Role</Text>
+                                </TouchableOpacity>
+
+                                {/* Verify Toggle */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => toggleVerify(actUser));
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: actUser.is_verified ? 'rgba(255,255,255,0.08)' : C.emeraldBg }]}>
+                                        <Ionicons name={actUser.is_verified ? 'close-circle' : 'checkmark-circle'} size={20} color={actUser.is_verified ? '#94A3B8' : C.emerald} />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: actUser.is_verified ? '#94A3B8' : C.emerald }]}>
+                                        {actUser.is_verified ? 'Revoke KYC' : 'Verify KYC'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* Suspend Account */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => toggleBan(actUser));
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: C.crimsonBg }]}>
+                                        <Ionicons name={actUser.is_banned ? 'shield-checkmark' : 'ban'} size={20} color={C.crimson} />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: C.crimson }]}>
+                                        {actUser.is_banned ? 'Restore User' : 'Suspend User'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* Promote to Driver */}
+                                {actUser.role !== 'driver' && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            closeSheet(() => makeDriver(actUser));
+                                        }}
+                                        style={S.sheetActionItem}
+                                    >
+                                        <View style={[S.sheetActionIcon, { backgroundColor: C.skyBg }]}>
+                                            <Ionicons name="bicycle" size={20} color={C.sky} />
+                                        </View>
+                                        <Text style={[S.sheetActionLabel, { color: C.sky }]}>Make Driver</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Admin Tags */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => setTagVis(true));
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: C.goldMuted }]}>
+                                        <Ionicons name="pricetags" size={20} color={C.gold} />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: C.gold }]}>Set Tags</Text>
+                                </TouchableOpacity>
+
+                                {/* Admin Note */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        closeSheet(() => {
+                                            setNoteText(actUser.admin_note || '');
+                                            setNoteVis(true);
+                                        });
+                                    }}
+                                    style={S.sheetActionItem}
+                                >
+                                    <View style={[S.sheetActionIcon, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+                                        <Ionicons name="create" size={20} color="#FFFFFF" />
+                                    </View>
+                                    <Text style={[S.sheetActionLabel, { color: '#FFFFFF' }]}>Edit Note</Text>
+                                </TouchableOpacity>
                             </ScrollView>
                         </>
                     )}
                 </Animated.View>
             </Modal>
 
-            {/* ══ ROLE PICKER ══ */}
+            {/* ── ROLE SELECTION MODAL ─────────────────────────────────────── */}
             <Modal visible={roleVis} transparent animationType="fade" onRequestClose={() => setRoleVis(false)}>
-                <TouchableOpacity style={S.overlay} onPress={() => setRoleVis(false)} />
-                <View style={S.picker}>
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 16 }}>Change Role — {actUser?.full_name}</Text>
-                    {Object.entries(ROLES).map(([role, cfg]) => (
-                        <TouchableOpacity key={role} style={[S.pRow, actUser?.role === role && { backgroundColor: `${cfg.color}10` }]} onPress={() => changeRole(actUser, role)}>
-                            <View style={[S.qIcon, { backgroundColor: cfg.bg, marginRight: 14 }]}><Ionicons name={cfg.icon} size={18} color={cfg.color} /></View>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: cfg.color, flex: 1 }}>{cfg.label}</Text>
-                            {actUser?.role === role && <Ionicons name="checkmark-circle" size={18} color={cfg.color} />}
+                <TouchableOpacity style={S.modalOverlay} onPress={() => setRoleVis(false)} />
+                <View style={S.dialogContainer}>
+                    <View style={S.dialogBox}>
+                        <Text style={S.dialogTitle}>Change Account Role</Text>
+                        <Text style={S.dialogSubtitle}>Assign a platform permission level for {actUser?.full_name}</Text>
+
+                        {Object.entries(ROLES).map(([roleKey, roleCfg]) => {
+                            const isCurrent = actUser?.role === roleKey;
+                            return (
+                                <TouchableOpacity
+                                    key={roleKey}
+                                    onPress={() => changeRole(actUser, roleKey)}
+                                    style={[S.roleSelectItem, isCurrent && { borderColor: roleCfg.color, backgroundColor: `${roleCfg.color}15` }]}
+                                >
+                                    <View style={[S.roleSelectIcon, { backgroundColor: roleCfg.bg }]}>
+                                        <Ionicons name={roleCfg.icon} size={18} color={roleCfg.color} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[S.roleSelectLabel, { color: roleCfg.color }]}>{roleCfg.label}</Text>
+                                        <Text style={S.roleSelectDesc}>
+                                            {roleKey === 'admin' ? 'Complete marketplace authority' :
+                                             roleKey === 'vendor' ? 'Store & product inventory manager' :
+                                             roleKey === 'driver' ? 'Dispatch courier & fulfillment driver' :
+                                             'Standard buyer & marketplace shopper'}
+                                        </Text>
+                                    </View>
+                                    {isCurrent && <Ionicons name="checkmark-circle" size={20} color={roleCfg.color} />}
+                                </TouchableOpacity>
+                            );
+                        })}
+
+                        <TouchableOpacity onPress={() => setRoleVis(false)} style={S.dialogCancelBtn}>
+                            <Text style={S.dialogCancelText}>Cancel</Text>
                         </TouchableOpacity>
-                    ))}
-                </View>
-            </Modal>
-
-            {/* ══ TAGS PICKER ══ */}
-            <Modal visible={tagVis} transparent animationType="slide" onRequestClose={() => setTagVis(false)}>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 36 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 14 }}>🏷️ Tags — {actUser?.full_name}</Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                            {PRESET_TAGS.map(t => {
-                                const active = (actUser?.admin_tags || []).includes(t.id);
-                                return (
-                                    <TouchableOpacity key={t.id} onPress={() => toggleTag(actUser, t.id)} style={[{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 2, borderColor: active ? t.color : '#E2E8F0', backgroundColor: active ? t.bg : 'white' }]}>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: active ? t.color : '#64748B' }}>{t.label}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                        <TouchableOpacity onPress={() => setTagVis(false)} style={{ marginTop: 18, backgroundColor: '#6366F1', borderRadius: 14, paddingVertical: 13, alignItems: 'center' }}>
-                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Done</Text>
-                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
 
-            {/* ══ NOTE MODAL ══ */}
-            <Modal visible={noteVis} transparent animationType="slide" onRequestClose={() => setNoteVis(false)}>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 20 }}>
-                    <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 20 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 12 }}>📝 Admin Note — {actUser?.full_name}</Text>
-                        <TextInput style={[S.fieldIn, { height: 120, textAlignVertical: 'top' }]} placeholder="Note about this user…" placeholderTextColor="#94A3B8" value={noteText} onChangeText={setNoteText} multiline />
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                            <TouchableOpacity onPress={() => setNoteVis(false)} style={{ flex: 1, backgroundColor: '#F1F5F9', borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}><Text style={{ color: '#64748B', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={saveNote} style={{ flex: 2, backgroundColor: '#6366F1', borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}><Text style={{ color: 'white', fontWeight: '800' }}>Save</Text></TouchableOpacity>
+            {/* ── WALLET CREDIT/DEBIT MODAL ────────────────────────────────── */}
+            <Modal visible={walVis} transparent animationType="fade" onRequestClose={() => setWalVis(false)}>
+                <View style={S.dialogContainer}>
+                    <View style={S.dialogBox}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            <Ionicons name="wallet" size={22} color={C.gold} style={{ marginRight: 8 }} />
+                            <Text style={S.dialogTitle}>Adjust Wallet Funds</Text>
                         </View>
-                    </View>
-                </View>
-            </Modal>
 
-            {/* ══ WALLET MODAL ══ */}
-            <Modal visible={walVis} transparent animationType="slide" onRequestClose={() => setWalVis(false)}>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 20 }}>
-                    <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 20 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 4 }}>💰 Adjust Wallet</Text>
-                        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>Current: <Text style={{ color: '#059669', fontWeight: '800' }}>{fmtAmt(actUser?.wallet?.balance || 0)}</Text></Text>
-                        <TextInput style={[S.fieldIn, { height: 52 }]} placeholder="Amount (₦)" placeholderTextColor="#94A3B8" value={walAmt} onChangeText={setWalAmt} keyboardType="numeric" />
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                            <TouchableOpacity onPress={() => { setWalVis(false); setWalAmt(''); }} style={{ backgroundColor: '#F1F5F9', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' }}><Text style={{ color: '#64748B', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => adjustWallet('subtract')} style={{ flex: 1, backgroundColor: '#FEF2F2', borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}><Text style={{ color: '#EF4444', fontWeight: '800' }}>Debit</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => adjustWallet('add')} style={{ flex: 1, backgroundColor: '#ECFDF5', borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}><Text style={{ color: '#059669', fontWeight: '800' }}>Credit</Text></TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+                        <Text style={S.dialogSubtitle}>
+                            Account: <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>{actUser?.full_name}</Text>
+                            {'\n'}Current Balance: <Text style={{ color: C.emerald, fontWeight: '800' }}>{fmtAmt(actUser?.wallet?.balance || 0)}</Text>
+                        </Text>
 
-            {/* ══ BROADCAST MODAL ══ */}
-            <Modal visible={bcastVis} transparent animationType="slide" onRequestClose={() => setBcastVis(false)}>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }}>
-                        <LinearGradient colors={['#4F46E5', '#7C3AED']} style={{ flexDirection: 'row', alignItems: 'center', padding: 18, gap: 10 }}>
-                            <Ionicons name="megaphone" size={20} color="white" />
-                            <Text style={{ flex: 1, color: 'white', fontSize: 15, fontWeight: '800' }}>Broadcast to {filtered.length} users</Text>
-                            <TouchableOpacity onPress={() => setBcastVis(false)}><Ionicons name="close" size={20} color="rgba(255,255,255,0.7)" /></TouchableOpacity>
-                        </LinearGradient>
-                        <View style={{ padding: 18, gap: 12 }}>
-                            <TextInput style={S.fieldIn} placeholder="Title (e.g. Special Offer! 🎉)" placeholderTextColor="#94A3B8" value={bTitle} onChangeText={setBTitle} />
-                            <TextInput style={[S.fieldIn, { height: 100, textAlignVertical: 'top' }]} placeholder="Message…" placeholderTextColor="#94A3B8" value={bMsg} onChangeText={setBMsg} multiline />
-                            <TouchableOpacity onPress={sendBcast} disabled={loading} style={{ borderRadius: 14, overflow: 'hidden' }}>
-                                <LinearGradient colors={['#4F46E5', '#7C3AED']} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 }}>
-                                    {loading ? <ActivityIndicator color="white" /> : <><Ionicons name="send" size={15} color="white" style={{ marginRight: 8 }} /><Text style={{ color: 'white', fontSize: 14, fontWeight: '800' }}>Send Broadcast</Text></>}
-                                </LinearGradient>
+                        <TextInput
+                            style={S.dialogInput}
+                            placeholder="Amount in Naira (e.g. 5000)"
+                            placeholderTextColor="#64748B"
+                            value={walAmt}
+                            onChangeText={setWalAmt}
+                            keyboardType="numeric"
+                        />
+
+                        <TextInput
+                            style={[S.dialogInput, { marginTop: 8 }]}
+                            placeholder="Reason (e.g. Promotional bonus, refund)"
+                            placeholderTextColor="#64748B"
+                            value={walReason}
+                            onChangeText={setWalReason}
+                        />
+
+                        <View style={S.dialogButtonRow}>
+                            <TouchableOpacity
+                                onPress={() => { setWalVis(false); setWalAmt(''); setWalReason(''); }}
+                                style={S.dialogSecondaryBtn}
+                            >
+                                <Text style={S.dialogSecondaryBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => adjustWallet('debit')}
+                                style={[S.dialogActionBtn, { backgroundColor: C.crimsonBg, borderColor: C.crimson }]}
+                            >
+                                <Text style={[S.dialogActionBtnText, { color: C.crimson }]}>Debit</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => adjustWallet('credit')}
+                                style={[S.dialogActionBtn, { backgroundColor: C.emeraldBg, borderColor: C.emerald }]}
+                            >
+                                <Text style={[S.dialogActionBtnText, { color: C.emerald }]}>Credit</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
             </Modal>
 
-            <AdminUserDetails visible={detailVis} user={selUser} navigation={nav} onClose={() => setDetailVis(false)} onUpdate={load} />
+            {/* ── DIRECT MESSAGE MODAL ─────────────────────────────────────── */}
+            <Modal visible={directMsgVis} transparent animationType="fade" onRequestClose={() => setDirectMsgVis(false)}>
+                <View style={S.dialogContainer}>
+                    <View style={S.dialogBox}>
+                        <Text style={S.dialogTitle}>Send Direct In-App Alert</Text>
+                        <Text style={S.dialogSubtitle}>Dispatch a targeted notification directly to {actUser?.full_name}</Text>
 
+                        <TextInput
+                            style={S.dialogInput}
+                            placeholder="Message Title (e.g. KYC Verified! 🎉)"
+                            placeholderTextColor="#64748B"
+                            value={directTitle}
+                            onChangeText={setDirectTitle}
+                        />
+
+                        <TextInput
+                            style={[S.dialogInput, { height: 90, textAlignVertical: 'top', marginTop: 10 }]}
+                            placeholder="Detailed notification message…"
+                            placeholderTextColor="#64748B"
+                            value={directBody}
+                            onChangeText={setDirectBody}
+                            multiline
+                        />
+
+                        <View style={[S.dialogButtonRow, { marginTop: 14 }]}>
+                            <TouchableOpacity onPress={() => setDirectMsgVis(false)} style={S.dialogSecondaryBtn}>
+                                <Text style={S.dialogSecondaryBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={sendDirectMessage}
+                                style={[S.dialogPrimaryBtn, { backgroundColor: C.gold }]}
+                            >
+                                <Text style={[S.dialogPrimaryBtnText, { color: '#071422' }]}>Send Alert</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── ADMIN TAGS MODAL ─────────────────────────────────────────── */}
+            <Modal visible={tagVis} transparent animationType="slide" onRequestClose={() => setTagVis(false)}>
+                <View style={S.modalOverlay}>
+                    <View style={S.actionSheet}>
+                        <View style={S.dragHandle} />
+                        <Text style={S.dialogTitle}>Account Segmentation Tags</Text>
+                        <Text style={S.dialogSubtitle}>Assign or remove customer classification flags</Text>
+
+                        <View style={S.tagsContainer}>
+                            {PRESET_TAGS.map(t => {
+                                const active = (actUser?.admin_tags || []).includes(t.id);
+                                return (
+                                    <TouchableOpacity
+                                        key={t.id}
+                                        onPress={() => toggleTag(actUser, t.id)}
+                                        style={[
+                                            S.tagPill,
+                                            { borderColor: active ? t.color : C.borderSubtle, backgroundColor: active ? t.bg : 'rgba(255,255,255,0.03)' }
+                                        ]}
+                                    >
+                                        <Text style={[S.tagPillText, { color: active ? t.color : C.textSecondary }]}>
+                                            {t.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => setTagVis(false)}
+                            style={[S.dialogPrimaryBtn, { marginTop: 18, backgroundColor: C.gold }]}
+                        >
+                            <Text style={[S.dialogPrimaryBtnText, { color: '#071422' }]}>Save Tags</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── ADMIN NOTE MODAL ─────────────────────────────────────────── */}
+            <Modal visible={noteVis} transparent animationType="fade" onRequestClose={() => setNoteVis(false)}>
+                <View style={S.dialogContainer}>
+                    <View style={S.dialogBox}>
+                        <Text style={S.dialogTitle}>Internal Admin Memo</Text>
+                        <Text style={S.dialogSubtitle}>Private notes visible only to marketplace administrators</Text>
+
+                        <TextInput
+                            style={[S.dialogInput, { height: 120, textAlignVertical: 'top' }]}
+                            placeholder="Add administrative observations, compliance notes, or records…"
+                            placeholderTextColor="#64748B"
+                            value={noteText}
+                            onChangeText={setNoteText}
+                            multiline
+                        />
+
+                        <View style={[S.dialogButtonRow, { marginTop: 14 }]}>
+                            <TouchableOpacity onPress={() => setNoteVis(false)} style={S.dialogSecondaryBtn}>
+                                <Text style={S.dialogSecondaryBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={saveNote} style={[S.dialogPrimaryBtn, { backgroundColor: C.gold }]}>
+                                <Text style={[S.dialogPrimaryBtnText, { color: '#071422' }]}>Save Memo</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── BROADCAST MODAL ──────────────────────────────────────────── */}
+            <Modal visible={bcastVis} transparent animationType="slide" onRequestClose={() => setBcastVis(false)}>
+                <View style={S.modalOverlay}>
+                    <View style={S.actionSheet}>
+                        <View style={S.dragHandle} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Ionicons name="megaphone" size={20} color={C.gold} style={{ marginRight: 8 }} />
+                            <Text style={S.dialogTitle}>Broadcast Notification</Text>
+                        </View>
+                        <Text style={S.dialogSubtitle}>
+                            Will dispatch to <Text style={{ color: C.gold, fontWeight: '800' }}>{filtered.length}</Text> filtered users.
+                        </Text>
+
+                        <TextInput
+                            style={S.dialogInput}
+                            placeholder="Broadcast Title (e.g. Weekend Flash Sale! 🎉)"
+                            placeholderTextColor="#64748B"
+                            value={bTitle}
+                            onChangeText={setBTitle}
+                        />
+
+                        <TextInput
+                            style={[S.dialogInput, { height: 110, textAlignVertical: 'top', marginTop: 10 }]}
+                            placeholder="Broadcast Message Content…"
+                            placeholderTextColor="#64748B"
+                            value={bMsg}
+                            onChangeText={setBMsg}
+                            multiline
+                        />
+
+                        <View style={[S.dialogButtonRow, { marginTop: 16 }]}>
+                            <TouchableOpacity onPress={() => setBcastVis(false)} style={S.dialogSecondaryBtn}>
+                                <Text style={S.dialogSecondaryBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={sendBroadcast}
+                                disabled={bcastSending}
+                                style={[S.dialogPrimaryBtn, { backgroundColor: C.gold }]}
+                            >
+                                {bcastSending ? (
+                                    <ActivityIndicator color="#071422" size="small" />
+                                ) : (
+                                    <Text style={[S.dialogPrimaryBtnText, { color: '#071422' }]}>Dispatch Broadcast</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* User Details Slide Modal */}
+            <AdminUserDetails
+                visible={detailVis}
+                user={selUser}
+                navigation={nav}
+                onClose={() => setDetailVis(false)}
+                onUpdate={loadData}
+            />
+
+            {/* WhatsApp Integration Modal */}
             <WhatsAppActionModal
                 visible={whatsappVisible}
                 phone={whatsappPhone}
@@ -697,61 +1361,602 @@ export const AdminUsers = ({ navigation: propNav }) => {
     );
 };
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Luxury Styling Sheet ────────────────────────────────────────────────────
 const S = StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#F8FAFC' },
-    hdr: { paddingHorizontal: 18, paddingBottom: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-    hdrRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    iconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-    hdrTitle: { color: '#0E1A2E', fontSize: 20, fontWeight: '900', letterSpacing: -.5 },
-    hdrSub: { color: '#64748B', fontSize: 11, fontWeight: '600', marginTop: 2 },
-    hChip: { alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, minWidth: 68 },
-    hChipVal: { fontSize: 15, fontWeight: '900' },
-    hChipLbl: { fontSize: 8, color: '#64748B', fontWeight: '600', textTransform: 'uppercase' },
-    statPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
-    statPillVal: { fontSize: 13, fontWeight: '900' },
-    statPillLbl: { fontSize: 9, color: '#64748B', fontWeight: '600' },
-    searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', marginHorizontal: 14, marginTop: 12, marginBottom: 4, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-    searchIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-    searchIn: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0E1A2E' },
-    pill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'white', borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', gap: 5 },
-    pillOn: { backgroundColor: '#0E1A2E', borderColor: '#0E1A2E' },
-    pillTxt: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-    pillTxtOn: { color: '#D9A73A' },
-    pillBadge: { backgroundColor: '#F1F5F9', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
-    pillBadgeTxt: { fontSize: 9, fontWeight: '800', color: '#64748B' },
-    sortRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 6, gap: 10 },
-    sortCount: { fontSize: 11, fontWeight: '700', color: '#94A3B8' },
-    sChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: 'white', borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 4 },
-    sChipOn: { borderColor: '#D9A73A', backgroundColor: '#FFFBEB' },
-    sChipTxt: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-    card: { backgroundColor: 'white', borderRadius: 16, paddingVertical: 13, paddingRight: 12, paddingLeft: 0, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
-    cardAccent: { width: 4, height: '100%', borderRadius: 2, marginRight: 10 },
-    cardBanned: { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' },
-    cardSel: { borderColor: '#0E1A2E', borderWidth: 2, backgroundColor: '#F8FAFC' },
-    avWrap: { width: 52, height: 52, marginRight: 11, position: 'relative' },
-    avRing: { borderRadius: 26, borderWidth: 2, padding: 1 },
-    dot: { position: 'absolute', bottom: 0, right: 0, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: 'white', alignItems: 'center', justifyContent: 'center' },
-    cName: { fontSize: 14, fontWeight: '800', color: '#0F172A', flex: 1, letterSpacing: -0.2 },
-    cEmail: { fontSize: 10.5, color: '#94A3B8', marginBottom: 5, fontWeight: '500' },
-    badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginBottom: 2 },
-    badge: { paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 7, flexDirection: 'row', alignItems: 'center' },
-    bdgTxt: { fontSize: 9, fontWeight: '800' },
-    walChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
-    walBal: { fontSize: 11, fontWeight: '800' },
-    walPend: { fontSize: 9.5, color: '#D97706', fontWeight: '600' },
-    lastSeen: { fontSize: 9.5, color: '#CBD5E1', fontWeight: '600' },
-    driverInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#F0F9FF' },
-    driverInfoTxt: { fontSize: 10, fontWeight: '700', color: '#0EA5E9', flex: 1 },
-    driverStatus: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 },
-    chatBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
-    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
-    sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 18, paddingBottom: 38 },
-    drag: { width: 36, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-    picker: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 40 },
-    pRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 10, borderRadius: 14, marginBottom: 6 },
-    qBtn: { alignItems: 'center', width: 68 },
-    qIcon: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
-    qLabel: { fontSize: 9, fontWeight: '700', textAlign: 'center' },
-    fieldIn: { backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' },
+    container: {
+        flex: 1,
+        backgroundColor: '#071422',
+    },
+    header: {
+        paddingHorizontal: 16,
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(217, 167, 58, 0.2)',
+    },
+    headerTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    headerIconBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.25)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitleBox: {
+        flex: 1,
+        paddingHorizontal: 12,
+    },
+    headerTitle: {
+        fontSize: 19,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: -0.3,
+    },
+    headerSubtitle: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#94A3B8',
+        marginTop: 2,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    kpiScroll: {
+        gap: 8,
+        marginTop: 14,
+        paddingBottom: 2,
+    },
+    kpiCard: {
+        backgroundColor: '#0B1B2F',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.25)',
+        borderRadius: 14,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        minWidth: 92,
+    },
+    kpiCardTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginBottom: 2,
+    },
+    kpiVal: {
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    kpiLabel: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#94A3B8',
+        textTransform: 'uppercase',
+    },
+    searchContainer: {
+        paddingHorizontal: 14,
+        marginTop: 10,
+        marginBottom: 4,
+    },
+    searchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0B1B2F',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.25)',
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    filterBar: {
+        backgroundColor: '#071422',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    filterScroll: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        gap: 8,
+    },
+    pill: {
+        paddingHorizontal: 13,
+        paddingVertical: 6,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    pillActive: {
+        backgroundColor: '#D9A73A',
+        borderColor: '#D9A73A',
+    },
+    pillText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#94A3B8',
+    },
+    pillTextActive: {
+        color: '#071422',
+        fontWeight: '900',
+    },
+    pillBadge: {
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        borderRadius: 10,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+    },
+    pillBadgeActive: {
+        backgroundColor: '#071422',
+    },
+    pillBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#94A3B8',
+    },
+    pillBadgeTextActive: {
+        color: '#D9A73A',
+    },
+    sortRibbon: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        justifyContent: 'space-between',
+    },
+    sortTotal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    indicatorDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#D9A73A',
+    },
+    sortTotalText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+    sortOptions: {
+        gap: 6,
+    },
+    sortChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+    },
+    sortChipActive: {
+        borderColor: 'rgba(217, 167, 58, 0.4)',
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+    },
+    sortChipText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#94A3B8',
+    },
+    sortChipTextActive: {
+        color: '#D9A73A',
+        fontWeight: '800',
+    },
+    listContent: {
+        paddingHorizontal: 14,
+        paddingTop: 6,
+        paddingBottom: 40,
+    },
+    card: {
+        backgroundColor: '#0B1B2F',
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingRight: 12,
+        paddingLeft: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.2)',
+        overflow: 'hidden',
+    },
+    cardAccentBar: {
+        width: 4,
+        height: '100%',
+        marginRight: 10,
+    },
+    cardBanned: {
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+    },
+    cardSelected: {
+        borderColor: '#D9A73A',
+        backgroundColor: 'rgba(217, 167, 58, 0.06)',
+    },
+    avContainer: {
+        width: 50,
+        height: 50,
+        marginRight: 11,
+        position: 'relative',
+    },
+    avRing: {
+        borderRadius: 25,
+        borderWidth: 2,
+        padding: 1,
+    },
+    statusDot: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 2,
+        borderColor: '#0B1B2F',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    infoContainer: {
+        flex: 1,
+        minWidth: 0,
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 1,
+    },
+    userName: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#FFFFFF',
+        letterSpacing: -0.2,
+    },
+    userEmail: {
+        fontSize: 11,
+        color: '#94A3B8',
+        fontWeight: '500',
+        marginBottom: 5,
+    },
+    tagRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 5,
+        marginBottom: 4,
+    },
+    chip: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    chipTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    bottomStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 3,
+    },
+    walletPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 2.5,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    walletText: {
+        fontSize: 10.5,
+        fontWeight: '800',
+    },
+    walletPending: {
+        fontSize: 9.5,
+        fontWeight: '600',
+        color: '#F59E0B',
+    },
+    lastActiveText: {
+        fontSize: 9.5,
+        color: '#64748B',
+        fontWeight: '600',
+    },
+    driverStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 5,
+        paddingTop: 5,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(14, 165, 233, 0.15)',
+    },
+    driverStripText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#0EA5E9',
+        flex: 1,
+    },
+    driverStatusBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 4,
+    },
+    cardActions: {
+        paddingLeft: 6,
+    },
+    quickActionBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(217, 167, 58, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#94A3B8',
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 80,
+        gap: 8,
+    },
+    emptyTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+    emptySubtitle: {
+        fontSize: 12,
+        color: '#94A3B8',
+    },
+    modalOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    },
+    actionSheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#0B1B2F',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        padding: 20,
+        paddingBottom: 36,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(217, 167, 58, 0.3)',
+    },
+    dragHandle: {
+        width: 38,
+        height: 4,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    sheetUserHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+        marginBottom: 12,
+    },
+    sheetUserName: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    sheetUserEmail: {
+        fontSize: 11,
+        color: '#94A3B8',
+    },
+    sheetNoteCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)',
+        padding: 10,
+        borderRadius: 12,
+        marginBottom: 12,
+    },
+    sheetNoteText: {
+        fontSize: 11,
+        color: '#F3C96A',
+        flex: 1,
+        fontWeight: '600',
+    },
+    sheetSectionTitle: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#94A3B8',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 10,
+    },
+    sheetActionsScroll: {
+        gap: 12,
+        paddingVertical: 4,
+    },
+    sheetActionItem: {
+        alignItems: 'center',
+        width: 74,
+    },
+    sheetActionIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    sheetActionLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    dialogContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+    },
+    dialogBox: {
+        backgroundColor: '#0B1B2F',
+        borderRadius: 24,
+        padding: 22,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)',
+    },
+    dialogTitle: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: -0.3,
+    },
+    dialogSubtitle: {
+        fontSize: 12,
+        color: '#94A3B8',
+        marginTop: 4,
+        marginBottom: 14,
+        lineHeight: 18,
+    },
+    dialogInput: {
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        color: '#FFFFFF',
+        fontSize: 14,
+    },
+    dialogButtonRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 14,
+    },
+    dialogSecondaryBtn: {
+        flex: 1,
+        paddingVertical: 13,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    dialogSecondaryBtnText: {
+        color: '#94A3B8',
+        fontWeight: '700',
+        fontSize: 13,
+    },
+    dialogActionBtn: {
+        flex: 1,
+        paddingVertical: 13,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    dialogActionBtnText: {
+        fontWeight: '800',
+        fontSize: 13,
+    },
+    dialogPrimaryBtn: {
+        flex: 2,
+        paddingVertical: 13,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    dialogPrimaryBtnText: {
+        fontWeight: '900',
+        fontSize: 13,
+    },
+    roleSelectItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        marginBottom: 8,
+    },
+    roleSelectIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    roleSelectLabel: {
+        fontSize: 13,
+        fontWeight: '900',
+    },
+    roleSelectDesc: {
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 2,
+    },
+    dialogCancelBtn: {
+        marginTop: 10,
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    dialogCancelText: {
+        color: '#94A3B8',
+        fontWeight: '700',
+        fontSize: 13,
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginTop: 10,
+    },
+    tagPill: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 16,
+        borderWidth: 1.5,
+    },
+    tagPillText: {
+        fontSize: 12,
+        fontWeight: '800',
+    },
 });
