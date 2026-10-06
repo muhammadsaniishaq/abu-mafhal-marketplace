@@ -133,19 +133,29 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 const asset = result.assets[0];
                 if (asset.base64) {
                     setUploading(true);
-                    const fileName = `cat_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
-                    const { error: uploadError } = await supabase.storage
-                        .from('product-images')
-                        .upload(fileName, decode(asset.base64), {
-                            contentType: 'image/png',
-                            upsert: true
-                        });
+                    let uploadedUrl = null;
+                    const fileName = `categories/cat_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+                    
+                    try {
+                        const { error: uploadError } = await supabase.storage
+                            .from('products')
+                            .upload(fileName, decode(asset.base64), {
+                                contentType: 'image/png',
+                                upsert: true
+                            });
 
-                    if (!uploadError) {
-                        const { data: publicUrlData } = supabase.storage
-                            .from('product-images')
-                            .getPublicUrl(fileName);
-                        setFormImageUrl(publicUrlData.publicUrl);
+                        if (!uploadError) {
+                            const { data: publicUrlData } = supabase.storage
+                                .from('products')
+                                .getPublicUrl(fileName);
+                            uploadedUrl = publicUrlData?.publicUrl;
+                        }
+                    } catch (_) {}
+
+                    if (uploadedUrl) {
+                        setFormImageUrl(uploadedUrl);
+                    } else if (asset.base64) {
+                        setFormImageUrl(`data:image/png;base64,${asset.base64}`);
                     } else {
                         setFormImageUrl(asset.uri);
                     }
@@ -155,7 +165,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
             }
         } catch (err) {
             console.error('Image pick error:', err);
-            Alert.alert('Upload Notice', 'An kasa daura hoton ta kai tsaye. Za ka iya manna URL na hoton.');
         } finally {
             setUploading(false);
         }

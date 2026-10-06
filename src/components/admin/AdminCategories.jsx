@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../config/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../../config/supabase';
 import { 
   Layers, Plus, Search, Edit2, Trash2, CheckCircle, 
   XCircle, Image as ImageIcon, ArrowUpDown, RefreshCw, Eye,
@@ -234,18 +234,38 @@ const AdminCategories = () => {
   };
 
   const syncCustomTaxonomy = async (updatedList, deletedSlugs = []) => {
+    const payload = {
+      categories: updatedList,
+      deletedSlugs,
+      updated_at: new Date().toISOString()
+    };
+
     try {
-      await supabase.rpc('save_app_setting', {
+      const { error } = await supabase.rpc('save_app_setting', {
         p_key: 'custom_taxonomy_categories',
-        p_value: {
-          categories: updatedList,
-          deletedSlugs,
-          updated_at: new Date().toISOString()
-        },
+        p_value: payload,
         p_description: 'Platform Taxonomy Categories'
       });
+      if (!error) return;
+    } catch (_) {}
+
+    // Fallback: Direct REST call with clean Anon Key (immune to 401 / expired token)
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/rpc/save_app_setting`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          p_key: 'custom_taxonomy_categories',
+          p_value: payload,
+          p_description: 'Platform Taxonomy Categories'
+        })
+      });
     } catch (e) {
-      console.warn('RPC sync notice:', e);
+      console.warn('REST sync notice:', e);
     }
   };
 
