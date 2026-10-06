@@ -12,6 +12,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { geminiService } from '../../services/geminiService';
 import { parsePrice } from '../../utils/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
+import { fetchAllCategories, subscribeToCategoryChanges } from '../../services/categoryService';
 
 const { width: W } = Dimensions.get('window');
 const SB_H = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
@@ -150,25 +151,28 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     // ── Load categories dynamically ──────────────────────────────
     useEffect(() => {
         loadCategories();
+        const unsubscribe = subscribeToCategoryChanges(() => {
+            loadCategories();
+        });
         const ch = supabase.channel('admin-addprod-cat-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
                 loadCategories();
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+                loadCategories();
+            })
             .subscribe();
         return () => {
+            unsubscribe();
             supabase.removeChannel(ch);
         };
     }, []);
 
     const loadCategories = async () => {
         try {
-            const { data, error } = await supabase
-                .from('categories')
-                .select('*')
-                .neq('is_active', false)
-                .order('display_order', { ascending: true, nullsFirst: false });
+            const data = await fetchAllCategories({ activeOnly: true, forceRefresh: false });
 
-            if (!error && Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data) && data.length > 0) {
                 const mapped = data.map((c, i) => ({
                     label: c.name,
                     icon: c.icon || 'pricetag',

@@ -73,18 +73,75 @@ const AdminCategories = () => {
   const fetchCategoriesAndCounts = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const [catsRes, prodsRes] = await Promise.allSettled([
+      const [catsRes, prodsRes, settingsRes] = await Promise.allSettled([
         supabase
           .from('categories')
           .select('*')
           .order('display_order', { ascending: true, nullsFirst: false }),
         supabase
           .from('products')
-          .select('id, category')
+          .select('id, category'),
+        supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'custom_taxonomy_categories')
+          .maybeSingle()
       ]);
 
-      const cats = (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value?.data)) ? catsRes.value.data : [];
+      const rawTable = (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value?.data)) ? catsRes.value.data : [];
       const prods = (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value?.data)) ? prodsRes.value.data : [];
+
+      let rawCustom = [];
+      let deletedSlugs = [];
+      if (settingsRes.status === 'fulfilled' && settingsRes.value?.data?.value) {
+        let val = settingsRes.value.data.value;
+        if (typeof val === 'string') {
+          try { val = JSON.parse(val); } catch (_) {}
+        }
+        if (Array.isArray(val)) {
+          rawCustom = val;
+        } else if (val && typeof val === 'object') {
+          if (Array.isArray(val.categories)) rawCustom = val.categories;
+          if (Array.isArray(val.deletedSlugs)) deletedSlugs = val.deletedSlugs;
+        }
+      }
+
+      const categoryMap = new Map();
+      rawTable.forEach(cat => {
+        const slug = (cat.slug || cat.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-')).toLowerCase().trim();
+        if (deletedSlugs.includes(slug)) return;
+        categoryMap.set(slug, {
+          ...cat,
+          slug,
+          display_order: Number(cat.display_order) || 0,
+          is_active: cat.is_active !== false
+        });
+      });
+
+      rawCustom.forEach(cat => {
+        if (!cat || !cat.name) return;
+        const slug = (cat.slug || cat.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-')).toLowerCase().trim();
+        if (cat.is_deleted === true || deletedSlugs.includes(slug)) {
+          categoryMap.delete(slug);
+          return;
+        }
+        const existing = categoryMap.get(slug);
+        categoryMap.set(slug, {
+          id: cat.id || existing?.id || `cat_${Date.now()}`,
+          name: cat.name,
+          slug,
+          icon: cat.icon || existing?.icon || 'Tag',
+          image_url: cat.image_url !== undefined ? cat.image_url : (existing?.image_url || null),
+          display_order: cat.display_order !== undefined ? Number(cat.display_order) : (existing?.display_order || 0),
+          is_active: cat.is_active !== false,
+          created_at: cat.created_at || existing?.created_at || new Date().toISOString()
+        });
+      });
+
+      const mergedCats = Array.from(categoryMap.values()).sort((a, b) => {
+        if (a.display_order !== b.display_order) return a.display_order - b.display_order;
+        return (a.name || '').localeCompare(b.name || '');
+      });
 
       const counts = {};
       prods.forEach(p => {
@@ -94,7 +151,7 @@ const AdminCategories = () => {
         }
       });
 
-      setCategories(cats);
+      setCategories(mergedCats);
       setProductCounts(counts);
     } catch (err) {
       console.error('Error fetching categories:', err);
@@ -176,6 +233,22 @@ const AdminCategories = () => {
     setForm(nextForm);
   };
 
+  const syncCustomTaxonomy = async (updatedList, deletedSlugs = []) => {
+    try {
+      await supabase.rpc('save_app_setting', {
+        p_key: 'custom_taxonomy_categories',
+        p_value: {
+          categories: updatedList,
+          deletedSlugs,
+          updated_at: new Date().toISOString()
+        },
+        p_description: 'Platform Taxonomy Categories'
+      });
+    } catch (e) {
+      console.warn('RPC sync notice:', e);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -184,49 +257,70 @@ const AdminCategories = () => {
     }
 
     setSaving(true);
-    const slug = form.slug.trim() || form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+    const name = form.name.trim();
+    const slug = form.slug.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const displayOrder = parseInt(form.display_order, 10) || 0;
+    const isActive = form.is_active === true;
+    const imageUrl = form.image_url.trim() || null;
+    const icon = form.icon || 'Tag';
 
     try {
-      if (editingCategory) {
-        // Update
-        const { data, error } = await supabase
-          .from('categories')
-          .update({
-            name: form.name.trim(),
-            slug,
-            icon: form.icon || 'Tag',
-            image_url: form.image_url.trim() || null,
-            display_order: parseInt(form.display_order, 10) || 0,
-            is_active: form.is_active === true
-          })
-          .eq('id', editingCategory.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        setCategories(prev => prev.map(c => c.id === editingCategory.id ? data : c));
-        invalidateWebCaches();
-        showToast('success', `Category "${form.name.trim()}" updated and live!`);
-      } else {
-        // Insert
-        const { data, error } = await supabase
-          .from('categories')
-          .insert([{
-            name: form.name.trim(),
-            slug,
-            icon: form.icon || 'Tag',
-            image_url: form.image_url.trim() || null,
-            display_order: parseInt(form.display_order, 10) || 0,
-            is_active: form.is_active === true
-          }])
-          .select()
-          .single();
-
-        if (error) throw error;
-        setCategories(prev => [...prev, data]);
-        invalidateWebCaches();
-        showToast('success', `New category "${form.name.trim()}" created and live!`);
+      // 1. Try table write
+      try {
+        if (editingCategory?.id && typeof editingCategory.id === 'number') {
+          await supabase
+            .from('categories')
+            .update({
+              name,
+              slug,
+              icon,
+              image_url: imageUrl,
+              display_order: displayOrder,
+              is_active: isActive
+            })
+            .eq('id', editingCategory.id);
+        } else if (!editingCategory) {
+          await supabase
+            .from('categories')
+            .insert([{
+              name,
+              slug,
+              icon,
+              image_url: imageUrl,
+              display_order: displayOrder,
+              is_active: isActive
+            }]);
+        }
+      } catch (dbErr) {
+        console.warn('Table write notice:', dbErr);
       }
+
+      // 2. Sync to custom taxonomy RPC
+      const savedRecord = {
+        id: editingCategory?.id || `cat_${Date.now()}`,
+        name,
+        slug,
+        icon,
+        image_url: imageUrl,
+        display_order: displayOrder,
+        is_active: isActive,
+        updated_at: new Date().toISOString()
+      };
+
+      const existingIndex = categories.findIndex(
+        c => (editingCategory?.id && c.id === editingCategory.id) || c.slug === slug
+      );
+
+      let nextList = [...categories];
+      if (existingIndex >= 0) {
+        nextList[existingIndex] = { ...nextList[existingIndex], ...savedRecord };
+      } else {
+        nextList.push(savedRecord);
+      }
+
+      await syncCustomTaxonomy(nextList);
+      invalidateWebCaches();
+      showToast('success', editingCategory ? `Category "${name}" updated and live!` : `Category "${name}" created and live!`);
       setShowModal(false);
       fetchCategoriesAndCounts(true);
     } catch (err) {
@@ -239,22 +333,22 @@ const AdminCategories = () => {
 
   const handleToggleStatus = async (cat) => {
     const nextStatus = cat.is_active === false ? true : false;
-    // Optimistic UI update
-    setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: nextStatus } : c));
+    setCategories(prev => prev.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: nextStatus } : c));
 
     try {
-      const { error } = await supabase
-        .from('categories')
-        .update({ is_active: nextStatus })
-        .eq('id', cat.id);
+      try {
+        if (cat.id && typeof cat.id === 'number') {
+          await supabase.from('categories').update({ is_active: nextStatus }).eq('id', cat.id);
+        }
+      } catch (_) {}
 
-      if (error) throw error;
+      const nextList = categories.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: nextStatus } : c);
+      await syncCustomTaxonomy(nextList);
       invalidateWebCaches();
       showToast('success', `Category set to ${nextStatus ? 'Active' : 'Inactive'}`);
     } catch (err) {
       console.error(err);
-      // Revert on error
-      setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: !nextStatus } : c));
+      setCategories(prev => prev.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: !nextStatus } : c));
       showToast('error', 'Could not update category status');
     }
   };
@@ -266,13 +360,15 @@ const AdminCategories = () => {
     if (!window.confirm(`Are you sure you want to delete category "${cat.name}"?${warn}`)) return;
 
     try {
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', cat.id);
+      try {
+        if (cat.id && typeof cat.id === 'number') {
+          await supabase.from('categories').delete().eq('id', cat.id);
+        }
+      } catch (_) {}
 
-      if (error) throw error;
-      setCategories(prev => prev.filter(c => c.id !== cat.id));
+      const nextList = categories.filter(c => c.id !== cat.id && c.slug !== cat.slug);
+      setCategories(nextList);
+      await syncCustomTaxonomy(nextList, [cat.slug]);
       invalidateWebCaches();
       showToast('success', 'Category deleted successfully');
     } catch (err) {

@@ -8,6 +8,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
+import { fetchAllCategories, subscribeToCategoryChanges } from "../services/categoryService";
 
 const RAIL_WIDTH = 82;
 
@@ -375,18 +376,23 @@ export const CategoriesPage = ({
 
     useEffect(() => {
         fetchD();
+        const unsubscribeCats = subscribeToCategoryChanges(() => fetchD(true));
         const ch = supabase.channel("cats-live-modern")
             .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () => fetchD(true))
             .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => fetchD(true))
+            .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, () => fetchD(true))
             .subscribe();
-        return () => supabase.removeChannel(ch);
+        return () => {
+            unsubscribeCats();
+            supabase.removeChannel(ch);
+        };
     }, []);
 
     const fetchD = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
             const [cr, pr] = await Promise.allSettled([
-                supabase.from("categories").select("*").neq("is_active", false).order("display_order", { ascending: true, nullsFirst: false }),
+                fetchAllCategories({ activeOnly: true, forceRefresh: false }).then(d => ({ data: d })),
                 supabase.from("products").select("id,name,description,price,compare_at_price,image_url,images,category,rating,reviews,stock,total_sales,status,created_at").eq("status", "approved").order("created_at", { ascending: false }).limit(150),
             ]);
             const cl = cr.status === "fulfilled" && Array.isArray(cr.value?.data) ? cr.value.data : [];

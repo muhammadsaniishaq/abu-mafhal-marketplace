@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { fetchAllCategories, subscribeToCategoryChanges } from '../services/categoryService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -173,9 +174,19 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, () => {
                 fetchData();
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+                fetchData();
+            })
             .subscribe();
 
+        const unsubscribeCats = subscribeToCategoryChanges((newCats) => {
+            if (Array.isArray(newCats)) {
+                setCategories(newCats.filter(c => c.is_active !== false));
+            }
+        });
+
         return () => {
+            unsubscribeCats();
             supabase.removeChannel(channel);
         };
     }, []);
@@ -203,8 +214,8 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').order('created_at', { ascending: false }).limit(8),
                 // 3: Recommended
                 supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').limit(12),
-                // 4: Categories from Admin
-                supabase.from('categories').select('id, name, icon, image_url, display_order, is_active, slug').neq('is_active', false).order('display_order', { ascending: true, nullsFirst: false }),
+                // 4: Categories from Admin (Unified DB + Custom Taxonomy)
+                fetchAllCategories({ activeOnly: true, forceRefresh: false }).then(cats => ({ data: cats })).catch(() => ({ data: [] })),
                 // 5: Top Vendors
                 supabase.from('vendors').select('id, user_id, business_name, logo_url, rating, review_count, total_sales, is_verified, vendor_status').eq('vendor_status', 'active').eq('is_verified', true).order('total_sales', { ascending: false }).limit(8),
                 // 6: Home Services

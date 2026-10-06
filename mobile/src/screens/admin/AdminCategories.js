@@ -6,10 +6,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
+import { supabase } from '../../lib/supabase';
+import {
+    fetchAllCategories,
+    saveCategory,
+    deleteCategory,
+    toggleCategoryStatus,
+    subscribeToCategoryChanges,
+    invalidateCategoryCaches,
+    generateSlug
+} from '../../services/categoryService';
 
 const BRAND = {
     navyDark: '#071422',
@@ -31,25 +39,6 @@ const BRAND = {
     border: '#E2E8F0',
     borderGold: 'rgba(217, 167, 58, 0.35)',
     danger: '#EF4444',
-};
-
-const invalidateClientCaches = async () => {
-    try {
-        const keys = [
-            '@abumafhal_home_cache_v2',
-            '@abumafhal_shop_cache',
-            'abumafhal_categories_cache',
-            '@abumafhal_categories_v2'
-        ];
-        await Promise.allSettled(keys.map(k => AsyncStorage.removeItem(k)));
-        if (typeof window !== 'undefined' && window.localStorage) {
-            keys.forEach(k => {
-                try { window.localStorage.removeItem(k); } catch (_) {}
-            });
-        }
-    } catch (e) {
-        console.log('Cache invalidation err:', e);
-    }
 };
 
 export const AdminCategories = ({ navigation, onBack }) => {
@@ -74,17 +63,29 @@ export const AdminCategories = ({ navigation, onBack }) => {
     useEffect(() => {
         fetchCategoriesAndCounts();
 
+        // Subscribe to internal category service updates
+        const unsubscribe = subscribeToCategoryChanges((newCats) => {
+            if (Array.isArray(newCats)) {
+                setCategories(newCats);
+            }
+        });
+
+        // Also subscribe to Postgres Realtime changes
         const channel = supabase
-            .channel('admin-categories-realtime-v5')
+            .channel('admin-categories-unified-v6')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
                 fetchCategoriesAndCounts(true);
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
                 fetchCategoriesAndCounts(true);
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+                fetchCategoriesAndCounts(true);
+            })
             .subscribe();
 
         return () => {
+            unsubscribe();
             supabase.removeChannel(channel);
         };
     }, []);
@@ -92,18 +93,12 @@ export const AdminCategories = ({ navigation, onBack }) => {
     const fetchCategoriesAndCounts = async (isSilent = false) => {
         if (!isSilent) setLoading(true);
         try {
-            const [catsRes, prodsRes] = await Promise.allSettled([
-                supabase
-                    .from('categories')
-                    .select('*')
-                    .order('display_order', { ascending: true, nullsFirst: false }),
-                supabase
-                    .from('products')
-                    .select('id, category')
+            const [cats, prodsRes] = await Promise.all([
+                fetchAllCategories({ forceRefresh: true }),
+                supabase.from('products').select('id, category')
             ]);
 
-            const cats = (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value?.data)) ? catsRes.value.data : [];
-            const prods = (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value?.data)) ? prodsRes.value.data : [];
+            const prods = (Array.isArray(prodsRes?.data)) ? prodsRes.data : [];
 
             // Compute counts
             const counts = {};
@@ -114,10 +109,10 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 }
             });
 
-            setCategories(cats);
+            setCategories(Array.isArray(cats) ? cats : []);
             setProductCounts(counts);
         } catch (e) {
-            console.error('Fetch categories crash:', e);
+            console.error('[AdminCategories] Fetch crash:', e);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -152,7 +147,6 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             .getPublicUrl(fileName);
                         setFormImageUrl(publicUrlData.publicUrl);
                     } else {
-                        // Fallback to asset URI
                         setFormImageUrl(asset.uri);
                     }
                 } else if (asset.uri) {
@@ -161,7 +155,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
             }
         } catch (err) {
             console.error('Image pick error:', err);
-            Alert.alert('Upload Error', 'Could not process selected image. You can also paste an image URL directly.');
+            Alert.alert('Upload Notice', 'An kasa daura hoton ta kai tsaye. Za ka iya manna URL na hoton.');
         } finally {
             setUploading(false);
         }
@@ -191,59 +185,42 @@ export const AdminCategories = ({ navigation, onBack }) => {
     const handleNameChange = (text) => {
         setFormName(text);
         if (!editingCategory) {
-            const generatedSlug = text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-            setFormSlug(generatedSlug);
+            setFormSlug(generateSlug(text));
         }
     };
 
     const handleSave = async () => {
         if (!formName.trim()) {
-            return Alert.alert('Validation Error', 'Please enter a category name.');
+            return Alert.alert('Kuskure (Error)', 'Da fatan a saka sunan Category (Please enter a category name).');
         }
 
-        const slug = formSlug.trim() || formName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+        const slug = formSlug.trim() || generateSlug(formName);
         const displayOrder = parseInt(formDisplayOrder, 10) || 0;
 
         try {
             setSaving(true);
 
-            if (editingCategory) {
-                // Update
-                const { error } = await supabase
-                    .from('categories')
-                    .update({
-                        name: formName.trim(),
-                        slug,
-                        image_url: formImageUrl.trim() || null,
-                        display_order: displayOrder,
-                        is_active: formIsActive === true
-                    })
-                    .eq('id', editingCategory.id);
-
-                if (error) throw error;
-                await invalidateClientCaches();
-                Alert.alert('Success', `Category "${formName.trim()}" updated successfully.`);
-            } else {
-                // Insert
-                const { error } = await supabase
-                    .from('categories')
-                    .insert([{
-                        name: formName.trim(),
-                        slug,
-                        image_url: formImageUrl.trim() || null,
-                        display_order: displayOrder,
-                        is_active: formIsActive === true
-                    }]);
-
-                if (error) throw error;
-                await invalidateClientCaches();
-                Alert.alert('Success', `New category "${formName.trim()}" created and live!`);
-            }
+            await saveCategory({
+                name: formName.trim(),
+                slug,
+                image_url: formImageUrl.trim() || null,
+                display_order: displayOrder,
+                is_active: formIsActive === true
+            }, editingCategory);
 
             setModalVisible(false);
-            fetchCategoriesAndCounts();
+            await fetchCategoriesAndCounts(true);
+
+            Alert.alert(
+                'An Samu Nasara! 🎉',
+                editingCategory
+                    ? `An sabunta category "${formName.trim()}" kuma yana aiki 100% a dukkan manhajar.`
+                    : `An kirkiri sabon category "${formName.trim()}" kuma ya hau kai tsaye 100%!`,
+                [{ text: 'To Madalla', style: 'default' }]
+            );
         } catch (err) {
-            Alert.alert('Save Failed', err.message || 'Failed to save category. Please try again.');
+            console.error('Save failed:', err);
+            Alert.alert('Save Failed', err.message || 'An samu matsala wajen ajiye category.');
         } finally {
             setSaving(false);
         }
@@ -252,46 +229,38 @@ export const AdminCategories = ({ navigation, onBack }) => {
     const handleToggleStatus = async (cat) => {
         const nextStatus = cat.is_active === false ? true : false;
         // Optimistic UI update
-        setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: nextStatus } : c));
+        setCategories(prev => prev.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: nextStatus } : c));
 
         try {
-            const { error } = await supabase
-                .from('categories')
-                .update({ is_active: nextStatus })
-                .eq('id', cat.id);
-
-            if (error) {
-                // Revert on error
-                setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: !nextStatus } : c));
-                Alert.alert('Status Error', 'Could not update category visibility status.');
-            } else {
-                await invalidateClientCaches();
-            }
+            await toggleCategoryStatus(cat);
         } catch (err) {
-            console.error(err);
+            console.error('Toggle status error:', err);
+            // Revert
+            setCategories(prev => prev.map(c => (c.id === cat.id || c.slug === cat.slug) ? { ...c, is_active: !nextStatus } : c));
+            Alert.alert('Matsalar Status', 'Ba a iya canza matsayin category ba.');
         }
     };
 
     const deleteCat = (cat) => {
         const count = productCounts[(cat.name || '').toLowerCase().trim()] || 0;
-        const warning = count > 0 ? ` WARNING: This category currently has ${count} linked products.` : '';
+        const warning = count > 0 ? `\n\nLURA: Wannan category yana da kayayyaki ${count} da aka danganta da shi.` : '';
 
         Alert.alert(
-            'Delete Category',
-            `Are you sure you want to delete "${cat.name}"?${warning}`,
+            'Goge Category (Delete)',
+            `Kana da tabbacin kana son goge "${cat.name}"?${warning}`,
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: 'A\'a (Cancel)', style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: 'Goge (Delete)',
                     style: 'destructive',
                     onPress: async () => {
-                        const { error } = await supabase.from('categories').delete().eq('id', cat.id);
-                        if (!error) {
-                            setCategories(prev => prev.filter(c => c.id !== cat.id));
-                            await invalidateClientCaches();
-                            Alert.alert('Deleted', 'Category removed successfully.');
-                        } else {
-                            Alert.alert('Delete Failed', error.message);
+                        try {
+                            setCategories(prev => prev.filter(c => c.id !== cat.id && c.slug !== cat.slug));
+                            await deleteCategory(cat);
+                            Alert.alert('An Goge', `An cire category "${cat.name}" cikin nasara.`);
+                        } catch (delErr) {
+                            Alert.alert('Delete Failed', delErr.message || 'An kasa goge category.');
+                            fetchCategoriesAndCounts(true);
                         }
                     }
                 }
@@ -339,11 +308,11 @@ export const AdminCategories = ({ navigation, onBack }) => {
                     <View style={{ flex: 1, paddingRight: 10 }}>
                         <View style={s.badgePill}>
                             <Ionicons name="sparkles" size={11} color={BRAND.gold} />
-                            <Text style={s.badgePillTxt}>ABU MAFHAL TAXONOMY</Text>
+                            <Text style={s.badgePillTxt}>TSARIN KASUWA • TAXONOMY</Text>
                         </View>
-                        <Text style={s.headerTitle}>Category Management</Text>
+                        <Text style={s.headerTitle}>Sarrafa Categories</Text>
                         <Text style={s.headerSubtitle}>
-                            Departments, order priority & live catalog propagation
+                            Bangarori, jerin fifiko & bayyana kai tsaye a manhaja 100%
                         </Text>
                     </View>
 
@@ -359,7 +328,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             style={s.addBtnGrad}
                         >
                             <Ionicons name="add" size={18} color="#071422" />
-                            <Text style={s.addBtnTxt}>Add New</Text>
+                            <Text style={s.addBtnTxt}>KARA SABO</Text>
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>
@@ -368,19 +337,19 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 <View style={s.kpiRow}>
                     <View style={s.kpiCard}>
                         <Text style={s.kpiValue}>{totalCategories}</Text>
-                        <Text style={s.kpiLabel}>Total</Text>
+                        <Text style={s.kpiLabel}>Duka (Total)</Text>
                     </View>
                     <View style={s.kpiCard}>
                         <Text style={[s.kpiValue, { color: BRAND.emerald }]}>{activeCategories}</Text>
-                        <Text style={s.kpiLabel}>Active</Text>
+                        <Text style={s.kpiLabel}>Masu Aiki</Text>
                     </View>
                     <View style={s.kpiCard}>
                         <Text style={[s.kpiValue, { color: BRAND.slate }]}>{inactiveCategories}</Text>
-                        <Text style={s.kpiLabel}>Inactive</Text>
+                        <Text style={s.kpiLabel}>An Dakatar</Text>
                     </View>
                     <View style={s.kpiCard}>
                         <Text style={[s.kpiValue, { color: BRAND.gold }]}>{totalLinkedProds}</Text>
-                        <Text style={s.kpiLabel}>Products</Text>
+                        <Text style={s.kpiLabel}>Kayayyaki</Text>
                     </View>
                 </View>
 
@@ -388,7 +357,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 <View style={s.searchBar}>
                     <Ionicons name="search" size={16} color={BRAND.gold} style={{ marginRight: 8 }} />
                     <TextInput
-                        placeholder="Search category name or slug..."
+                        placeholder="Nemi category ko slug..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         style={s.searchInput}
@@ -404,9 +373,9 @@ export const AdminCategories = ({ navigation, onBack }) => {
                 {/* Filter Pills Row */}
                 <View style={s.filterPillsRow}>
                     {[
-                        { key: 'all', label: `All (${totalCategories})` },
-                        { key: 'active', label: `Active (${activeCategories})` },
-                        { key: 'inactive', label: `Inactive (${inactiveCategories})` },
+                        { key: 'all', label: `Duka (${totalCategories})` },
+                        { key: 'active', label: `Masu Aiki (${activeCategories})` },
+                        { key: 'inactive', label: `An Dakatar (${inactiveCategories})` },
                     ].map(f => (
                         <TouchableOpacity
                             key={f.key}
@@ -426,22 +395,22 @@ export const AdminCategories = ({ navigation, onBack }) => {
             {loading && !refreshing ? (
                 <View style={s.loadingCenter}>
                     <ActivityIndicator size="large" color={BRAND.gold} />
-                    <Text style={s.loadingTxt}>Loading taxonomy categories...</Text>
+                    <Text style={s.loadingTxt}>Ana loda categories na kasuwa...</Text>
                 </View>
             ) : filteredCategories.length === 0 ? (
                 <View style={s.emptyBox}>
                     <View style={s.emptyIconCircle}>
                         <Ionicons name="layers-outline" size={38} color={BRAND.gold} />
                     </View>
-                    <Text style={s.emptyTitle}>No categories found</Text>
+                    <Text style={s.emptyTitle}>Babu wani category a halin yanzu</Text>
                     <Text style={s.emptySub}>
-                        {searchQuery ? 'Try adjusting your search terms.' : 'Click "Add New" above to create your first category.'}
+                        {searchQuery ? 'Babu sakamako ga bincikenka.' : 'Danna "KARA SABO" a sama domin daura sabon category 100%.'}
                     </Text>
                 </View>
             ) : (
                 <FlatList
                     data={filteredCategories}
-                    keyExtractor={item => String(item.id)}
+                    keyExtractor={item => String(item.id || item.slug)}
                     contentContainerStyle={s.listContent}
                     refreshControl={
                         <RefreshControl
@@ -463,7 +432,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         {item.image_url ? (
                                             <Image source={{ uri: item.image_url }} style={s.catThumbImg} />
                                         ) : (
-                                            <Ionicons name="layers" size={24} color={BRAND.gold} />
+                                            <Ionicons name={item.icon || "layers"} size={24} color={BRAND.gold} />
                                         )}
                                     </View>
 
@@ -475,7 +444,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                             </Text>
                                             <View style={[s.statusPill, isActive ? s.statusPillActive : s.statusPillInactive]}>
                                                 <Text style={[s.statusPillTxt, isActive ? s.statusPillTxtActive : s.statusPillTxtInactive]}>
-                                                    {isActive ? 'ACTIVE' : 'INACTIVE'}
+                                                    {isActive ? 'YANA AIKI' : 'AN DAKATAR'}
                                                 </Text>
                                             </View>
                                         </View>
@@ -488,12 +457,12 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         <View style={s.catMetaRow}>
                                             <View style={s.metaItem}>
                                                 <Ionicons name="cube-outline" size={12} color={BRAND.gold} />
-                                                <Text style={s.metaTxt}>{count} products</Text>
+                                                <Text style={s.metaTxt}>{count} kayayyaki</Text>
                                             </View>
                                             <Text style={s.metaDot}>•</Text>
                                             <View style={s.metaItem}>
                                                 <Ionicons name="swap-vertical-outline" size={12} color={BRAND.slate} />
-                                                <Text style={s.metaTxt}>Order #{item.display_order ?? 0}</Text>
+                                                <Text style={s.metaTxt}>Lambar #{item.display_order ?? 0}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -506,7 +475,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         onPress={() => handleToggleStatus(item)}
                                         style={[s.toggleBtn, isActive ? s.toggleBtnActive : s.toggleBtnInactive]}
                                         activeOpacity={0.75}
-                                        title={isActive ? 'Deactivate Category' : 'Activate Category'}
+                                        title={isActive ? 'Dakatar da Category' : 'Kunna Category'}
                                     >
                                         <Ionicons
                                             name={isActive ? "checkmark-circle" : "pause-circle-outline"}
@@ -557,10 +526,10 @@ export const AdminCategories = ({ navigation, onBack }) => {
                         >
                             <View>
                                 <Text style={s.modalTitle}>
-                                    {editingCategory ? 'Edit Category' : 'Add New Category'}
+                                    {editingCategory ? 'Gyara Category' : 'Dauki / Kara Sabon Category'}
                                 </Text>
                                 <Text style={s.modalSub}>
-                                    Live marketplace department configuration
+                                    Zai hau kai tsaye 100% a manhajar waya da yanar gizo
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={s.closeBtn}>
@@ -593,19 +562,19 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                     >
                                         <Ionicons name="cloud-upload-outline" size={15} color="#071422" />
                                         <Text style={s.pickImageTxt}>
-                                            {uploading ? 'Uploading...' : 'Choose Image File'}
+                                            {uploading ? 'Ana lodawa...' : 'Zabi Hoto (Pick Image)'}
                                         </Text>
                                     </TouchableOpacity>
 
                                     <Text style={s.imageHintTxt}>
-                                        Square ratio (1:1) recommended. PNG or JPG.
+                                        Hoton murabba'i (1:1) ya fi kyau. PNG ko JPG.
                                     </Text>
                                 </View>
                             </View>
 
                             {/* Image URL Manual Input */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Image URL (Optional Direct Link)</Text>
+                                <Text style={s.fieldLabel}>Link na Hoto (Image URL kai tsaye)</Text>
                                 <TextInput
                                     placeholder="https://images.unsplash.com/..."
                                     value={formImageUrl}
@@ -617,9 +586,9 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
                             {/* Category Name */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Category Name *</Text>
+                                <Text style={s.fieldLabel}>Sunan Category (Category Name) *</Text>
                                 <TextInput
-                                    placeholder="e.g. Phones & Tablets"
+                                    placeholder="misali: Kayan Mata & Turare"
                                     value={formName}
                                     onChangeText={handleNameChange}
                                     style={s.input}
@@ -629,9 +598,9 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
                             {/* Slug */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Category Slug (URL Identifier)</Text>
+                                <Text style={s.fieldLabel}>Lambar Mahada (Slug / URL Identifier)</Text>
                                 <TextInput
-                                    placeholder="e.g. phones-tablets"
+                                    placeholder="misali: kayan-mata-turare"
                                     value={formSlug}
                                     onChangeText={setFormSlug}
                                     style={s.input}
@@ -642,9 +611,9 @@ export const AdminCategories = ({ navigation, onBack }) => {
 
                             {/* Display Order */}
                             <View style={s.formField}>
-                                <Text style={s.fieldLabel}>Display Priority / Order (Lower numbers appear first)</Text>
+                                <Text style={s.fieldLabel}>Lambar Tsari / Fifiko (Display Order)</Text>
                                 <TextInput
-                                    placeholder="e.g. 1"
+                                    placeholder="misali: 1"
                                     value={formDisplayOrder}
                                     onChangeText={setFormDisplayOrder}
                                     keyboardType="numeric"
@@ -656,8 +625,8 @@ export const AdminCategories = ({ navigation, onBack }) => {
                             {/* Active Toggle */}
                             <View style={s.switchFieldRow}>
                                 <View style={{ flex: 1, paddingRight: 12 }}>
-                                    <Text style={s.fieldLabel}>Active Visibility</Text>
-                                    <Text style={s.switchSubTxt}>Publish live on customer mobile app & website</Text>
+                                    <Text style={s.fieldLabel}>Bude Don Jama'a (Active Visibility)</Text>
+                                    <Text style={s.switchSubTxt}>Zai fito a shafin farko da shagon kasuwa nan take</Text>
                                 </View>
                                 <Switch
                                     value={formIsActive}
@@ -686,7 +655,7 @@ export const AdminCategories = ({ navigation, onBack }) => {
                                         <>
                                             <Ionicons name="checkmark-circle" size={18} color="#071422" />
                                             <Text style={s.submitBtnTxt}>
-                                                {editingCategory ? 'Update Category' : 'Create & Publish Category'}
+                                                {editingCategory ? 'Ajiye Gyara (Update Category)' : 'Dauka & Fara Aiki (Create & Publish)'}
                                             </Text>
                                         </>
                                     )}

@@ -14,6 +14,7 @@ import { geminiService } from '../services/geminiService';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchAllCategories, subscribeToCategoryChanges } from '../services/categoryService';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const NAVY  = '#0E1A2E';
@@ -296,17 +297,13 @@ export const ShopPage = ({
                 setBanners(bannerData.filter(b => !b.section || ['shop', 'all', ''].includes(b.section)));
             }
 
-            // Fetch categories
-            const { data: catData } = await supabase
-                .from('categories')
-                .select('*')
-                .neq('is_active', false)
-                .order('display_order', { ascending: true, nullsFirst: false });
+            // Fetch categories (Unified DB + Custom Taxonomy)
+            const catData = await fetchAllCategories({ activeOnly: true, forceRefresh: false });
 
             if (catData?.length) {
                 setCategories([
                     { label: 'All', icon: 'apps-outline', slug: 'All' },
-                    ...catData.map(c => ({ label: c.name, slug: c.slug || c.name, icon: c.icon || 'pricetag-outline' }))
+                    ...catData.map(c => ({ label: c.name, slug: c.slug || c.name, icon: c.icon || 'pricetag-outline', image_url: c.image_url }))
                 ]);
             }
 
@@ -361,12 +358,17 @@ export const ShopPage = ({
 
     // ── Realtime updates ───────────────────────────────────────────────────────
     useEffect(() => {
+        const unsubscribeCats = subscribeToCategoryChanges(fetchData);
         const ch = supabase
             .channel('shop-rt-v3')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, fetchData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, fetchData)
             .subscribe();
-        return () => supabase.removeChannel(ch);
+        return () => {
+            unsubscribeCats();
+            supabase.removeChannel(ch);
+        };
     }, [fetchData]);
 
     // ── Sync props ─────────────────────────────────────────────────────────────
