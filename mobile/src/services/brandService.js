@@ -135,7 +135,22 @@ export const fetchAllBrands = async ({ forceRefresh = false } = {}) => {
         }
     }
 
-    // 4. Update cache
+    // 4. Default to top curated global presets if database is initially empty
+    if (!fetched || fetched.length === 0) {
+        fetched = GLOBAL_BRAND_PRESETS.map((p, idx) => ({
+            id: `brand_preset_${idx + 1}`,
+            name: p.name,
+            logo_url: p.logo_url,
+            is_featured: p.is_featured,
+            domain: p.domain,
+            category: p.category
+        }));
+
+        // Silently persist initial presets to app_settings backup
+        saveAppSettingsBrands(fetched).catch(() => {});
+    }
+
+    // 5. Update cache
     if (fetched && fetched.length > 0) {
         try {
             await AsyncStorage.setItem(BRANDS_CACHE_KEY, JSON.stringify(fetched));

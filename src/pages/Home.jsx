@@ -148,6 +148,21 @@ const SECURITY_FEATURES = [
   }
 ];
 
+const DEFAULT_BRANDS = [
+  { name: "Apple", logo_url: "https://www.google.com/s2/favicons?domain=apple.com&sz=128" },
+  { name: "Samsung", logo_url: "https://www.google.com/s2/favicons?domain=samsung.com&sz=128" },
+  { name: "Sony", logo_url: "https://www.google.com/s2/favicons?domain=sony.com&sz=128" },
+  { name: "HP", logo_url: "https://www.google.com/s2/favicons?domain=hp.com&sz=128" },
+  { name: "Dell", logo_url: "https://www.google.com/s2/favicons?domain=dell.com&sz=128" },
+  { name: "Nike", logo_url: "https://www.google.com/s2/favicons?domain=nike.com&sz=128" },
+  { name: "Adidas", logo_url: "https://www.google.com/s2/favicons?domain=adidas.com&sz=128" },
+  { name: "Zara", logo_url: "https://www.google.com/s2/favicons?domain=zara.com&sz=128" },
+  { name: "Gucci", logo_url: "https://www.google.com/s2/favicons?domain=gucci.com&sz=128" },
+  { name: "Rolex", logo_url: "https://www.google.com/s2/favicons?domain=rolex.com&sz=128" },
+  { name: "LG", logo_url: "https://www.google.com/s2/favicons?domain=lg.com&sz=128" },
+  { name: "JBL", logo_url: "https://www.google.com/s2/favicons?domain=jbl.com&sz=128" }
+];
+
 const Home = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
@@ -158,6 +173,7 @@ const Home = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [banners, setBanners] = useState([]);
+  const [brands, setBrands] = useState(DEFAULT_BRANDS);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -227,7 +243,7 @@ const Home = () => {
     try {
       setLoading(true);
 
-      const [bannersRes, categoriesRes, productsRes] = await Promise.allSettled([
+      const [bannersRes, categoriesRes, productsRes, brandsRes] = await Promise.allSettled([
         supabase
           .from('banners')
           .select('id, title, subtitle, image_url, action_link, section, display_order')
@@ -242,7 +258,12 @@ const Home = () => {
           .from('products')
           .select('*')
           .eq('status', 'approved')
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('brands')
+          .select('id, name, logo_url, is_featured')
+          .eq('is_featured', true)
+          .order('name', { ascending: true })
       ]);
 
       if (bannersRes.status === 'fulfilled' && bannersRes.value?.data?.length > 0) {
@@ -281,6 +302,10 @@ const Home = () => {
 
       if (productsRes.status === 'fulfilled' && productsRes.value?.data?.length > 0) {
         setProducts(productsRes.value.data);
+      }
+
+      if (brandsRes.status === 'fulfilled' && brandsRes.value?.data?.length > 0) {
+        setBrands(brandsRes.value.data);
       }
     } catch (err) {
       console.error('Error fetching live marketplace data:', err);
@@ -696,6 +721,58 @@ const Home = () => {
 
       {/* ── MAIN CONTENT CONTAINER ── */}
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-10 space-y-12 flex-1">
+
+        {/* ── 🌟 OFFICIAL FEATURED BRANDS (STORY RINGS) ── */}
+        <section className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-4 bg-amber-500 rounded-full" />
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-wide">
+                Featured Brands
+              </h3>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
+                Official Stores
+              </span>
+            </div>
+            <Link
+              to="/stores"
+              className="text-xs font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 flex items-center gap-1 group"
+            >
+              <span>Explore All Official Stores</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-2 scrollbar-none">
+            {brands.map((brand, idx) => (
+              <Link
+                key={brand.id || idx}
+                to={`/shop?search=${encodeURIComponent(brand.name)}`}
+                className="flex flex-col items-center gap-2 shrink-0 group focus:outline-none"
+              >
+                <div className="relative p-0.5 rounded-full bg-gradient-to-tr from-amber-400 via-amber-500 to-amber-300 group-hover:scale-105 transition-all shadow-md shadow-amber-500/10">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white dark:bg-slate-950 p-2 flex items-center justify-center overflow-hidden border-2 border-white dark:border-slate-900">
+                    <img
+                      src={brand.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand.name)}&background=0A192F&color=D9A73A&bold=true&size=128`}
+                      alt={brand.name}
+                      className="w-10 h-10 object-contain group-hover:scale-110 transition-transform"
+                      onError={(e) => {
+                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(brand.name)}&background=0A192F&color=D9A73A&bold=true&size=128`;
+                      }}
+                    />
+                  </div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#0A192F] text-amber-400 flex items-center justify-center border border-white dark:border-slate-800 shadow-sm">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                </div>
+                <span className="text-[11px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-amber-500 transition-colors text-center max-w-[72px] truncate">
+                  {brand.name}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
 
         {/* ── 3. DEDICATED ESCROW & SECURITY VAULT SECTION ("ya kasance da tsaro") ── */}
         <section className="bg-gradient-to-br from-[#070F1E] via-[#0A192F] to-[#070F1E] rounded-3xl p-6 sm:p-10 border border-slate-800 shadow-2xl text-white relative overflow-hidden">

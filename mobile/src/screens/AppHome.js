@@ -23,7 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { fetchAllCategories, subscribeToCategoryChanges } from '../services/categoryService';
-import { fetchAllBrands, subscribeToBrandChanges } from '../services/brandService';
+import { fetchAllBrands, subscribeToBrandChanges, GLOBAL_BRAND_PRESETS } from '../services/brandService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -90,7 +90,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const [loyalty, setLoyalty] = useState(null);
     const [topCustomers, setTopCustomers] = useState([]);
     const [reviews, setReviews] = useState([]);
-    const [brands, setBrands] = useState([]);
+    const [brands, setBrands] = useState(() => {
+        return (GLOBAL_BRAND_PRESETS || []).filter(p => p.is_featured).map((p, idx) => ({
+            id: `brand_preset_${idx + 1}`,
+            name: p.name,
+            logo_url: p.logo_url,
+            is_featured: true,
+            domain: p.domain,
+            category: p.category
+        }));
+    });
     const [trendingProducts, setTrending] = useState([]);
     const [recentOrders, setRecentOrders] = useState([]);
     const [mostRated, setMostRated] = useState([]);
@@ -974,6 +983,86 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             </TouchableOpacity>
                         </View>
                     )}
+                </View>
+
+                {/* ── 🌟 OFFICIAL FEATURED BRANDS (PRIME SHOWCASE) ── */}
+                <View style={{ marginBottom: 18, marginTop: 4 }}>
+                    <View style={{ paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ width: 3.5, height: 14, backgroundColor: '#D9A73A', borderRadius: 2 }} />
+                            <Ionicons name="sparkles" size={14} color="#D9A73A" />
+                            <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0A192F', letterSpacing: 0.2 }}>
+                                Featured Brands
+                            </Text>
+                            <View style={{ backgroundColor: 'rgba(217, 167, 58, 0.15)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.3)' }}>
+                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#A07820' }}>OFFICIAL</Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity onPress={() => onGoToShop && onGoToShop('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Text style={{ color: '#D9A73A', fontSize: 11, fontWeight: '800' }}>See All Stores →</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 4 }}
+                    >
+                        {brands.map((brand, i) => (
+                            <TouchableOpacity
+                                key={brand.id || i}
+                                style={{ alignItems: 'center', width: 66 }}
+                                onPress={() => onGoToShop && onGoToShop(brand?.name)}
+                                activeOpacity={0.75}
+                            >
+                                <View style={{
+                                    width: 58,
+                                    height: 58,
+                                    borderRadius: 29,
+                                    backgroundColor: '#FFFFFF',
+                                    padding: 6,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    borderWidth: 2,
+                                    borderColor: '#D9A73A',
+                                    shadowColor: '#0A192F',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.08,
+                                    shadowRadius: 4,
+                                    elevation: 2,
+                                    position: 'relative'
+                                }}>
+                                    <Image
+                                        source={{ uri: brand?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand?.name || 'Brand')}&background=0A192F&color=D9A73A&bold=true&size=128` }}
+                                        style={{ width: 38, height: 38, borderRadius: 19 }}
+                                        resizeMode="contain"
+                                    />
+                                    {/* Mini Verified Badge */}
+                                    <View style={{
+                                        position: 'absolute',
+                                        bottom: -2,
+                                        right: -2,
+                                        backgroundColor: '#0A192F',
+                                        width: 17,
+                                        height: 17,
+                                        borderRadius: 8.5,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderWidth: 1.5,
+                                        borderColor: '#FFFFFF'
+                                    }}>
+                                        <Ionicons name="checkmark" size={10} color="#D9A73A" />
+                                    </View>
+                                </View>
+                                <Text
+                                    numberOfLines={1}
+                                    style={{ marginTop: 6, fontSize: 11, fontWeight: '700', color: '#0F172A', textAlign: 'center', maxWidth: 66 }}
+                                >
+                                    {brand?.name || 'Brand'}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
                 </View>
 
                 {/* ── FLASH SALE SECTION WITH 4 COUNTDOWN BOXES ── */}
