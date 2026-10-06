@@ -106,6 +106,30 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const [dealOfDay, setDealOfDay] = useState(null);
     const [cartCount, setCartCount] = useState(initialCartCount);
 
+    const brandScrollRef = useRef(null);
+    const brandScrollOffsetRef = useRef(0);
+
+    // ── AUTO-SCROLL FEATURED BRANDS CAROUSEL ──
+    useEffect(() => {
+        if (!brands || brands.length <= 3) return;
+
+        const ITEM_STEP = 78; // width 66 + gap 12
+        const timer = setInterval(() => {
+            if (!brandScrollRef.current) return;
+            let nextOffset = brandScrollOffsetRef.current + ITEM_STEP;
+            const maxScroll = Math.max(0, (brands.length * ITEM_STEP) - width + 48);
+
+            if (nextOffset > maxScroll) {
+                nextOffset = 0;
+            }
+
+            brandScrollOffsetRef.current = nextOffset;
+            brandScrollRef.current.scrollTo({ x: nextOffset, animated: true });
+        }, 2500);
+
+        return () => clearInterval(timer);
+    }, [brands, width]);
+
     useEffect(() => {
         if (initialCartCount !== undefined) setCartCount(initialCartCount);
     }, [initialCartCount]);
@@ -176,15 +200,17 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+                fetchAllBrands({ forceRefresh: true }).then(allB => {
+                    if (Array.isArray(allB)) {
+                        setBrands(allB.filter(b => b.is_featured === true));
+                    }
+                }).catch(() => {});
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors' }, () => {
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, () => {
-                fetchData();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
                 fetchData();
             })
             .subscribe();
@@ -197,7 +223,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
         const unsubscribeBrands = subscribeToBrandChanges((newBrands) => {
             if (Array.isArray(newBrands)) {
-                setBrands(newBrands.filter(b => b.is_featured));
+                setBrands(newBrands.filter(b => b.is_featured === true));
             }
         });
 
@@ -241,8 +267,8 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 supabase.from('profiles').select('id, full_name, avatar_url, total_spend, is_featured').eq('is_featured', true).order('total_spend', { ascending: false }).limit(10),
                 // 8: Reviews
                 supabase.from('reviews').select('id, comment, rating, created_at, is_displayed, user:user_id(full_name, avatar_url)').eq('is_displayed', true).limit(10),
-                // 9: Brands
-                supabase.from('brands').select('id, name, logo_url, is_featured').eq('is_featured', true).limit(10),
+                // 9: Brands from Admin (Unified DB + app_settings)
+                fetchAllBrands({ forceRefresh: false }).then(allB => ({ data: (allB || []).filter(b => b.is_featured === true) })).catch(() => ({ data: [] })),
                 // 10: Trending
                 supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').order('total_sales', { ascending: false, nullsFirst: false }).limit(8),
                 // 11: Most Rated
@@ -303,14 +329,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             // 6-11: Horizontal lists
             const servicesData = getVal(6).data || [];
             const customersData = getVal(7).data || [];
-            const rawBrands = getVal(9).data || [];
-            let brandsData = rawBrands;
-            if (!brandsData || brandsData.length === 0) {
-                try {
-                    const fallbackB = await fetchAllBrands();
-                    brandsData = (fallbackB || []).filter(b => b.is_featured);
-                } catch (_) {}
-            }
+            const brandsData = getVal(9).data || [];
             const trendingData = getVal(10).data || [];
             const mostRatedData = getVal(11).data || [];
 
@@ -844,7 +863,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 0 }}
             >
                 {/* ── HERO BANNER: 100% DYNAMIC FROM ADMIN / SUPABASE ── */}
                 <View style={{ marginBottom: 16, paddingTop: 12 }}>
@@ -1004,9 +1023,14 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     </View>
 
                     <ScrollView
+                        ref={brandScrollRef}
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 4 }}
+                        onScroll={(e) => {
+                            brandScrollOffsetRef.current = e.nativeEvent.contentOffset.x;
+                        }}
+                        scrollEventThrottle={16}
                     >
                         {brands.map((brand, i) => (
                             <TouchableOpacity
@@ -1553,25 +1577,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     </View>
                 )}
 
-                {/* 4. FEATURED BRANDS */}
-                {brands.length > 0 && (
-                    <View style={{ marginTop: 14, paddingBottom: 4 }}>
-                        <View style={{ paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                            <View style={{ width: 3, height: 11, backgroundColor: '#D9A73A', borderRadius: 1.5 }} />
-                            <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#0E1A2E' }}>Featured Brands</Text>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
-                            {brands.map((brand, i) => (
-                                <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={() => onGoToShop && onGoToShop(brand?.name)}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', padding: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.15)', boxShadow: '0px 2px 5px rgba(0,0,0,0.06)' }}>
-                                        <Image source={{ uri: brand?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand?.name || 'Brand')}&background=0E1A2E&color=D9A73A` }} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
-                                    </View>
-                                    <Text style={{ marginTop: 5, fontSize: 10.5, fontWeight: '600', color: '#475569' }}>{brand?.name || 'Brand'}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
+
 
                 {/* ── DEAL OF THE DAY ── */}
                 {dealOfDay && (
@@ -1767,114 +1773,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     </TouchableOpacity>
                 </View>
 
-                {/* ── LIMITED STOCK ALERT ── */}
-                {limitedStock.length > 0 && (
-                    <View style={{ marginTop: 14 }}>
-                        <View style={{ paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <View style={{ width: 3, height: 13, backgroundColor: '#D9A73A', borderRadius: 1.5 }} />
-                                <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>Almost Gone!</Text>
-                            </View>
-                            <TouchableOpacity onPress={onGoToShop}><Text style={{ color: '#D9A73A', fontWeight: '800', fontSize: 10.5 }}>See All</Text></TouchableOpacity>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-                            {limitedStock.map((item, i) => (
-                                <TouchableOpacity key={i} onPress={() => handleProductClick(item)}
-                                    style={{ width: 115, backgroundColor: 'white', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)', elevation: 1 }}>
-                                    <Image source={{ uri: getProductImage(item) }}
-                                        style={{ width: 115, height: 100 }} resizeMode="cover" />
-                                    <View style={{ position: 'absolute', top: 6, right: 6, backgroundColor: '#D9A73A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ color: '#0E1A2E', fontSize: 8.5, fontWeight: '900' }}>Only {item.stock_quantity} left!</Text>
-                                    </View>
-                                    <View style={{ padding: 8 }}>
-                                        <Text style={{ fontWeight: '700', fontSize: 12, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 3 }}>
-                                            <Text style={{ fontWeight: '800', fontSize: 13, color: '#D9A73A' }}>₦{(item?.price || 0).toLocaleString()}</Text>
-                                            <View style={{ backgroundColor: '#0E1A2E', paddingHorizontal: 4, paddingVertical: 1.5, borderRadius: 3, borderWidth: 0.5, borderColor: '#D9A73A' }}>
-                                                <Text style={{ fontSize: 8.5, color: '#D9A73A', fontWeight: '800' }}>LOW</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
 
-                {/* ── SHOP BY BUDGET ── */}
-                <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E', marginBottom: 6 }}>💰 Shop by Budget</Text>
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                        {[
-                            { label: 'Under ₦5k', icon: 'pricetag-outline' },
-                            { label: '₦5k – ₦20k', icon: 'flame-outline' },
-                            { label: 'Above ₦20k', icon: 'diamond-outline' },
-                        ].map(b => (
-                            <TouchableOpacity key={b.label} onPress={onGoToShop}
-                                style={{ flex: 1, backgroundColor: 'white', borderRadius: 10, paddingVertical: 13, alignItems: 'center', gap: 5, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.15)' }}>
-                                <Ionicons name={b.icon} size={18} color="#D9A73A" />
-                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' }}>{b.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                {/* ── SHOP BY OCCASION ── */}
-                <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E', marginBottom: 6 }}>🎯 Shop by Occasion</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                        {[
-                            { label: 'Birthday 🎂' },
-                            { label: 'Wedding 💍' },
-                            { label: 'Back to School 🎒' },
-                            { label: 'Sports 🏋️' },
-                            { label: 'Home 🏠' },
-                            { label: 'Eid 🌙' },
-                        ].map(o => (
-                            <TouchableOpacity key={o.label} onPress={onGoToShop}
-                                style={{ backgroundColor: 'white', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.15)' }}>
-                                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0E1A2E' }}>{o.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
-
-                {/* ── WHY CHOOSE US ── */}
-                <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E', marginBottom: 6 }}>🛡️ Why Abu Mafhal?</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                        {[
-                            { icon: 'rocket-outline', label: 'Fast Delivery', sub: 'Same-day options' },
-                            { icon: 'shield-checkmark-outline', label: 'Secure Pay', sub: '100% protected' },
-                            { icon: 'refresh-outline', label: 'Easy Returns', sub: '7-day policy' },
-                            { icon: 'headset-outline', label: '24/7 Support', sub: 'Always here' },
-                        ].map(w => (
-                            <View key={w.label} style={{ width: '49%', backgroundColor: 'white', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)', gap: 6 }}>
-                                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(217, 167, 58, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Ionicons name={w.icon} size={16} color="#D9A73A" />
-                                </View>
-                                <Text style={{ fontWeight: '800', color: '#0E1A2E', fontSize: 12.5 }}>{w.label}</Text>
-                                <Text style={{ color: '#8A9BB0', fontSize: 10.5 }}>{w.sub}</Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
-
-                {/* SERVICE HIGHLIGHTS (Moved Down) */}
-                {homeServices.length > 0 && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 12, marginBottom: 6 }}>
-                        {homeServices.map((svc, i) => (
-                            <ServiceIcon
-                                key={i}
-                                icon={svc.icon}
-                                label={svc.label}
-                                color={svc.color}
-                                lib={svc.lib}
-                                onPress={() => onNavigate(svc.action_link)}
-                            />
-                        ))}
-                    </View>
-                )}
 
                 {/* DYNAMIC PROMO BANNERS CAROUSEL */}
                 {promoBanners.length > 0 && (
@@ -1972,37 +1871,6 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     </View>
                 )}
 
-                {/* ── MOST RATED ── */}
-                {mostRated.length > 0 && (
-                    <View style={{ marginTop: 14 }}>
-                        <View style={{ paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View style={{ width: 3.5, height: 15, backgroundColor: '#D9A73A', borderRadius: 2 }} />
-                                <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>Most Loved</Text>
-                            </View>
-                            <TouchableOpacity onPress={onGoToShop}><Text style={{ color: '#D9A73A', fontWeight: '800', fontSize: 10 }}>See All →</Text></TouchableOpacity>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
-                            {mostRated.map((item, i) => (
-                                <TouchableOpacity key={i} onPress={() => onProductClick(item)}
-                                    style={{ width: 108, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.18)', elevation: 2 }}>
-                                    <Image source={{ uri: getProductImage(item) }}
-                                        style={{ width: 108, height: 95, backgroundColor: '#F5F3EB' }} resizeMode="cover" />
-                                    <View style={{ padding: 7 }}>
-                                        <Text style={{ fontWeight: '700', fontSize: 11, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
-                                            <Ionicons name="star" size={11} color="#D9A73A" />
-                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#D9A73A' }}>{(Number(item?.rating || item?.average_rating || 5)).toFixed(1)}</Text>
-                                            <Text style={{ fontSize: 9, color: '#8A9BB0' }}>({item?.reviews != null ? item.reviews : (item?.reviews_count != null ? item.reviews_count : 0)})</Text>
-                                            <Text style={{ fontSize: 10, color: '#8A9BB0' }}>• ₦{(item?.price || 0).toLocaleString()}</Text>
-                                        </View>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
-
                 {/* NEW ARRIVALS */}
                 {newArrivals.length > 0 && (
                     <View style={{ marginTop: 14 }}>
@@ -2036,37 +1904,6 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     </View>
                 )}
 
-                {/* RECOMMENDED FOR YOU */}
-                <View style={{ backgroundColor: '#F5F3EB', marginTop: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: 'rgba(217,167,58,0.1)' }}>
-                    <View style={{ paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={{ width: 3.5, height: 15, backgroundColor: '#D9A73A', borderRadius: 2 }} />
-                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>Recommended For You</Text>
-                        </View>
-                        <TouchableOpacity onPress={onGoToShop}><Text style={{ color: '#D9A73A', fontWeight: '800', fontSize: 10 }}>See All →</Text></TouchableOpacity>
-                    </View>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, justifyContent: 'space-between' }}>
-                        {recommended.map((item, i) => (
-                            <TouchableOpacity key={i} style={{ width: '49%', marginBottom: 10, borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', borderRadius: 12, padding: 7, backgroundColor: 'white' }} onPress={() => onProductClick(item)}>
-                                <Image source={{ uri: getProductImage(item) }} style={{ width: '100%', height: 95, borderRadius: 8, backgroundColor: '#F5F3EB', marginBottom: 7 }} resizeMode="cover" />
-                                <View style={{ paddingHorizontal: 2 }}>
-                                    <Text style={{ fontSize: 11, color: '#0E1A2E', marginBottom: 2 }} numberOfLines={1}>{item?.name}</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
-                                        <Ionicons name="star" size={9} color="#D9A73A" />
-                                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#0E1A2E' }}>
-                                            {(Number(item?.rating || item?.average_rating || 5)).toFixed(1)}
-                                        </Text>
-                                        <Text style={{ fontSize: 8.5, color: '#8A9BB0' }}>
-                                            ({item?.reviews != null ? item.reviews : (item?.reviews_count != null ? item.reviews_count : 0)})
-                                        </Text>
-                                    </View>
-                                    <Text style={{ fontSize: 12, fontWeight: '900', color: '#D9A73A' }}>₦{item?.price?.toLocaleString() || '0'}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
                 {/* ── RECENTLY VIEWED ── */}
                 {recentlyViewed.length > 0 && (
                     <View style={{ marginTop: 14 }}>
@@ -2093,139 +1930,22 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     </View>
                 )}
 
-                {/* ── BECOME A SELLER ── */}
-                <View style={{ marginHorizontal: 16, marginTop: 14 }}>
-                    <TouchableOpacity onPress={() => onNavigate('vendorRegister')} activeOpacity={0.92}
-                        style={{ borderRadius: 14, overflow: 'hidden', padding: 14, backgroundColor: '#0E1A2E', borderWidth: 1, borderColor: 'rgba(217,167,58,0.25)' }}>
-                        <View style={{ position: 'absolute', top: -20, right: -20, width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(217,167,58,0.08)' }} />
-                        <View style={{ position: 'absolute', bottom: -30, left: 30, width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(217,167,58,0.06)' }} />
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(217,167,58,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(217,167,58,0.3)' }}>
-                                <Ionicons name="storefront-outline" size={18} color="#D9A73A" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ color: '#D9A73A', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8 }}>SELL ON ABU MAFHAL</Text>
-                                <Text style={{ color: 'white', fontSize: 13, fontWeight: '900', marginTop: 2 }}>Start Earning Today! 💰</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 2 }}>Join 200+ verified sellers making money daily</Text>
-                            </View>
-                            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#D9A73A', alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="chevron-forward" size={13} color="#0E1A2E" />
-                            </View>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 7, marginTop: 12 }}>
-                            {['Free to Join', 'Low Commission', 'Fast Payouts'].map(tag => (
-                                <View key={tag} style={{ backgroundColor: 'rgba(217,167,58,0.1)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7, borderWidth: 0.5, borderColor: 'rgba(217,167,58,0.25)' }}>
-                                    <Text style={{ color: '#D9A73A', fontSize: 10, fontWeight: '700' }}>✓ {tag}</Text>
+                {/* ── LUXURY TRUST & ESCROW STRIP ── */}
+                <View style={{ marginHorizontal: 16, marginTop: 18, marginBottom: 8, padding: 14, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', elevation: 1 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        {[
+                            { icon: 'shield-checkmark', title: '100% Escrow', sub: 'Funds protected' },
+                            { icon: 'airplane', title: 'Nationwide Delivery', sub: 'Across 36 states' },
+                            { icon: 'checkmark-circle', title: 'Verified KYC Sellers', sub: 'Vetted stores' },
+                        ].map((item, idx) => (
+                            <View key={idx} style={{ flex: 1, alignItems: 'center', paddingHorizontal: 4 }}>
+                                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(217, 167, 58, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 5 }}>
+                                    <Ionicons name={item.icon} size={16} color="#D9A73A" />
                                 </View>
-                            ))}
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* ── PRICE DROP ALERTS ── */}
-                {priceDrops.length > 0 && (
-                    <View style={{ marginTop: 14 }}>
-                        <View style={{ paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View style={{ width: 3.5, height: 15, backgroundColor: '#D9A73A', borderRadius: 2 }} />
-                                <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>Price Drops 🔥</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0A192F', textAlign: 'center' }}>{item.title}</Text>
+                                <Text style={{ fontSize: 9, color: '#64748B', fontWeight: '500', textAlign: 'center', marginTop: 1 }}>{item.sub}</Text>
                             </View>
-                            <TouchableOpacity onPress={onGoToShop}><Text style={{ color: '#D9A73A', fontWeight: '800', fontSize: 10 }}>See All →</Text></TouchableOpacity>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
-                            {priceDrops.map((item, i) => {
-                                const cmpPrice = Number(item?.compare_at_price || 0);
-                                const currPrice = Number(item?.price || 0);
-                                const saved = (cmpPrice > currPrice && cmpPrice > 0) ? Math.round(((cmpPrice - currPrice) / cmpPrice) * 100) : 0;
-                                return (
-                                    <TouchableOpacity key={item?.id || i} onPress={() => handleProductClick(item)}
-                                        style={{ width: 108, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', elevation: 2 }}>
-                                        <Image source={{ uri: getProductImage(item) }}
-                                            style={{ width: 108, height: 95 }} resizeMode="cover" />
-                                        <View style={{ position: 'absolute', top: 7, left: 7, backgroundColor: '#D9A73A', paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 5 }}>
-                                            <Text style={{ color: '#0E1A2E', fontSize: 8.5, fontWeight: '900' }}>SAVE {saved}%</Text>
-                                        </View>
-                                        <View style={{ padding: 7 }}>
-                                            <Text style={{ fontWeight: '700', fontSize: 11, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
-                                            <Text style={{ fontWeight: '900', fontSize: 11.5, color: '#D9A73A' }}>₦{currPrice.toLocaleString()}</Text>
-                                            {cmpPrice > 0 ? (
-                                                <Text style={{ fontSize: 10, color: '#8A9BB0', textDecorationLine: 'line-through' }}>₦{cmpPrice.toLocaleString()}</Text>
-                                            ) : null}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                )}
-
-                {/* ── VENDOR SPOTLIGHT ── */}
-                {spotlightVendor && (
-                    <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                            <View style={{ width: 3.5, height: 15, backgroundColor: '#D9A73A', borderRadius: 2 }} />
-                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>🌟 Vendor Spotlight</Text>
-                        </View>
-                        <TouchableOpacity onPress={onGoToShop} activeOpacity={0.9}
-                            style={{ backgroundColor: 'white', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(217,167,58,0.2)', elevation: 2 }}>
-                            <Image
-                                source={{ uri: spotlightVendor.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(spotlightVendor.business_name || 'Vendor')}&background=0E1A2E&color=D9A73A&size=200` }}
-                                style={{ width: 46, height: 46, borderRadius: 12, backgroundColor: '#EEE9D9' }}
-                                resizeMode="cover"
-                            />
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                                    <Ionicons name="checkmark-circle" size={11} color="#D9A73A" />
-                                    <Text style={{ fontSize: 8.5, color: '#D9A73A', fontWeight: '900', letterSpacing: 0.5 }}>FEATURED SELLER</Text>
-                                </View>
-                                <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>{spotlightVendor.business_name || spotlightVendor.store_name}</Text>
-                                <Text style={{ fontSize: 10, color: '#8A9BB0', marginTop: 2.5 }}>{spotlightVendor.total_sales || 0} sales • {spotlightVendor.review_count || 0} reviews</Text>
-                            </View>
-                            <View style={{ backgroundColor: '#0E1A2E', width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="chevron-forward" size={12} color="#D9A73A" />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {/* ── NEWSLETTER ── */}
-                <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-                    <NewsletterCard />
-                </View>
-
-                {/* ── WHATSAPP SUPPORT ── */}
-                <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-                    <TouchableOpacity
-                        onPress={() => Linking.openURL(`whatsapp://send?phone=2348145853539&text=${encodeURIComponent('Hi Abu Mafhal! I need help with my order.')}`).catch(() => Linking.openURL('https://wa.me/2348145853539'))}
-                        style={{ backgroundColor: 'white', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(217,167,58,0.18)', elevation: 1 }}>
-                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#25D366', alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="logo-whatsapp" size={18} color="white" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontWeight: '900', color: '#0E1A2E', fontSize: 12 }}>Need Help? Chat Us 💬</Text>
-                            <Text style={{ color: '#8A9BB0', fontSize: 10, marginTop: 2 }}>We're online now — instant reply on WhatsApp</Text>
-                        </View>
-                        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#25D366', alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="chevron-forward" size={13} color="white" />
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* ── REFERRAL BANNER ── */}
-                <View style={{ marginHorizontal: 16, marginTop: 14, marginBottom: 8 }}>
-                    <View style={{ backgroundColor: '#0E1A2E', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.25)' }}>
-                        <View style={{ position: 'absolute', top: -15, right: -15, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(217,167,58,0.07)' }} />
-                        <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(217,167,58,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(217,167,58,0.3)' }}>
-                            <Ionicons name="gift-outline" size={18} color="#D9A73A" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ color: '#D9A73A', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 }}>INVITE & EARN</Text>
-                            <Text style={{ color: 'white', fontSize: 13, fontWeight: '900', marginTop: 2 }}>Invite Friends, Get Rewards!</Text>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 2 }}>Earn ₦500 for every friend you refer</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => onNavigate('referral')} style={{ backgroundColor: '#D9A73A', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 9, elevation: 2 }}>
-                            <Text style={{ fontWeight: '900', color: '#0E1A2E', fontSize: 11 }}>INVITE</Text>
-                        </TouchableOpacity>
+                        ))}
                     </View>
                 </View>
 

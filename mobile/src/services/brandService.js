@@ -101,37 +101,37 @@ export const fetchAllBrands = async ({ forceRefresh = false } = {}) => {
 
     let fetched = [];
 
-    // 2. Query primary Supabase `brands` table
+    // 2. First check app_settings which contains admin modifications
     try {
-        const { data, error } = await supabase
-            .from('brands')
-            .select('*')
-            .order('name', { ascending: true });
+        const { data: setRes } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', APP_SETTINGS_KEY)
+            .maybeSingle();
 
-        if (!error && Array.isArray(data) && data.length > 0) {
-            fetched = data;
+        if (setRes?.value) {
+            const parsed = typeof setRes.value === 'string' ? JSON.parse(setRes.value) : setRes.value;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                fetched = parsed;
+            }
         }
     } catch (e) {
-        console.log('[brandService] Fetch brands table error:', e);
+        console.log('[brandService] App settings check error:', e);
     }
 
-    // 3. Fallback to `app_settings` if table was empty or inaccessible
+    // 3. If app_settings is empty, check primary Supabase `brands` table
     if (!fetched || fetched.length === 0) {
         try {
-            const { data: setRes } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('key', APP_SETTINGS_KEY)
-                .maybeSingle();
+            const { data, error } = await supabase
+                .from('brands')
+                .select('*')
+                .order('name', { ascending: true });
 
-            if (setRes?.value) {
-                const parsed = typeof setRes.value === 'string' ? JSON.parse(setRes.value) : setRes.value;
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    fetched = parsed;
-                }
+            if (!error && Array.isArray(data) && data.length > 0) {
+                fetched = data;
             }
         } catch (e) {
-            console.log('[brandService] App settings fallback error:', e);
+            console.log('[brandService] Fetch brands table error:', e);
         }
     }
 
@@ -177,37 +177,18 @@ export const saveBrand = async ({ id, name, logo_url, is_featured = false, websi
     let result = null;
 
     if (id) {
-        // UPDATE existing brand
-        const { data, error } = await supabase
-            .from('brands')
-            .update(payload)
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error('[brandService] Update error, trying fallback:', error);
-            // Fallback: update in app_settings
-            result = await updateInAppSettingsBackup({ ...payload, id });
-        } else {
-            result = data;
-        }
+        // UPDATE existing brand in app_settings (guaranteed storage)
+        result = await updateInAppSettingsBackup({ ...payload, id });
+        try {
+            await supabase.from('brands').update(payload).eq('id', id);
+        } catch (_) {}
     } else {
-        // CREATE new brand
-        const { data, error } = await supabase
-            .from('brands')
-            .insert([payload])
-            .select()
-            .single();
-
-        if (error) {
-            console.error('[brandService] Insert error, trying fallback:', error);
-            // Fallback: insert in app_settings
-            const generatedId = 'brand_' + Date.now();
-            result = await insertInAppSettingsBackup({ ...payload, id: generatedId, created_at: new Date().toISOString() });
-        } else {
-            result = data;
-        }
+        // CREATE new brand in app_settings (guaranteed storage)
+        const generatedId = 'brand_' + Date.now();
+        result = await insertInAppSettingsBackup({ ...payload, id: generatedId, created_at: new Date().toISOString() });
+        try {
+            await supabase.from('brands').insert([payload]);
+        } catch (_) {}
     }
 
     // Invalidate caches & notify
@@ -224,22 +205,16 @@ export const saveBrand = async ({ id, name, logo_url, is_featured = false, websi
 export const toggleBrandFeatured = async (id, currentStatus) => {
     const nextStatus = !currentStatus;
 
+    // 1. Update in app_settings
+    await updateInAppSettingsBackup({ id, is_featured: nextStatus });
+
+    // 2. Also attempt update in Supabase 'brands' table
     try {
-        const { data, error } = await supabase
+        await supabase
             .from('brands')
             .update({ is_featured: nextStatus })
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error('[brandService] Toggle error, updating fallback:', error);
-            await updateInAppSettingsBackup({ id, is_featured: nextStatus });
-        }
-    } catch (e) {
-        console.error('[brandService] Toggle catch error:', e);
-        await updateInAppSettingsBackup({ id, is_featured: nextStatus });
-    }
+            .eq('id', id);
+    } catch (_) {}
 
     await invalidateBrandCaches();
     const updatedBrands = await fetchAllBrands({ forceRefresh: true });
@@ -251,20 +226,16 @@ export const toggleBrandFeatured = async (id, currentStatus) => {
  * Delete brand
  */
 export const deleteBrand = async (id) => {
+    // 1. Remove from app_settings
+    await deleteFromAppSettingsBackup(id);
+
+    // 2. Remove from Supabase 'brands' table
     try {
-        const { error } = await supabase
+        await supabase
             .from('brands')
             .delete()
             .eq('id', id);
-
-        if (error) {
-            console.error('[brandService] Delete error, updating fallback:', error);
-            await deleteFromAppSettingsBackup(id);
-        }
-    } catch (e) {
-        console.error('[brandService] Delete catch error:', e);
-        await deleteFromAppSettingsBackup(id);
-    }
+    } catch (_) {}
 
     await invalidateBrandCaches();
     const updatedBrands = await fetchAllBrands({ forceRefresh: true });

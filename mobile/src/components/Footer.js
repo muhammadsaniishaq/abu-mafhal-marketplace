@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Linking, Alert, TextInput, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Linking, Alert, TextInput, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -303,8 +303,8 @@ export const Footer = ({ onEnterShop, onNavigate }) => {
 
             </View>
 
-            {/* ── Extra padding for bottom nav ── */}
-            <View style={{ height: 80 }} />
+            {/* ── Sleek grounding for bottom nav ── */}
+            <View style={{ height: Platform.OS === 'web' ? 16 : 30 }} />
         </View>
     );
 };

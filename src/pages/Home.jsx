@@ -238,6 +238,24 @@ const Home = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // ── AUTO-SCROLL FEATURED BRANDS (WEB) ──
+  const brandScrollContainerRef = useRef(null);
+  useEffect(() => {
+    if (!brands || brands.length <= 4) return;
+    const interval = setInterval(() => {
+      if (brandScrollContainerRef.current) {
+        const el = brandScrollContainerRef.current;
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        if (el.scrollLeft >= maxScroll - 15) {
+          el.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          el.scrollBy({ left: 160, behavior: 'smooth' });
+        }
+      }
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [brands]);
+
   // 1. Fetch All Real Data from Supabase
   const fetchLiveMarketplaceData = async () => {
     try {
@@ -304,8 +322,29 @@ const Home = () => {
         setProducts(productsRes.value.data);
       }
 
-      if (brandsRes.status === 'fulfilled' && brandsRes.value?.data?.length > 0) {
-        setBrands(brandsRes.value.data);
+      // Synchronize brands with Admin configuration from app_settings
+      try {
+        const { data: setRes } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'marketplace_brands')
+          .maybeSingle();
+
+        if (setRes?.value) {
+          const parsed = typeof setRes.value === 'string' ? JSON.parse(setRes.value) : setRes.value;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const featured = parsed.filter(b => b.is_featured === true);
+            if (featured.length > 0) {
+              setBrands(featured);
+            }
+          }
+        } else if (brandsRes.status === 'fulfilled' && brandsRes.value?.data?.length > 0) {
+          setBrands(brandsRes.value.data);
+        }
+      } catch (_) {
+        if (brandsRes.status === 'fulfilled' && brandsRes.value?.data?.length > 0) {
+          setBrands(brandsRes.value.data);
+        }
       }
     } catch (err) {
       console.error('Error fetching live marketplace data:', err);
@@ -744,7 +783,7 @@ const Home = () => {
             </Link>
           </div>
 
-          <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-2 scrollbar-none">
+          <div ref={brandScrollContainerRef} className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-2 scrollbar-none scroll-smooth">
             {brands.map((brand, idx) => (
               <Link
                 key={brand.id || idx}
