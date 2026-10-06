@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { fetchAllCategories, subscribeToCategoryChanges } from '../services/categoryService';
+import { fetchAllBrands, subscribeToBrandChanges } from '../services/brandService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -185,8 +186,15 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             }
         });
 
+        const unsubscribeBrands = subscribeToBrandChanges((newBrands) => {
+            if (Array.isArray(newBrands)) {
+                setBrands(newBrands.filter(b => b.is_featured));
+            }
+        });
+
         return () => {
             unsubscribeCats();
+            unsubscribeBrands();
             supabase.removeChannel(channel);
         };
     }, []);
@@ -286,8 +294,14 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             // 6-11: Horizontal lists
             const servicesData = getVal(6).data || [];
             const customersData = getVal(7).data || [];
-            const reviewsData = getVal(8).data || [];
-            const brandsData = getVal(9).data || [];
+            const rawBrands = getVal(9).data || [];
+            let brandsData = rawBrands;
+            if (!brandsData || brandsData.length === 0) {
+                try {
+                    const fallbackB = await fetchAllBrands();
+                    brandsData = (fallbackB || []).filter(b => b.is_featured);
+                } catch (_) {}
+            }
             const trendingData = getVal(10).data || [];
             const mostRatedData = getVal(11).data || [];
 
@@ -1459,7 +1473,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
                             {brands.map((brand, i) => (
-                                <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={onGoToShop}>
+                                <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={() => onGoToShop && onGoToShop(brand?.name)}>
                                     <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', padding: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.15)', boxShadow: '0px 2px 5px rgba(0,0,0,0.06)' }}>
                                         <Image source={{ uri: brand?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand?.name || 'Brand')}&background=0E1A2E&color=D9A73A` }} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
                                     </View>
