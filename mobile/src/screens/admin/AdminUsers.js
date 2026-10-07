@@ -376,6 +376,31 @@ export const AdminUsers = ({ navigation: propNav }) => {
         }
     };
 
+    const quickCreditUser = async (u, amt = 1000) => {
+        try {
+            const curBal = u.wallet?.balance || 0;
+            const newBal = curBal + amt;
+            if (!u.wallet) {
+                await supabase.from('wallets').insert({ user_id: u.id, balance: amt, currency: 'NGN' });
+            } else {
+                await supabase.from('wallets').update({ balance: newBal }).eq('user_id', u.id);
+            }
+            try {
+                await supabase.from('wallet_transactions').insert({
+                    user_id: u.id,
+                    amount: amt,
+                    type: 'admin_credit',
+                    description: `Admin Quick +₦${amt.toLocaleString()}`,
+                    status: 'completed'
+                });
+            } catch (ignore) {}
+            setUsers(prev => prev.map(x => x.id === u.id ? { ...x, wallet: { ...x.wallet, balance: newBal } } : x));
+            Alert.alert('Credited', `Added ${fmtAmt(amt)} to ${u.full_name || 'user'}'s wallet.`);
+        } catch {
+            Alert.alert('Error', 'Quick credit failed.');
+        }
+    };
+
     const toggleTag = async (u, tagId) => {
         const current = u.admin_tags || [];
         const next = current.includes(tagId) ? current.filter(t => t !== tagId) : [...current, tagId];
@@ -468,13 +493,11 @@ export const AdminUsers = ({ navigation: propNav }) => {
         }
     };
 
-    // ── User Card Component (Bigger, Bolder, Spacious) ──────────────────────
+    // ── User Card Component (Ultra-Sleek, Compact & Feature-Rich) ──────────
     const renderUserCard = ({ item }) => {
         const isSel = selIds.includes(item.id);
         const cfg = item.role_cfg;
         const bal = item.wallet?.balance || 0;
-        const pend = item.wallet?.pending_balance || 0;
-        const userTags = (item.admin_tags || []).map(id => PRESET_TAGS.find(t => t.id === id)).filter(Boolean);
 
         return (
             <Pressable
@@ -489,7 +512,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 }}
                 style={({ pressed }) => [
                     S.card,
-                    pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] },
+                    pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
                     item.is_banned && S.cardBanned,
                     isSel && S.cardSelected,
                 ]}
@@ -500,16 +523,16 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 {selMode && (
                     <Ionicons
                         name={isSel ? 'checkbox' : 'square-outline'}
-                        size={24}
+                        size={18}
                         color={isSel ? W.gold : W.textSubtle}
-                        style={{ marginRight: 12, marginLeft: 6 }}
+                        style={{ marginRight: 8, marginLeft: 2 }}
                     />
                 )}
 
-                {/* Big Avatar */}
+                {/* Compact Avatar */}
                 <View style={S.avContainer}>
                     <View style={[S.avRing, { borderColor: cfg.border }]}>
-                        <UserAvatar user={item} size={44} />
+                        <UserAvatar user={item} size={36} />
                     </View>
                     <View style={[
                         S.statusDot,
@@ -518,8 +541,8 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         item.is_online ? { backgroundColor: W.emerald } :
                         { backgroundColor: '#CBD5E1' }
                     ]}>
-                        {item.is_banned && <Ionicons name="ban" size={9} color="#FFFFFF" />}
-                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={9} color="#FFFFFF" />}
+                        {item.is_banned && <Ionicons name="ban" size={6} color="#FFFFFF" />}
+                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={6} color="#FFFFFF" />}
                     </View>
                 </View>
 
@@ -530,85 +553,65 @@ export const AdminUsers = ({ navigation: propNav }) => {
                             {item.full_name || 'Anonymous User'}
                         </Text>
                         {item.is_verified && (
-                            <Ionicons name="checkmark-circle" size={17} color={W.sky} style={{ marginLeft: 5 }} />
+                            <Ionicons name="checkmark-circle" size={13} color={W.sky} style={{ marginLeft: 3 }} />
                         )}
-                    </View>
-
-                    <Text style={S.userEmail} numberOfLines={1}>
-                        {item.email || (item.phone ? item.phone : 'No contact specified')}
-                    </Text>
-
-                    {/* Role & Tier Tags */}
-                    <View style={S.tagRow}>
-                        <View style={[S.chip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-                            <Ionicons name={cfg.icon} size={11} color={cfg.color} style={{ marginRight: 4 }} />
+                        <View style={[S.chip, { backgroundColor: cfg.bg, borderColor: cfg.border, marginLeft: 4 }]}>
                             <Text style={[S.chipTxt, { color: cfg.color }]}>{cfg.label}</Text>
                         </View>
-
-                        <View style={[S.chip, { backgroundColor: item.tier.bg, borderColor: item.tier.border }]}>
-                            <Text style={[S.chipTxt, { color: item.tier.color }]}>{item.tier.label}</Text>
-                        </View>
-
-                        {userTags.slice(0, 1).map(tag => (
-                            <View key={tag.id} style={[S.chip, { backgroundColor: tag.bg, borderColor: tag.border }]}>
-                                <Text style={[S.chipTxt, { color: tag.color }]}>{tag.label}</Text>
-                            </View>
-                        ))}
-
-                        {item.admin_note ? (
-                            <Ionicons name="document-text" size={15} color={W.gold} style={{ marginLeft: 3 }} />
-                        ) : null}
                     </View>
 
-                    {/* Big Financial & Time Strip */}
-                    <View style={S.bottomStrip}>
-                        <View style={[
-                            S.walletPill,
-                            bal > 0 ? { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder } : { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }
-                        ]}>
-                            <Ionicons name="wallet-outline" size={13} color={bal > 0 ? W.emerald : W.textMuted} />
-                            <Text style={[S.walletText, { color: bal > 0 ? W.emerald : W.textMuted }]}>
-                                {fmtAmt(bal)}
-                            </Text>
-                            {pend > 0 && <Text style={S.walletPending}>+{fmtAmt(pend)}</Text>}
-                        </View>
-
-                        <Text style={S.lastActiveText}>
-                            {timeAgo(item.last_seen || item.created_at)}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                        <Text style={S.userEmail} numberOfLines={1}>
+                            {item.phone || item.email || 'No contact'}
                         </Text>
+                        <Text style={S.lastActiveText}>· {timeAgo(item.last_seen || item.created_at)}</Text>
                     </View>
-
-                    {/* Driver details if role is driver */}
-                    {item.role === 'driver' && item.driver_info && (
-                        <View style={S.driverStrip}>
-                            <Ionicons name="bicycle" size={13} color={W.sky} />
-                            <Text style={S.driverStripText} numberOfLines={1}>
-                                {item.driver_info.vehicle_type || 'Vehicle'} · {item.driver_info.plate_number || 'No Plate'}
-                            </Text>
-                            <View style={[
-                                S.driverStatusBadge,
-                                { backgroundColor: item.driver_info.status === 'active' ? W.emeraldBg : '#F1F5F9' }
-                            ]}>
-                                <Text style={{ fontSize: 9, fontWeight: '800', color: item.driver_info.status === 'active' ? W.emerald : W.textMuted }}>
-                                    {(item.driver_info.status || 'OFFLINE').toUpperCase()}
-                                </Text>
-                            </View>
-                        </View>
-                    )}
                 </View>
 
                 {/* Right Interactive Quick Actions */}
-                {!selMode && (
-                    <View style={S.cardActions}>
-                        <TouchableOpacity
-                            onPress={() => openSheet(item)}
-                            style={S.quickActionBtn}
-                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                        >
-                            <Ionicons name="ellipsis-vertical" size={18} color={W.charcoal} />
-                        </TouchableOpacity>
-                    </View>
-                )}
+                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <Text style={[S.walletText, { color: bal > 0 ? W.emerald : W.textMuted }]}>
+                        {fmtAmt(bal)}
+                    </Text>
+
+                    {!selMode && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                            {/* Fast +1k credit button */}
+                            <TouchableOpacity
+                                onPress={() => quickCreditUser(item, 1000)}
+                                style={S.fastCreditBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                            >
+                                <Text style={S.fastCreditBtnText}>+1K</Text>
+                            </TouchableOpacity>
+
+                            {/* Direct WhatsApp button */}
+                            {item.phone ? (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setWhatsappPhone(item.phone);
+                                        setWhatsappUserId(item.id);
+                                        setWhatsappRecipientName(item.full_name || 'User');
+                                        setWhatsappVisible(true);
+                                    }}
+                                    style={S.quickActionMiniBtn}
+                                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                                >
+                                    <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
+                                </TouchableOpacity>
+                            ) : null}
+
+                            {/* More Options */}
+                            <TouchableOpacity
+                                onPress={() => openSheet(item)}
+                                style={S.quickActionMiniBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                            >
+                                <Ionicons name="ellipsis-vertical" size={13} color={W.charcoal} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </View>
             </Pressable>
         );
     };
@@ -1731,6 +1734,31 @@ const S = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fastCreditBtn: {
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 6,
+        backgroundColor: W.emeraldBg,
+        borderWidth: 1,
+        borderColor: W.emeraldBorder,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fastCreditBtnText: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: W.emerald,
+    },
+    quickActionMiniBtn: {
+        width: 25,
+        height: 25,
+        borderRadius: 7,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: W.cardBorder,

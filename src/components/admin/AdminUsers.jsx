@@ -6,22 +6,23 @@ import {
   Trash2, UserCheck, UserX, ChevronDown, Wallet,
   Download, MessageCircle, AlertTriangle, ShieldCheck,
   Star, DollarSign, Filter, MoreVertical, Sparkles,
-  ArrowUpRight, ArrowDownRight, Tag
+  ArrowUpRight, ArrowDownRight, Tag, Copy, Check,
+  Send, SlidersHorizontal, CheckSquare, Square
 } from 'lucide-react';
 
 const ROLES = {
-  admin: { label: 'Administrator', color: 'text-purple-800 bg-purple-50 border-purple-200' },
-  vendor: { label: 'Merchant Vendor', color: 'text-orange-800 bg-orange-50 border-orange-200' },
-  driver: { label: 'Fleet Courier', color: 'text-sky-800 bg-sky-50 border-sky-200' },
-  buyer: { label: 'Shopper Client', color: 'text-emerald-800 bg-emerald-50 border-emerald-200' },
-  customer: { label: 'Shopper Client', color: 'text-emerald-800 bg-emerald-50 border-emerald-200' }
+  admin: { label: 'Admin', color: 'text-purple-800 bg-purple-50 border-purple-200' },
+  vendor: { label: 'Vendor', color: 'text-orange-800 bg-orange-50 border-orange-200' },
+  driver: { label: 'Driver', color: 'text-sky-800 bg-sky-50 border-sky-200' },
+  buyer: { label: 'Customer', color: 'text-emerald-800 bg-emerald-50 border-emerald-200' },
+  customer: { label: 'Customer', color: 'text-emerald-800 bg-emerald-50 border-emerald-200' }
 };
 
 const TIERS = [
-  { min: 1000000, label: 'Diamond VIP', color: 'text-purple-800 bg-purple-50 border-purple-200' },
-  { min: 250000, label: 'Gold Elite', color: 'text-amber-800 bg-amber-50 border-amber-200' },
-  { min: 50000, label: 'Silver Member', color: 'text-slate-800 bg-slate-100 border-slate-200' },
-  { min: 0, label: 'Starter', color: 'text-amber-900 bg-amber-50 border-amber-200' }
+  { min: 1000000, label: 'VIP', color: 'text-purple-800 bg-purple-50 border-purple-200' },
+  { min: 250000, label: 'Gold', color: 'text-amber-800 bg-amber-50 border-amber-200' },
+  { min: 50000, label: 'Silver', color: 'text-slate-800 bg-slate-100 border-slate-200' },
+  { min: 0, label: 'Basic', color: 'text-amber-900 bg-amber-50 border-amber-200' }
 ];
 
 const getTier = (spend = 0) => TIERS.find(t => spend >= t.min) || TIERS[3];
@@ -42,6 +43,8 @@ const AdminUsers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState({ type: '', text: '' });
   const [actionLoading, setActionLoading] = useState(false);
+  const [viewDensity, setViewDensity] = useState('compact'); // 'compact' | 'comfortable'
+  const [copiedText, setCopiedText] = useState('');
 
   // Modals & Panels
   const [selectedUser, setSelectedUser] = useState(null);
@@ -50,6 +53,9 @@ const AdminUsers = () => {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletAmount, setWalletAmount] = useState('');
   const [walletReason, setWalletReason] = useState('');
+
+  // WhatsApp template modal
+  const [whatsappModal, setWhatsappModal] = useState({ open: false, user: null, message: '' });
 
   // Bulk Selection
   const [selectedIds, setSelectedIds] = useState([]);
@@ -69,7 +75,15 @@ const AdminUsers = () => {
 
   const showToast = (type, text) => {
     setToast({ type, text });
-    setTimeout(() => setToast({ type: '', text: '' }), 4500);
+    setTimeout(() => setToast({ type: '', text: '' }), 4000);
+  };
+
+  const copyToClipboard = (text, label) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedText(text);
+    setTimeout(() => setCopiedText(''), 2000);
+    showToast('success', `${label} copied to clipboard!`);
   };
 
   const fetchUsers = async () => {
@@ -155,8 +169,6 @@ const AdminUsers = () => {
   };
 
   const handleUpdateRole = async (userId, newRole) => {
-    if (!window.confirm(`Are you sure you want to change this user's role to "${newRole.toUpperCase()}"?`)) return;
-
     try {
       const { error } = await supabase
         .from('profiles')
@@ -171,7 +183,7 @@ const AdminUsers = () => {
       if (selectedUser?.id === userId) {
         setSelectedUser(prev => ({ ...prev, role: newRole }));
       }
-      showToast('success', `User role successfully updated to ${newRole.toUpperCase()}`);
+      showToast('success', `Role changed to ${newRole.toUpperCase()}`);
     } catch (error) {
       showToast('error', 'Role update failed: ' + error.message);
     }
@@ -179,12 +191,6 @@ const AdminUsers = () => {
 
   const handleToggleSuspend = async (user) => {
     const nextSuspended = !user.suspended && !user.is_banned;
-    const confirmMsg = nextSuspended 
-      ? `Are you sure you want to suspend access for "${user.full_name || user.email}"?`
-      : `Restore active marketplace access for "${user.full_name || user.email}"?`;
-
-    if (!window.confirm(confirmMsg)) return;
-
     try {
       const { error } = await supabase
         .from('profiles')
@@ -200,9 +206,9 @@ const AdminUsers = () => {
       if (selectedUser?.id === user.id) {
         setSelectedUser(prev => ({ ...prev, suspended: nextSuspended, is_banned: nextSuspended }));
       }
-      showToast('success', nextSuspended ? 'Account suspended successfully.' : 'Account access restored.');
+      showToast('success', nextSuspended ? 'Account suspended.' : 'Account restored.');
     } catch (error) {
-      showToast('error', 'Could not update account suspension: ' + error.message);
+      showToast('error', 'Suspension update failed: ' + error.message);
     }
   };
 
@@ -222,9 +228,36 @@ const AdminUsers = () => {
       if (selectedUser?.id === user.id) {
         setSelectedUser(prev => ({ ...prev, is_verified: nextVerified }));
       }
-      showToast('success', nextVerified ? 'User KYC verified.' : 'KYC verification revoked.');
+      showToast('success', nextVerified ? 'KYC verified.' : 'KYC unverified.');
     } catch (error) {
       showToast('error', 'Verification toggle failed: ' + error.message);
+    }
+  };
+
+  // Instant Quick Credit (+₦1,000 / +₦5,000) directly from row
+  const handleQuickCredit = async (user, amt = 1000) => {
+    try {
+      const current = user?.wallet?.balance || 0;
+      const nextBal = current + amt;
+      if (!user?.wallet) {
+        await supabase.from('wallets').insert({ user_id: user.id, balance: amt, pending_balance: 0 });
+      } else {
+        await supabase.from('wallets').update({ balance: nextBal }).eq('user_id', user.id);
+      }
+      try {
+        await supabase.from('wallet_transactions').insert({
+          user_id: user.id,
+          amount: amt,
+          type: 'admin_credit',
+          description: `Admin Quick Credit +₦${amt.toLocaleString()}`,
+          status: 'completed'
+        });
+      } catch (e) {}
+
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, wallet: { ...u.wallet, balance: nextBal } } : u));
+      showToast('success', `Credited +${formatNaira(amt)} to ${user.full_name || 'user'}!`);
+    } catch (err) {
+      showToast('error', 'Quick credit failed: ' + err.message);
     }
   };
 
@@ -259,13 +292,64 @@ const AdminUsers = () => {
         });
       } catch (e) {}
 
-      showToast('success', `Wallet successfully ${type === 'credit' ? 'credited' : 'debited'} with ${formatNaira(amt)}.`);
+      showToast('success', `Wallet ${type === 'credit' ? 'credited' : 'debited'} with ${formatNaira(amt)}.`);
       setShowWalletModal(false);
       setWalletAmount('');
       setWalletReason('');
       fetchUsers();
     } catch (error) {
       showToast('error', 'Wallet adjustment error: ' + error.message);
+    }
+  };
+
+  // Bulk Operations
+  const handleBulkCredit = async (amt = 1000) => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Credit ${formatNaira(amt)} to all ${selectedIds.length} selected accounts?`)) return;
+    setActionLoading(true);
+    try {
+      for (const id of selectedIds) {
+        const u = users.find(x => x.id === id);
+        const cur = u?.wallet?.balance || 0;
+        await supabase.from('wallets').upsert({ user_id: id, balance: cur + amt });
+      }
+      showToast('success', `Bulk credited ${formatNaira(amt)} to ${selectedIds.length} users!`);
+      setSelectedIds([]);
+      fetchUsers();
+    } catch (err) {
+      showToast('error', 'Bulk credit failed: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBulkVerify = async () => {
+    if (selectedIds.length === 0) return;
+    setActionLoading(true);
+    try {
+      await supabase.from('profiles').update({ is_verified: true }).in('id', selectedIds);
+      showToast('success', `Verified KYC for ${selectedIds.length} users!`);
+      setSelectedIds([]);
+      fetchUsers();
+    } catch (err) {
+      showToast('error', 'Bulk verify failed: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBulkSuspend = async (suspend = true) => {
+    if (selectedIds.length === 0) return;
+    setActionLoading(true);
+    try {
+      await supabase.from('profiles').update({ suspended: suspend, is_banned: suspend }).in('id', selectedIds);
+      showToast('success', `${suspend ? 'Suspended' : 'Restored'} ${selectedIds.length} accounts!`);
+      setSelectedIds([]);
+      fetchUsers();
+    } catch (err) {
+      showToast('error', 'Bulk status update failed: ' + err.message);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -281,15 +365,16 @@ const AdminUsers = () => {
       if (error) throw error;
       setUsers(prev => prev.filter(u => u.id !== user.id));
       if (selectedUser?.id === user.id) setShowDetailModal(false);
-      showToast('success', 'User permanently deleted from system.');
+      showToast('success', 'User permanently deleted.');
     } catch (error) {
       showToast('error', 'Failed to delete user: ' + error.message);
     }
   };
 
   const exportCSV = () => {
+    const targetUsers = selectedIds.length > 0 ? users.filter(u => selectedIds.includes(u.id)) : filteredUsers;
     const headers = ['Full Name', 'Email', 'Phone', 'Role', 'Wallet Balance', 'KYC Verified', 'Suspended', 'Joined'];
-    const rows = filteredUsers.map(u => [
+    const rows = targetUsers.map(u => [
       `"${u.full_name || ''}"`,
       `"${u.email || ''}"`,
       `"${u.phone || ''}"`,
@@ -342,48 +427,95 @@ const AdminUsers = () => {
   const verifiedCount = useMemo(() => users.filter(u => u.is_verified).length, [users]);
   const suspendedCount = useMemo(() => users.filter(u => u.suspended || u.is_banned).length, [users]);
 
+  const allFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedIds.includes(u.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredUsers.map(u => u.id));
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  // WhatsApp templates generator
+  const getWhatsAppTemplates = (u) => {
+    const name = u?.full_name || 'Valued Customer';
+    return [
+      {
+        title: 'Welcome & Onboarding',
+        msg: `Hello ${name}, welcome to Abu Mafhal Marketplace! Your account is active and you can now browse, shop, and manage orders with verified fast delivery. Let us know if you need assistance!`
+      },
+      {
+        title: 'KYC Verification Approved',
+        msg: `Congratulations ${name}! Your KYC identification documents on Abu Mafhal Marketplace have been successfully reviewed and verified. Your account limits are now unlocked.`
+      },
+      {
+        title: 'Wallet Credit Confirmation',
+        msg: `Hello ${name}, your marketplace wallet float has just been successfully credited. You can verify your live balance anytime in your account dashboard.`
+      },
+      {
+        title: 'Support Follow-up',
+        msg: `Hello ${name}, our administrative desk is reaching out regarding your account activity on Abu Mafhal Marketplace. How can our customer experience team support you today?`
+      }
+    ];
+  };
+
   return (
-    <div className="space-y-6 text-slate-800 animate-fadeIn p-2 sm:p-4 rounded-3xl bg-[#F5F2EB]/60">
-      {/* ── WARM LUXURY HEADER (SPACIOUS & BOLD) ── */}
-      <div className="relative overflow-hidden bg-white p-7 sm:p-9 rounded-3xl border border-[#E6E0D5] shadow-sm">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+    <div className="space-y-3.5 text-slate-800 animate-fadeIn p-1 sm:p-2.5 rounded-2xl bg-[#F5F2EB]/50">
+      {/* ── SLEEK COMPACT HEADER ── */}
+      <div className="bg-white px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl border border-[#E6E0D5] shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-black tracking-widest uppercase mb-3">
-              <Users className="w-4 h-4 text-amber-700" />
-              <span>User Directory & Permissions</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] font-bold tracking-wider uppercase mb-1">
+              <Users className="w-3.5 h-3.5 text-amber-700" />
+              <span>Admin Directory & Permissions</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              Platform User Management
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-snug">
+              User Management Console
             </h1>
-            <p className="text-sm sm:text-base text-slate-500 mt-1 max-w-2xl font-medium">
-              Monitor active shoppers, accredited store vendors, logistics drivers, and privileged system administrators.
+            <p className="text-xs text-slate-500 font-medium">
+              Manage permissions, balances, KYC verifications, and direct WhatsApp alerts.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Density toggle */}
+            <button
+              onClick={() => setViewDensity(prev => prev === 'compact' ? 'comfortable' : 'compact')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 text-xs font-bold transition-all"
+              title="Toggle View Density"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+              <span>{viewDensity === 'compact' ? 'Dense' : 'Normal'}</span>
+            </button>
+
             <button
               onClick={exportCSV}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 text-xs sm:text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 text-xs font-bold transition-all"
               title="Export as CSV"
             >
-              <Download className="w-4 h-4 text-amber-700" />
-              <span>Export CSV</span>
+              <Download className="w-3.5 h-3.5 text-amber-700" />
+              <span>Export</span>
             </button>
 
             <button
               onClick={fetchUsers}
-              className="p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 transition-all hover:scale-[1.05]"
+              className="p-2 rounded-xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 transition-all"
               title="Refresh ledger"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-700' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-700' : ''}`} />
             </button>
 
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-all"
             >
-              <UserPlus className="w-4 h-4 text-amber-400" />
-              <span>Create User</span>
+              <UserPlus className="w-3.5 h-3.5 text-amber-400" />
+              <span>Add User</span>
             </button>
           </div>
         </div>
@@ -391,85 +523,81 @@ const AdminUsers = () => {
 
       {/* ── TOAST ALERT ── */}
       {toast.text && (
-        <div className={`p-4 rounded-2xl text-sm font-semibold border flex items-center justify-between shadow-sm transition-all ${
+        <div className={`p-2.5 rounded-xl text-xs font-semibold border flex items-center justify-between shadow-xs transition-all ${
           toast.type === 'success' 
             ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
             : 'bg-rose-50 text-rose-800 border-rose-200'
         }`}>
           <span>{toast.text}</span>
-          <button onClick={() => setToast({ type: '', text: '' })} className="text-xs opacity-70 hover:opacity-100 font-bold px-2 py-1">✕</button>
+          <button onClick={() => setToast({ type: '', text: '' })} className="text-[10px] opacity-70 hover:opacity-100 font-bold px-1.5 py-0.5">✕</button>
         </div>
       )}
 
-      {/* ── BIGGER KPI METRICS CARDS (WARM LUXURY PALETTE) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Total Users */}
-        <div className="bg-white p-6 rounded-3xl border border-[#E6E0D5] shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-black uppercase tracking-wider">Total Accounts</span>
-            <Users className="w-5 h-5 text-slate-800" />
+      {/* ── COMPACT KPI METRICS TILES ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="bg-white px-3.5 py-2.5 rounded-xl border border-[#E6E0D5] shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total Users</span>
+            <div className="text-lg font-black text-slate-900 leading-tight">{users.length}</div>
+            <span className="text-[10px] text-slate-500 font-medium">{customersCount} Shoppers · {adminsCount} Admins</span>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{users.length}</h3>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">{customersCount} Customers · {adminsCount} Admins</p>
+          <Users className="w-4 h-4 text-slate-700" />
         </div>
 
-        {/* Vendors */}
-        <div className="bg-white p-6 rounded-3xl border border-orange-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-orange-50/40 to-white">
-          <div className="flex items-center justify-between text-orange-800 mb-2">
-            <span className="text-xs font-black uppercase tracking-wider">Active Vendors</span>
-            <Star className="w-5 h-5 text-orange-600" />
+        <div className="bg-white px-3.5 py-2.5 rounded-xl border border-orange-200/70 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-orange-700 block">Merchants</span>
+            <div className="text-lg font-black text-slate-900 leading-tight">{vendorsCount}</div>
+            <span className="text-[10px] text-slate-500 font-medium">{driversCount} Logistics Couriers</span>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{vendorsCount}</h3>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">Accredited Store Merchants</p>
+          <Star className="w-4 h-4 text-orange-600" />
         </div>
 
-        {/* Logistics Drivers */}
-        <div className="bg-white p-6 rounded-3xl border border-sky-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-sky-50/40 to-white">
-          <div className="flex items-center justify-between text-sky-800 mb-2">
-            <span className="text-xs font-black uppercase tracking-wider">Fleet Drivers</span>
-            <ShieldCheck className="w-5 h-5 text-sky-600" />
+        <div className="bg-white px-3.5 py-2.5 rounded-xl border border-emerald-200/70 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">Float Balance</span>
+            <div className="text-lg font-black text-emerald-700 leading-tight">{formatNaira(totalBalance)}</div>
+            <span className="text-[10px] text-slate-500 font-medium">{verifiedCount} KYC Verified</span>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{driversCount}</h3>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">Fulfillment Couriers</p>
+          <Wallet className="w-4 h-4 text-emerald-600" />
         </div>
 
-        {/* Total Wallet Liquidity */}
-        <div className="bg-white p-6 rounded-3xl border border-emerald-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-emerald-50/40 to-white">
-          <div className="flex items-center justify-between text-emerald-800 mb-2">
-            <span className="text-xs font-black uppercase tracking-wider">Platform Liquidity</span>
-            <Wallet className="w-5 h-5 text-emerald-600" />
+        <div className="bg-white px-3.5 py-2.5 rounded-xl border border-sky-200/70 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-sky-700 block">Account Health</span>
+            <div className="text-lg font-black text-sky-800 leading-tight">{verifiedCount} / {users.length}</div>
+            <span className="text-[10px] text-rose-600 font-bold">{suspendedCount} Suspended</span>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-emerald-700">{formatNaira(totalBalance)}</h3>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">{verifiedCount} KYC Verified Accounts</p>
+          <ShieldCheck className="w-4 h-4 text-sky-600" />
         </div>
       </div>
 
-      {/* ── BIGGER SEARCH & FILTER BAR ── */}
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-[#E6E0D5] shadow-sm">
-        <div className="relative w-full lg:w-96">
-          <Search className="w-5 h-5 text-amber-700 absolute left-4 top-1/2 -translate-y-1/2" />
+      {/* ── SEARCH & FILTER CONTROLS ── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-white p-2.5 rounded-xl border border-[#E6E0D5] shadow-xs">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-amber-700 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search name, email, phone, role…"
+            placeholder="Search name, phone, email…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-[#F5F2EB]/60 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 transition-all text-slate-900 placeholder-slate-400 font-medium"
+            className="w-full pl-9 pr-7 py-1.5 bg-[#F5F2EB]/60 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 transition-all text-slate-900 placeholder-slate-400 font-medium"
           />
           {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700">✕</button>
+            <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700">✕</button>
           )}
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-0.5 sm:pb-0 scrollbar-none">
           {[
             { id: 'all', label: `All (${users.length})` },
             { id: 'customer', label: `Customers (${customersCount})` },
             { id: 'vendor', label: `Vendors (${vendorsCount})` },
             { id: 'driver', label: `Drivers (${driversCount})` },
             { id: 'admin', label: `Admins (${adminsCount})` },
-            { id: 'verified', label: `Verified (${verifiedCount})` },
-            { id: 'wallet', label: 'Has Balance' },
+            { id: 'verified', label: `KYC (${verifiedCount})` },
+            { id: 'wallet', label: 'Funded' },
             { id: 'suspended', label: `Suspended (${suspendedCount})` },
           ].map(p => {
             const active = filter === p.id;
@@ -477,10 +605,10 @@ const AdminUsers = () => {
               <button
                 key={p.id}
                 onClick={() => setFilter(p.id)}
-                className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap border ${
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap border ${
                   active
-                    ? 'bg-slate-900 text-white border-slate-900 font-black shadow-sm'
-                    : 'bg-[#F5F2EB]/80 text-slate-700 border-[#E6E0D5] hover:bg-stone-100 hover:text-slate-900'
+                    ? 'bg-slate-900 text-white border-slate-900 font-black'
+                    : 'bg-[#F5F2EB]/70 text-slate-700 border-[#E6E0D5] hover:bg-stone-100 hover:text-slate-900'
                 }`}
               >
                 {p.label}
@@ -490,75 +618,182 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      {/* ── USER TABLE (SPACIOUS & BOLD) ── */}
+      {/* ── FLOATING BULK ACTIONS TOOLBAR ── */}
+      {selectedIds.length > 0 && (
+        <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900 text-white shadow-lg animate-fadeIn border border-slate-800">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-md">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-bold text-slate-200">accounts selected</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleBulkCredit(1000)}
+              disabled={actionLoading}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black transition-all"
+            >
+              +₦1K Credit
+            </button>
+            <button
+              onClick={() => handleBulkCredit(5000)}
+              disabled={actionLoading}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black transition-all"
+            >
+              +₦5K Credit
+            </button>
+            <button
+              onClick={handleBulkVerify}
+              disabled={actionLoading}
+              className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition-all"
+            >
+              Verify KYC
+            </button>
+            <button
+              onClick={() => handleBulkSuspend(true)}
+              disabled={actionLoading}
+              className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-all"
+            >
+              Suspend
+            </button>
+            <button
+              onClick={() => handleBulkSuspend(false)}
+              disabled={actionLoading}
+              className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold transition-all"
+            >
+              Restore
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-2 py-1 rounded-lg text-slate-400 hover:text-white text-[11px] font-bold"
+            >
+              Deselect
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── USER TABLE (HIGH-DENSITY & COMPACT) ── */}
       {loading ? (
-        <div className="p-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-[#E6E0D5] shadow-sm text-center">
-          <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-sm font-bold text-slate-600">Synchronizing user accounts…</p>
+        <div className="p-12 flex flex-col items-center justify-center bg-white rounded-2xl border border-[#E6E0D5] text-center">
+          <div className="w-8 h-8 border-3 border-slate-900 border-t-transparent rounded-full animate-spin mb-3" />
+          <p className="text-xs font-bold text-slate-600">Loading user accounts…</p>
         </div>
       ) : filteredUsers.length === 0 ? (
-        <div className="p-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-[#E6E0D5] shadow-sm text-center">
-          <div className="w-16 h-16 rounded-2xl bg-stone-100 text-slate-400 flex items-center justify-center mb-4">
-            <Users className="w-8 h-8" />
-          </div>
-          <h3 className="text-lg font-black text-slate-900">No accounts found</h3>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-sm mt-1">Try clearing your search query or switching the active category filter.</p>
+        <div className="p-12 flex flex-col items-center justify-center bg-white rounded-2xl border border-[#E6E0D5] text-center">
+          <Users className="w-8 h-8 text-slate-400 mb-2" />
+          <h3 className="text-sm font-black text-slate-900">No accounts match criteria</h3>
+          <p className="text-xs text-slate-500 max-w-sm mt-0.5">Try adjusting your search terms or filter selection.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-[#E6E0D5] shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-[#E6E0D5] shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-stone-200 bg-[#FAF8F5] text-[11.5px] font-black uppercase tracking-wider text-slate-600">
-                  <th className="py-4 px-6">User Profile</th>
-                  <th className="py-4 px-4">Contact Phone</th>
-                  <th className="py-4 px-4">Permission Role</th>
-                  <th className="py-4 px-4">Wallet Balance</th>
-                  <th className="py-4 px-4 text-center">KYC & Status</th>
-                  <th className="py-4 px-4">Registered</th>
-                  <th className="py-4 px-6 text-right">Actions</th>
+                <tr className="border-b border-stone-200 bg-[#FAF8F5] text-[10.5px] font-black uppercase tracking-wider text-slate-600">
+                  <th className="py-2.5 px-3 w-8 text-center">
+                    <button onClick={toggleSelectAll} className="text-slate-500 hover:text-slate-900">
+                      {allFilteredSelected ? (
+                        <CheckSquare className="w-4 h-4 text-amber-600" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-2.5 px-3">User Profile</th>
+                  <th className="py-2.5 px-2.5">Contact</th>
+                  <th className="py-2.5 px-2.5">Role</th>
+                  <th className="py-2.5 px-2.5">Wallet Balance</th>
+                  <th className="py-2.5 px-2.5 text-center">Status & KYC</th>
+                  <th className="py-2.5 px-2.5">Registered</th>
+                  <th className="py-2.5 px-3 text-right">Quick Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100 text-sm">
+              <tbody className="divide-y divide-stone-100 text-xs">
                 {filteredUsers.map((user) => {
+                  const isSelected = selectedIds.includes(user.id);
                   const isSuspended = user.suspended === true || user.is_banned === true;
                   const roleConfig = ROLES[user.role] || ROLES.customer;
                   const initial = (user.full_name || user.email || 'U')[0].toUpperCase();
                   const bal = user.wallet?.balance || 0;
+                  const isCompact = viewDensity === 'compact';
 
                   return (
-                    <tr key={user.id} className="hover:bg-stone-50/80 transition-colors group">
-                      {/* Big User Profile */}
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-12 h-12 rounded-2xl bg-[#F5F2EB] border border-[#E6E0D5] flex items-center justify-center font-black text-base text-slate-800 shadow-sm flex-shrink-0">
+                    <tr 
+                      key={user.id} 
+                      className={`hover:bg-amber-50/20 transition-colors group ${
+                        isSelected ? 'bg-amber-50/40' : ''
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="py-2 px-3 text-center">
+                        <button onClick={() => toggleSelectOne(user.id)} className="text-slate-500 hover:text-slate-900">
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-amber-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-300" />
+                          )}
+                        </button>
+                      </td>
+
+                      {/* User Profile */}
+                      <td className={isCompact ? 'py-1.5 px-3' : 'py-2.5 px-3'}>
+                        <div className="flex items-center gap-2.5">
+                          <div className={`rounded-lg bg-[#F5F2EB] border border-[#E6E0D5] flex items-center justify-center font-black text-slate-800 shadow-2xs flex-shrink-0 ${
+                            isCompact ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-xs'
+                          }`}>
                             {initial}
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-bold text-slate-900 group-hover:text-amber-800 transition-colors truncate text-sm sm:text-base">
+                            <div className="flex items-center gap-1">
+                              <p className="font-bold text-slate-900 group-hover:text-amber-800 transition-colors truncate text-xs">
                                 {user.full_name || 'Anonymous User'}
                               </p>
                               {user.is_verified && (
-                                <CheckCircle className="w-4 h-4 text-sky-600 flex-shrink-0" title="KYC Verified" />
+                                <CheckCircle className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" title="KYC Verified" />
                               )}
                             </div>
-                            <p className="text-xs text-slate-500 truncate">{user.email || 'No email'}</p>
+                            <div className="flex items-center gap-1.5 text-[10.5px] text-slate-500 truncate">
+                              <span className="truncate">{user.email || 'No email'}</span>
+                              {user.email && (
+                                <button
+                                  onClick={() => copyToClipboard(user.email, 'Email')}
+                                  className="text-slate-400 hover:text-slate-700 p-0.5"
+                                  title="Copy email"
+                                >
+                                  {copiedText === user.email ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
 
                       {/* Phone */}
-                      <td className="py-4 px-4 text-xs sm:text-sm font-semibold text-slate-700">
-                        {user.phone || 'Not provided'}
+                      <td className="py-1.5 px-2.5 text-[11px] font-medium text-slate-700 whitespace-nowrap">
+                        {user.phone ? (
+                          <div className="flex items-center gap-1">
+                            <span>{user.phone}</span>
+                            <button
+                              onClick={() => copyToClipboard(user.phone, 'Phone')}
+                              className="text-slate-400 hover:text-slate-700 p-0.5"
+                              title="Copy phone"
+                            >
+                              {copiedText === user.phone ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">None</span>
+                        )}
                       </td>
 
                       {/* Role Selector */}
-                      <td className="py-4 px-4">
+                      <td className="py-1.5 px-2.5">
                         <select
                           value={user.role || 'customer'}
                           onChange={(e) => handleUpdateRole(user.id, e.target.value)}
-                          className={`text-xs font-black uppercase px-3 py-1.5 rounded-xl border cursor-pointer outline-none transition-all ${roleConfig.color}`}
+                          className={`text-[10.5px] font-black uppercase px-2 py-0.5 rounded-md border cursor-pointer outline-none transition-all ${roleConfig.color}`}
                         >
                           <option value="customer">Customer</option>
                           <option value="vendor">Vendor</option>
@@ -567,85 +802,98 @@ const AdminUsers = () => {
                         </select>
                       </td>
 
-                      {/* Wallet Balance */}
-                      <td className="py-4 px-4">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-mono text-xs sm:text-sm font-black">
-                          <Wallet className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{formatNaira(bal)}</span>
+                      {/* Wallet Balance + Quick +₦1K Pill */}
+                      <td className="py-1.5 px-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-mono text-xs font-black ${bal > 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+                            {formatNaira(bal)}
+                          </span>
+                          {/* 1-Click Quick Credit Feature */}
+                          <button
+                            onClick={() => handleQuickCredit(user, 1000)}
+                            className="px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9.5px] font-black transition-all"
+                            title="Instant 1-Click +₦1,000 Credit"
+                          >
+                            +1K
+                          </button>
                         </div>
                       </td>
 
-                      {/* Status */}
-                      <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                          isSuspended
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}>
-                          <span className={`w-2 h-2 rounded-full ${isSuspended ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-                          {isSuspended ? 'Suspended' : 'Active'}
-                        </span>
+                      {/* Status & KYC Quick Toggles */}
+                      <td className="py-1.5 px-2.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleToggleSuspend(user)}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+                              isSuspended
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                            title="Click to toggle suspension"
+                          >
+                            {isSuspended ? 'Suspended' : 'Active'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleVerify(user)}
+                            className={`p-1 rounded-md border transition-all ${
+                              user.is_verified
+                                ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                : 'bg-stone-50 text-slate-400 border-stone-200'
+                            }`}
+                            title={user.is_verified ? 'KYC Verified (click to revoke)' : 'Unverified (click to verify)'}
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
 
                       {/* Registered Date */}
-                      <td className="py-4 px-4 text-xs text-slate-500 font-medium">
-                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Recent'}
+                      <td className="py-1.5 px-2.5 text-[10.5px] text-slate-500 font-medium whitespace-nowrap">
+                        {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : 'Recent'}
                       </td>
 
                       {/* Actions */}
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* WhatsApp Launcher */}
-                          {user.phone && (
-                            <a
-                              href={`https://wa.me/${user.phone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200"
-                              title="Chat on WhatsApp"
+                      <td className="py-1.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Instant WhatsApp Template Launcher */}
+                          {user.phone ? (
+                            <button
+                              onClick={() => {
+                                const templates = getWhatsAppTemplates(user);
+                                setWhatsappModal({ open: true, user, message: templates[0].msg });
+                              }}
+                              className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200"
+                              title="Send WhatsApp Business Template"
                             >
-                              <MessageCircle className="w-4 h-4" />
-                            </a>
-                          )}
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
+                          ) : null}
 
                           {/* Inspect Modal */}
                           <button
                             onClick={() => { setSelectedUser(user); setShowDetailModal(true); }}
-                            className="p-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-stone-100 transition-all border border-transparent hover:border-stone-200"
-                            title="Inspect Details"
+                            className="p-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-stone-100 transition-all"
+                            title="View Full Profile"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Adjust Wallet */}
+                          {/* Custom Amount Wallet Adjust Modal */}
                           <button
                             onClick={() => { setSelectedUser(user); setShowWalletModal(true); }}
-                            className="p-2.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200"
+                            className="p-1 rounded-lg text-amber-700 hover:bg-amber-50 transition-all"
                             title="Credit / Debit Wallet"
                           >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
-
-                          {/* Toggle Suspend */}
-                          <button
-                            onClick={() => handleToggleSuspend(user)}
-                            className={`p-2.5 rounded-xl transition-all border border-transparent ${
-                              isSuspended
-                                ? 'text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200'
-                                : 'text-rose-600 hover:bg-rose-50 hover:border-rose-200'
-                            }`}
-                            title={isSuspended ? 'Restore User' : 'Suspend Account'}
-                          >
-                            {isSuspended ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                            <DollarSign className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Delete */}
                           <button
                             onClick={() => handleDeleteUser(user)}
-                            className="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                            title="Delete User"
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                            title="Delete Account"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -658,109 +906,181 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* ── CREATE USER MODAL ── */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-3xl p-7 sm:p-9 shadow-2xl border border-[#E6E0D5] relative">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-5">
-              <div>
-                <h3 className="text-xl font-black text-slate-900">Create Platform Account</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Register a new client, store merchant, or admin.</p>
+      {/* ── WHATSAPP TEMPLATES LAUNCHER MODAL (KILLER FEATURE) ── */}
+      {whatsappModal.open && whatsappModal.user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">WhatsApp Notification Hub</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">To: {whatsappModal.user.full_name || 'User'} ({whatsappModal.user.phone})</p>
+                </div>
               </div>
               <button
-                onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all"
+                onClick={() => setWhatsappModal({ open: false, user: null, message: '' })}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all text-xs"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Select Message Template:</p>
+            <div className="space-y-1.5 mb-3.5">
+              {getWhatsAppTemplates(whatsappModal.user).map((tmpl, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setWhatsappModal(prev => ({ ...prev, message: tmpl.msg }))}
+                  className={`w-full text-left p-2 rounded-xl border text-xs transition-all ${
+                    whatsappModal.message === tmpl.msg
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold'
+                      : 'border-stone-200 bg-stone-50 hover:bg-stone-100 text-slate-700'
+                  }`}
+                >
+                  <span className="block font-black text-[11px] uppercase tracking-wider text-emerald-800">{tmpl.title}</span>
+                  <span className="line-clamp-2 text-[10.5px] opacity-80 mt-0.5">{tmpl.msg}</span>
+                </button>
+              ))}
+            </div>
+
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Customized Message Content:
+            </label>
+            <textarea
+              value={whatsappModal.message}
+              onChange={(e) => setWhatsappModal(prev => ({ ...prev, message: e.target.value }))}
+              rows={3}
+              className="w-full p-2.5 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-emerald-600 text-slate-900 font-medium mb-3.5"
+            />
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setWhatsappModal({ open: false, user: null, message: '' })}
+                className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50"
+              >
+                Cancel
+              </button>
+              <a
+                href={`https://wa.me/${whatsappModal.user.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsappModal.message)}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setWhatsappModal({ open: false, user: null, message: '' })}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-xs"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Launch WhatsApp</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CREATE USER MODAL ── */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 mb-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Full Legal Name *
+                <h3 className="text-base font-black text-slate-900">Add Account</h3>
+                <p className="text-[11px] text-slate-500">Register customer, vendor, driver or admin.</p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-stone-100 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-2.5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Full Name *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Aliko Dangote"
+                  placeholder="e.g. Sani Muhammad"
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Email Address *
                 </label>
                 <input
                   type="email"
                   required
-                  placeholder="user@marketplace.com"
+                  placeholder="user@example.com"
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Password *
                 </label>
                 <input
                   type="password"
                   required
-                  placeholder="Minimum 6 characters"
+                  placeholder="Min 6 chars"
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Phone Number
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Phone
                 </label>
                 <input
                   type="tel"
                   placeholder="08012345678"
                   value={newUser.phone}
                   onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  System Role
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Role
                 </label>
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-bold"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 text-slate-900 font-bold"
                 >
                   <option value="customer">Customer (Shopper)</option>
-                  <option value="vendor">Vendor (Merchant Store)</option>
-                  <option value="driver">Driver (Fulfillment Courier)</option>
-                  <option value="admin">Admin (Full Control)</option>
+                  <option value="vendor">Vendor (Store Merchant)</option>
+                  <option value="driver">Driver (Logistics Courier)</option>
+                  <option value="admin">Admin (System Access)</option>
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-3 rounded-2xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50 transition-all"
+                  className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-6 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all disabled:opacity-50"
+                  className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
                 >
-                  {actionLoading ? 'Creating…' : 'Register Account'}
+                  {actionLoading ? 'Saving…' : 'Create'}
                 </button>
               </div>
             </form>
@@ -770,40 +1090,39 @@ const AdminUsers = () => {
 
       {/* ── WALLET CREDIT/DEBIT MODAL WITH PRESET QUICK PICKS ── */}
       {showWalletModal && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-3xl p-7 sm:p-9 shadow-2xl border border-[#E6E0D5] relative">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-5">
-              <div className="flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-emerald-700" />
-                <h3 className="text-xl font-black text-slate-900">Adjust Wallet Balance</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 mb-3">
+              <div className="flex items-center gap-1.5">
+                <Wallet className="w-4 h-4 text-emerald-700" />
+                <h3 className="text-sm font-black text-slate-900">Wallet Adjustment</h3>
               </div>
               <button
                 onClick={() => setShowWalletModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-stone-100 text-xs"
               >
                 ✕
               </button>
             </div>
 
-            <div className="mb-4 p-4 rounded-2xl bg-[#F5F2EB]/60 border border-[#E6E0D5]">
-              <p className="text-xs text-slate-500">Target Account:</p>
-              <p className="text-base font-bold text-slate-900">{selectedUser.full_name || selectedUser.email}</p>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-500">Current Balance:</span>
-                <span className="text-lg font-black text-emerald-800 font-mono">
+            <div className="mb-3 p-2.5 rounded-xl bg-[#F5F2EB]/60 border border-[#E6E0D5]">
+              <span className="text-[10.5px] text-slate-500 font-bold block">Account: {selectedUser.full_name || selectedUser.email}</span>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-slate-600">Current Balance:</span>
+                <span className="text-base font-black text-emerald-800 font-mono">
                   {formatNaira(selectedUser.wallet?.balance || 0)}
                 </span>
               </div>
             </div>
 
             {/* Quick Amount Presets */}
-            <div className="flex gap-2 mb-3">
+            <div className="grid grid-cols-4 gap-1.5 mb-3">
               {['1000', '5000', '10000', '50000'].map((val) => (
                 <button
                   key={val}
                   type="button"
                   onClick={() => setWalletAmount(val)}
-                  className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  className={`py-1 rounded-lg text-[11px] font-bold border transition-all ${
                     walletAmount === val
                       ? 'bg-amber-100 border-amber-400 text-amber-900'
                       : 'bg-stone-50 border-stone-200 text-slate-700 hover:bg-stone-100'
@@ -814,9 +1133,9 @@ const AdminUsers = () => {
               ))}
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2.5">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Amount in Naira (₦)
                 </label>
                 <input
@@ -824,44 +1143,44 @@ const AdminUsers = () => {
                   placeholder="e.g. 5000"
                   value={walletAmount}
                   onChange={(e) => setWalletAmount(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-base focus:outline-none focus:border-amber-600 text-slate-900 font-mono font-bold"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-mono font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Transaction Reason / Memo
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Reason / Memo
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Loyalty bonus, manual refund"
+                  placeholder="e.g. Manual refund, promotion"
                   value={walletReason}
                   onChange={(e) => setWalletReason(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900"
+                  className="w-full px-3 py-2 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-xl text-xs focus:outline-none focus:border-amber-600 text-slate-900"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200">
                 <button
                   type="button"
                   onClick={() => setShowWalletModal(false)}
-                  className="px-5 py-3 rounded-2xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50 transition-all"
+                  className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAdjustWallet('debit')}
-                  className="px-5 py-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-all"
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-all"
                 >
-                  Debit Funds
+                  Debit
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAdjustWallet('credit')}
-                  className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
                 >
-                  Credit Funds
+                  Credit
                 </button>
               </div>
             </div>
@@ -871,96 +1190,98 @@ const AdminUsers = () => {
 
       {/* ── USER DETAILS DRAWER / MODAL ── */}
       {showDetailModal && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-7 sm:p-9 shadow-2xl border border-[#E6E0D5] relative">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-5">
-              <div className="flex items-center gap-3.5">
-                <div className="w-14 h-14 rounded-2xl bg-[#F5F2EB] border border-[#E6E0D5] flex items-center justify-center font-black text-lg text-slate-800 shadow-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-[#F5F2EB] border border-[#E6E0D5] flex items-center justify-center font-black text-sm text-slate-800 shadow-2xs">
                   {(selectedUser.full_name || selectedUser.email || 'U')[0].toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 leading-tight">
+                  <h3 className="text-sm font-black text-slate-900 leading-tight">
                     {selectedUser.full_name || 'Anonymous User'}
                   </h3>
-                  <p className="text-xs text-slate-500 font-mono">ID: {selectedUser.id}</p>
+                  <p className="text-[10px] text-slate-500 font-mono">ID: {selectedUser.id}</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowDetailModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-stone-100 text-xs"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3.5 p-4 rounded-2xl bg-[#F5F2EB]/60 border border-[#E6E0D5] text-xs">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-[#F5F2EB]/60 border border-[#E6E0D5] text-xs">
                 <div>
-                  <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">System Role</span>
-                  <span className="font-bold capitalize text-slate-900 text-sm">{selectedUser.role || 'customer'}</span>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-0.5">Role</span>
+                  <span className="font-bold capitalize text-slate-900">{selectedUser.role || 'customer'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">Status</span>
-                  <span className={`inline-flex items-center gap-1 font-bold text-sm ${
+                  <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-0.5">Status</span>
+                  <span className={`inline-flex items-center gap-1 font-bold ${
                     selectedUser.suspended || selectedUser.is_banned ? 'text-rose-600' : 'text-emerald-700'
                   }`}>
                     {selectedUser.suspended || selectedUser.is_banned ? 'Suspended' : 'Active'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">Wallet Float</span>
-                  <span className="font-black text-emerald-800 text-sm sm:text-base font-mono">{formatNaira(selectedUser.wallet?.balance || 0)}</span>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-0.5">Wallet Float</span>
+                  <span className="font-black text-emerald-800 font-mono">{formatNaira(selectedUser.wallet?.balance || 0)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">KYC Verification</span>
-                  <span className={`font-bold text-sm ${selectedUser.is_verified ? 'text-sky-700' : 'text-slate-500'}`}>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-0.5">KYC Verified</span>
+                  <span className={`font-bold ${selectedUser.is_verified ? 'text-sky-700' : 'text-slate-500'}`}>
                     {selectedUser.is_verified ? 'Verified Citizen' : 'Unverified'}
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-2.5 text-xs sm:text-sm">
-                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-stone-200 bg-white">
-                  <span className="text-slate-500 font-semibold flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-amber-700" /> Email:
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-stone-200 bg-white">
+                  <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-amber-700" /> Email:
                   </span>
-                  <strong className="text-slate-800 font-mono">{selectedUser.email || 'N/A'}</strong>
+                  <strong className="text-slate-800 font-mono text-[11px]">{selectedUser.email || 'N/A'}</strong>
                 </div>
 
-                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-stone-200 bg-white">
-                  <span className="text-slate-500 font-semibold flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-amber-700" /> Telephone:
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-stone-200 bg-white">
+                  <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-amber-700" /> Phone:
                   </span>
-                  <strong className="text-slate-800 font-mono">{selectedUser.phone || 'N/A'}</strong>
+                  <strong className="text-slate-800 font-mono text-[11px]">{selectedUser.phone || 'N/A'}</strong>
                 </div>
 
                 {selectedUser.phone && (
-                  <div className="flex gap-2.5 pt-1">
-                    <a
-                      href={`https://wa.me/${selectedUser.phone.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 py-3 px-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 text-xs font-black flex items-center justify-center gap-2 transition-all"
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setShowDetailModal(false);
+                        const templates = getWhatsAppTemplates(selectedUser);
+                        setWhatsappModal({ open: true, user: selectedUser, message: templates[0].msg });
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                     >
-                      <MessageCircle className="w-4 h-4 text-emerald-700" />
-                      <span>WhatsApp Chat</span>
-                    </a>
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>WhatsApp Notification</span>
+                    </button>
                     <a
                       href={`tel:${selectedUser.phone}`}
-                      className="flex-1 py-3 px-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-black flex items-center justify-center gap-2 transition-all"
+                      className="flex-1 py-2 px-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                     >
-                      <Phone className="w-4 h-4 text-sky-700" />
-                      <span>Direct Phone Call</span>
+                      <Phone className="w-3.5 h-3.5 text-sky-700" />
+                      <span>Direct Call</span>
                     </a>
                   </div>
                 )}
               </div>
 
-              <div className="pt-4 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="pt-3 border-t border-stone-200 flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => handleToggleVerify(selectedUser)}
-                  className={`px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                     selectedUser.is_verified
                       ? 'border-stone-200 text-slate-600 hover:bg-stone-50'
                       : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'
@@ -973,18 +1294,18 @@ const AdminUsers = () => {
                   <button
                     type="button"
                     onClick={() => handleToggleSuspend(selectedUser)}
-                    className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-2xs ${
                       selectedUser.suspended || selectedUser.is_banned
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                         : 'bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100'
                     }`}
                   >
-                    {selectedUser.suspended || selectedUser.is_banned ? 'Restore User' : 'Suspend User'}
+                    {selectedUser.suspended || selectedUser.is_banned ? 'Restore' : 'Suspend'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowDetailModal(false)}
-                    className="px-5 py-2.5 rounded-2xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50 transition-all"
+                    className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50"
                   >
                     Close
                   </button>
