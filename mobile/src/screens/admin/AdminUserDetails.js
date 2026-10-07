@@ -2,9 +2,8 @@ import * as React from 'react';
 import {
     View, Text, Modal, TouchableOpacity, ScrollView, TextInput,
     ActivityIndicator, Alert, StyleSheet, Linking, KeyboardAvoidingView,
-    Platform, Dimensions, Pressable
+    Platform, Dimensions, Pressable, Clipboard
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -13,12 +12,12 @@ import { UserAvatar } from '../../components/UserAvatar';
 
 const { width } = Dimensions.get('window');
 
-// ─── Warm Luxury Palette (Neither Stark White Nor Dark) ─────────────────────
+// ─── Warm Luxury Palette ───────────────────────────────────────────────────
 const W = {
     canvas: '#F5F2EB',          // Warm alabaster cream canvas
     canvasAlt: '#EFEAE1',
     cardBg: '#FFFFFF',          // Crisp warm porcelain card
-    cardBorder: '#E6E0D5',      // Warm champagne/stone border
+    cardBorder: '#E6E0D5',      // Warm champagne stone border
     gold: '#B45309',            // Rich metallic bronze-gold
     goldLight: '#D97706',
     goldBg: '#FEF3C7',
@@ -50,133 +49,50 @@ const fmtAmt = (val) => {
     return `₦${num.toLocaleString('en-US')}`;
 };
 
-// ─── Tab Button Helper ───────────────────────────────────────────────────────
-const TabButton = ({ title, active, onPress, count, icon }) => (
-    <TouchableOpacity
-        onPress={onPress}
-        style={[styles.tabBtn, active && styles.tabBtnActive]}
-    >
-        <Ionicons
-            name={icon}
-            size={16}
-            color={active ? W.charcoal : W.textMuted}
-            style={{ marginRight: 6 }}
-        />
-        <Text style={[styles.tabText, active && styles.tabTextActive]}>
-            {title} {count !== undefined && count > 0 ? `(${count})` : ''}
-        </Text>
-    </TouchableOpacity>
-);
+const TIERS = [
+    { min: 1000000, label: '💎 Diamond VIP', color: W.purple, bg: W.purpleBg, border: W.purpleBorder },
+    { min: 250000, label: '🥇 Gold Elite', color: W.gold, bg: W.goldBg, border: W.goldBorder },
+    { min: 50000, label: '🥈 Silver Member', color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' },
+    { min: 0, label: '🥉 Starter', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+];
+const getTier = (spend = 0) => TIERS.find(t => spend >= t.min) || TIERS[3];
 
-// ─── Section Header Helper ───────────────────────────────────────────────────
-const SectionHeader = ({ title, icon, color = W.charcoal }) => (
-    <View style={styles.sectionHeader}>
-        <Ionicons name={icon} size={18} color={color} />
-        <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
-    </View>
-);
-
-// ─── Role Card Helper (Spacious) ─────────────────────────────────────────────
-const RoleCard = ({ role, selected, onSelect, disabled }) => {
-    const getRoleMeta = (r) => {
-        switch (r) {
-            case 'admin': return { icon: 'shield-checkmark', color: W.purple, bg: W.purpleBg, border: W.purpleBorder, label: 'Administrator' };
-            case 'vendor': return { icon: 'storefront', color: '#C2410C', bg: '#FFF7ED', border: '#FFEDD5', label: 'Merchant Vendor' };
-            case 'driver': return { icon: 'bicycle', color: W.sky, bg: W.skyBg, border: W.skyBorder, label: 'Fleet Courier' };
-            default: return { icon: 'person', color: W.emerald, bg: W.emeraldBg, border: W.emeraldBorder, label: 'Shopper Client' };
-        }
-    };
-
-    const meta = getRoleMeta(role);
-
-    return (
-        <TouchableOpacity
-            onPress={() => onSelect(role)}
-            disabled={disabled}
-            style={[
-                styles.roleCard,
-                { borderColor: selected ? meta.color : W.cardBorder, backgroundColor: selected ? meta.bg : '#FFFFFF' },
-                disabled && { opacity: 0.5 }
-            ]}
-        >
-            <View style={[styles.roleIconBox, { backgroundColor: meta.bg, borderColor: meta.border }]}>
-                <Ionicons name={meta.icon} size={20} color={meta.color} />
-            </View>
-            <Text style={[styles.roleCardText, { color: selected ? meta.color : W.textBody, fontWeight: selected ? '900' : '700' }]}>
-                {meta.label}
-            </Text>
-            {selected && (
-                <View style={[styles.checkCircle, { backgroundColor: meta.color }]}>
-                    <Ionicons name="checkmark" size={12} color="white" />
-                </View>
-            )}
-        </TouchableOpacity>
-    );
-};
-
-// ─── Switch Button Helper ───────────────────────────────────────────────────
-const SwitchBtn = ({ value, onToggle, color = W.emerald }) => (
-    <TouchableOpacity
-        onPress={onToggle}
-        style={{
-            width: 48,
-            height: 28,
-            borderRadius: 14,
-            backgroundColor: value ? color : '#E2E8F0',
-            padding: 2,
-            justifyContent: 'center'
-        }}
-    >
-        <View style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            backgroundColor: '#FFFFFF',
-            alignSelf: value ? 'flex-end' : 'flex-start',
-            ...Platform.select({
-                ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3 },
-                android: { elevation: 2 }
-            })
-        }} />
-    </TouchableOpacity>
-);
-
-// ─── Main AdminUserDetails Component ─────────────────────────────────────────
-export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation: propNavigation }) => {
-    const internalNavigation = useNavigation();
-    const navigation = propNavigation || internalNavigation;
+export const AdminUserDetails = ({ visible, user, navigation, onClose, onUpdate }) => {
     const insets = useSafeAreaInsets();
 
     // Data State
     const [wallet, setWallet] = React.useState(null);
+    const [transactions, setTransactions] = React.useState([]);
     const [orders, setOrders] = React.useState([]);
     const [driverInfo, setDriverInfo] = React.useState(null);
     const [loadingData, setLoadingData] = React.useState(false);
 
-    // UI State
-    const [activeTab, setActiveTab] = React.useState('overview');
+    // Navigation Tab
+    const [activeTab, setActiveTab] = React.useState('overview'); // 'overview' | 'wallet' | 'orders' | 'security'
     const [editMode, setEditMode] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
 
-    // Form State
+    // Form fields
     const [fullName, setFullName] = React.useState('');
     const [phone, setPhone] = React.useState('');
     const [address, setAddress] = React.useState('');
     const [city, setCity] = React.useState('');
     const [state, setState] = React.useState('');
-    const [country, setCountry] = React.useState('');
     const [adminNotes, setAdminNotes] = React.useState('');
     const [role, setRole] = React.useState('customer');
+    const [isVerified, setIsVerified] = React.useState(false);
+    const [isSuspended, setIsSuspended] = React.useState(false);
+    const [isRestricted, setIsRestricted] = React.useState(false);
 
-    // Security State
+    // Security
     const [newPassword, setNewPassword] = React.useState('');
 
-    // Transaction State
+    // Custom Transaction Modal
     const [transactVisible, setTransactVisible] = React.useState(false);
     const [transactType, setTransactType] = React.useState('credit');
     const [transacting, setTransacting] = React.useState(false);
-    const [amount, setAmount] = React.useState('');
-    const [note, setNote] = React.useState('');
+    const [transactAmount, setTransactAmount] = React.useState('');
+    const [transactReason, setTransactReason] = React.useState('');
 
     React.useEffect(() => {
         if (visible && user) {
@@ -185,9 +101,11 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
             setAddress(user.address || '');
             setCity(user.city || '');
             setState(user.state || '');
-            setCountry(user.country || '');
             setAdminNotes(user.admin_note || user.admin_notes || '');
             setRole(user.role || 'customer');
+            setIsVerified(!!user.is_verified);
+            setIsSuspended(!!(user.is_banned || user.suspended));
+            setIsRestricted(!!user.is_restricted);
             setNewPassword('');
             fetchUserData();
         }
@@ -197,411 +115,521 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
         if (!user?.id) return;
         setLoadingData(true);
         try {
-            const { data: walletData } = await supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle();
-            setWallet(walletData || { balance: 0, points: 0 });
+            const [walletRes, txRes, ordersRes] = await Promise.all([
+                supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle(),
+                supabase.from('wallet_transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(25),
+                supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(25)
+            ]);
 
-            const { data: ordersData } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(50);
-            setOrders(ordersData || []);
+            setWallet(walletRes.data || { balance: 0, pending_balance: 0 });
+            setTransactions(txRes.data || []);
+            setOrders(ordersRes.data || []);
 
             if (user.role === 'driver') {
-                const { data: driverData } = await supabase
-                    .from('drivers')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-                setDriverInfo(driverData || null);
-            } else {
-                setDriverInfo(null);
+                const { data: dData } = await supabase.from('drivers').select('*').eq('user_id', user.id).maybeSingle();
+                setDriverInfo(dData || null);
             }
         } catch (e) {
-            console.log("Error fetching user details:", e);
+            console.log("Error loading user profile:", e);
         } finally {
             setLoadingData(false);
         }
     };
 
-    const handleSaveProfile = async () => {
-        if (role !== user.role && role === 'admin') {
-            Alert.alert(
-                'Confirm Administrator Access',
-                `Are you sure you want to promote ${user.email || user.full_name} to ADMIN? They will receive full control over the marketplace backend.`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Promote to Admin', style: 'destructive', onPress: () => executeSave() }
-                ]
-            );
-            return;
-        }
-        executeSave();
-    };
+    // Lifetime Analytics
+    const totalSpent = React.useMemo(() => {
+        return orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+    }, [orders]);
+    const avgOrderVal = orders.length > 0 ? (totalSpent / orders.length) : 0;
+    const tier = getTier(totalSpent);
 
-    const executeSave = async () => {
-        setSaving(true);
-        const { error } = await supabase.from('profiles').update({
-            full_name: fullName.trim(),
-            phone: phone.trim(),
-            address: address.trim(),
-            city: city.trim(),
-            state: state.trim(),
-            country: country.trim(),
-            admin_note: adminNotes.trim(),
-            role: role
-        }).eq('id', user.id);
-
-        setSaving(false);
-
-        if (error) {
-            Alert.alert('Save Error', error.message);
+    // Copy to clipboard helper
+    const copyText = (val, label) => {
+        if (!val) return;
+        if (Platform.OS === 'web') {
+            navigator.clipboard.writeText(val);
         } else {
-            Alert.alert('Profile Saved', 'User information updated successfully.');
-            setEditMode(false);
+            Clipboard.setString(val);
+        }
+        Alert.alert('Copied', `${label} copied to clipboard.`);
+    };
+
+    // Instant Quick Credit (+₦1,000 / +₦5,000)
+    const handleQuickCredit = async (amt = 1000) => {
+        try {
+            const current = wallet?.balance || 0;
+            const nextBal = current + amt;
+            if (!wallet) {
+                await supabase.from('wallets').insert({ user_id: user.id, balance: amt, currency: 'NGN' });
+            } else {
+                await supabase.from('wallets').update({ balance: nextBal }).eq('user_id', user.id);
+            }
+            try {
+                await supabase.from('wallet_transactions').insert({
+                    user_id: user.id,
+                    amount: amt,
+                    type: 'admin_credit',
+                    description: `Admin Instant Quick +₦${amt.toLocaleString()}`,
+                    status: 'completed'
+                });
+            } catch (e) {}
+
+            setWallet(prev => ({ ...prev, balance: nextBal }));
+            Alert.alert('Wallet Credited', `Successfully added ${fmtAmt(amt)} to ${user.full_name || 'user'}'s account.`);
+            fetchUserData();
             if (onUpdate) onUpdate();
+        } catch (err) {
+            Alert.alert('Error', 'Quick credit failed.');
         }
     };
 
-    const handleTransaction = async () => {
-        const amtVal = parseFloat(amount);
-        if (isNaN(amtVal) || amtVal <= 0) {
+    // Toggle KYC Verification
+    const handleToggleKYC = async () => {
+        const nextVal = !isVerified;
+        try {
+            const { error } = await supabase.from('profiles').update({ is_verified: nextVal }).eq('id', user.id);
+            if (error) throw error;
+            setIsVerified(nextVal);
+            Alert.alert('KYC Updated', nextVal ? 'Account has been marked KYC Verified.' : 'KYC verification has been revoked.');
+            if (onUpdate) onUpdate();
+        } catch (e) {
+            Alert.alert('Error', e.message);
+        }
+    };
+
+    // Toggle Suspension
+    const handleToggleSuspend = async () => {
+        const nextVal = !isSuspended;
+        try {
+            const { error } = await supabase.from('profiles').update({
+                suspended: nextVal,
+                is_banned: nextVal
+            }).eq('id', user.id);
+            if (error) throw error;
+            setIsSuspended(nextVal);
+            Alert.alert('Status Updated', nextVal ? 'Account access suspended.' : 'Account restored to active status.');
+            if (onUpdate) onUpdate();
+        } catch (e) {
+            Alert.alert('Error', e.message);
+        }
+    };
+
+    // Toggle Restricted Purchases
+    const handleToggleRestricted = async () => {
+        const nextVal = !isRestricted;
+        try {
+            const { error } = await supabase.from('profiles').update({ is_restricted: nextVal }).eq('id', user.id);
+            if (error) throw error;
+            setIsRestricted(nextVal);
+            Alert.alert('Restriction Updated', nextVal ? 'User ordering is now restricted.' : 'Ordering restrictions removed.');
+            if (onUpdate) onUpdate();
+        } catch (e) {
+            Alert.alert('Error', e.message);
+        }
+    };
+
+    // Execute Custom Wallet Transaction
+    const handleCustomTransact = async () => {
+        const amt = parseFloat(transactAmount);
+        if (isNaN(amt) || amt <= 0) {
             Alert.alert('Validation Error', 'Please enter a valid numeric amount.');
             return;
         }
 
         setTransacting(true);
-        const currentBal = wallet?.balance || 0;
-        const newBal = transactType === 'credit' ? currentBal + amtVal : Math.max(0, currentBal - amtVal);
-
-        const { error: walletError } = await supabase
-            .from('wallets')
-            .upsert({ user_id: user.id, balance: newBal, currency: 'NGN' });
-
-        if (walletError) {
-            Alert.alert('Error', walletError.message);
-            setTransacting(false);
-            return;
-        }
-
         try {
-            await supabase.from('wallet_transactions').insert({
-                user_id: user.id,
-                amount: amtVal,
-                type: transactType === 'credit' ? 'admin_credit' : 'admin_debit',
-                description: note.trim() || `Admin manual ${transactType}`,
-                status: 'completed'
-            });
-        } catch (e) {}
+            const current = wallet?.balance || 0;
+            const nextBal = transactType === 'credit' ? current + amt : Math.max(0, current - amt);
 
-        Alert.alert('Wallet Updated', `Wallet successfully ${transactType}ed with ₦${amtVal.toLocaleString()}.`);
-        setTransactVisible(false);
-        setTransacting(false);
-        setAmount('');
-        setNote('');
-        fetchUserData();
-        if (onUpdate) onUpdate();
+            if (!wallet) {
+                await supabase.from('wallets').insert({ user_id: user.id, balance: nextBal, currency: 'NGN' });
+            } else {
+                await supabase.from('wallets').update({ balance: nextBal }).eq('user_id', user.id);
+            }
+
+            try {
+                await supabase.from('wallet_transactions').insert({
+                    user_id: user.id,
+                    amount: amt,
+                    type: transactType === 'credit' ? 'admin_credit' : 'admin_debit',
+                    description: transactReason.trim() || `Admin manual ${transactType}`,
+                    status: 'completed'
+                });
+            } catch (e) {}
+
+            Alert.alert('Transaction Complete', `Wallet successfully ${transactType}ed with ${fmtAmt(amt)}.`);
+            setTransactVisible(false);
+            setTransactAmount('');
+            setTransactReason('');
+            fetchUserData();
+            if (onUpdate) onUpdate();
+        } catch (e) {
+            Alert.alert('Error', e.message);
+        } finally {
+            setTransacting(false);
+        }
     };
 
+    // Save Profile edits
+    const handleSaveProfile = async () => {
+        setSaving(true);
+        try {
+            const { error } = await supabase.from('profiles').update({
+                full_name: fullName.trim(),
+                phone: phone.trim(),
+                address: address.trim(),
+                city: city.trim(),
+                state: state.trim(),
+                admin_note: adminNotes.trim(),
+                role: role
+            }).eq('id', user.id);
+
+            if (error) throw error;
+            setEditMode(false);
+            Alert.alert('Saved', 'Profile information updated successfully.');
+            if (onUpdate) onUpdate();
+        } catch (e) {
+            Alert.alert('Save Failed', e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Direct Password Override
     const handleManualPasswordReset = async () => {
         if (!newPassword || newPassword.length < 6) {
-            Alert.alert('Validation Error', 'Password must contain at least 6 characters.');
+            Alert.alert('Validation', 'Password must be at least 6 characters.');
             return;
         }
-
-        Alert.alert(
-            'Confirm Password Override',
-            `Manually set a new password for ${user.email}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Set Password',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setLoadingData(true);
-                        const { error } = await supabase.rpc('admin_reset_password', { target_user_id: user.id, new_password: newPassword });
-                        setLoadingData(false);
-                        if (error) Alert.alert('Error', error.message);
-                        else {
-                            Alert.alert('Password Updated', 'New password is now in effect.');
-                            setNewPassword('');
-                        }
-                    }
-                }
-            ]
-        );
+        try {
+            const { error } = await supabase.rpc('admin_reset_password', {
+                target_user_id: user.id,
+                new_password: newPassword
+            });
+            if (error) throw error;
+            Alert.alert('Success', 'New password is now in effect.');
+            setNewPassword('');
+        } catch (e) {
+            Alert.alert('Override Notice', 'Direct RPC failed. Please use Send Reset Email for standard authentication.');
+        }
     };
 
     const handleEmailReset = async () => {
-        Alert.alert('Send Reset Email', `Send password recovery link to ${user.email}?`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Send Email',
-                onPress: async () => {
-                    const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: 'abumafhal://reset-password' });
-                    if (error) Alert.alert('Error', error.message);
-                    else Alert.alert('Recovery Sent', 'Password reset instructions have been sent to their inbox.');
-                }
-            }
-        ]);
-    };
-
-    const handleToggleStatus = async (field, currentValue) => {
-        const { error } = await supabase.from('profiles').update({ [field]: !currentValue }).eq('id', user.id);
-        if (error) {
-            Alert.alert('Update Failed', error.message);
-        } else {
-            if (onUpdate) onUpdate();
-            fetchUserData();
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(user.email);
+            if (error) throw error;
+            Alert.alert('Email Dispatched', `Password recovery link sent to ${user.email}.`);
+        } catch (e) {
+            Alert.alert('Error', e.message);
         }
     };
 
-    const openWhatsAppTemplate = (msg) => {
+    // WhatsApp Templates
+    const sendWhatsApp = (msg) => {
         if (!user.phone) {
-            Alert.alert('No Phone', 'This user has no telephone number registered.');
+            Alert.alert('No Phone', 'This account has no phone number recorded.');
             return;
         }
-        const cleanPhone = user.phone.replace(/[^0-9]/g, '');
-        const encoded = encodeURIComponent(msg);
-        Linking.openURL(`https://wa.me/${cleanPhone}?text=${encoded}`);
+        const clean = user.phone.replace(/[^0-9]/g, '');
+        Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`);
     };
 
     if (!user) return null;
 
-    const roleColor =
-        user.role === 'admin' ? W.purple :
-        user.role === 'vendor' ? '#C2410C' :
-        user.role === 'driver' ? W.sky : W.emerald;
-
-    const roleBg =
-        user.role === 'admin' ? W.purpleBg :
-        user.role === 'vendor' ? '#FFF7ED' :
-        user.role === 'driver' ? W.skyBg : W.emeraldBg;
-
-    const roleBorder =
-        user.role === 'admin' ? W.purpleBorder :
-        user.role === 'vendor' ? '#FFEDD5' :
-        user.role === 'driver' ? W.skyBorder : W.emeraldBorder;
-
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-            <View style={styles.container}>
-                {/* ══ WARM LUXURY HERO HEADER (BIGGER & PROMINENT) ══ */}
-                <View style={styles.heroHdr}>
-                    {/* Top Navigation Row */}
-                    <View style={styles.heroTopBar}>
-                        <TouchableOpacity onPress={onClose} style={styles.heroCircleBtn}>
-                            <Ionicons name="close" size={22} color={W.charcoal} />
+            <View style={S.container}>
+                {/* ── TOP EXECUTIVE APP BAR ── */}
+                <View style={S.topBar}>
+                    <TouchableOpacity onPress={onClose} style={S.iconCircleBtn}>
+                        <Ionicons name="close" size={20} color={W.charcoal} />
+                    </TouchableOpacity>
+
+                    <View style={S.topBarCenter}>
+                        <View style={[S.badge, { backgroundColor: W.goldBg, borderColor: W.goldBorder }]}>
+                            <Text style={[S.badgeTxt, { color: W.gold }]}>{(role || 'customer').toUpperCase()}</Text>
+                        </View>
+                        {isVerified && (
+                            <View style={[S.badge, { backgroundColor: W.skyBg, borderColor: W.skyBorder, marginLeft: 6 }]}>
+                                <Ionicons name="checkmark-circle" size={11} color={W.sky} style={{ marginRight: 2 }} />
+                                <Text style={[S.badgeTxt, { color: W.sky }]}>KYC VERIFIED</Text>
+                            </View>
+                        )}
+                        {isSuspended && (
+                            <View style={[S.badge, { backgroundColor: W.crimsonBg, borderColor: W.crimsonBorder, marginLeft: 6 }]}>
+                                <Text style={[S.badgeTxt, { color: W.crimson }]}>SUSPENDED</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    <TouchableOpacity
+                        onPress={() => editMode ? handleSaveProfile() : setEditMode(true)}
+                        disabled={saving}
+                        style={[S.editSaveBtn, editMode && { backgroundColor: W.emerald, borderColor: W.emerald }]}
+                    >
+                        {saving ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                            <>
+                                <Ionicons name={editMode ? "checkmark" : "create-outline"} size={14} color={editMode ? "#FFFFFF" : W.charcoal} />
+                                <Text style={[S.editSaveBtnText, editMode && { color: '#FFFFFF' }]}>
+                                    {editMode ? "Save" : "Edit"}
+                                </Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                {/* ── EXECUTIVE PROFILE HERO CARD ── */}
+                <View style={S.heroCard}>
+                    <View style={S.heroTopRow}>
+                        <View style={S.avatarWrap}>
+                            <UserAvatar user={user} size={46} />
+                            {isVerified && (
+                                <View style={S.verifyBadge}>
+                                    <Ionicons name="checkmark-circle" size={16} color={W.sky} />
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={S.heroDetails}>
+                            <Text style={S.heroName} numberOfLines={1}>{user.full_name || 'Anonymous User'}</Text>
+                            <View style={S.contactRow}>
+                                <Text style={S.heroContactTxt} numberOfLines={1}>{user.email || 'No email'}</Text>
+                                {user.email && (
+                                    <TouchableOpacity onPress={() => copyText(user.email, 'Email')} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                                        <Ionicons name="copy-outline" size={12} color={W.textSubtle} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            {user.phone && (
+                                <View style={[S.contactRow, { marginTop: 1 }]}>
+                                    <Text style={S.heroContactTxt}>{user.phone}</Text>
+                                    <TouchableOpacity onPress={() => copyText(user.phone, 'Phone')} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                                        <Ionicons name="copy-outline" size={12} color={W.textSubtle} />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* 4-KPI Financial & Vital Summary Ribbon */}
+                    <View style={S.kpiRibbon}>
+                        <View style={S.kpiTile}>
+                            <Text style={S.kpiLabel}>Wallet Float</Text>
+                            <Text style={[S.kpiVal, { color: W.emerald }]}>{fmtAmt(wallet?.balance || 0)}</Text>
+                        </View>
+                        <View style={S.kpiDivider} />
+                        <View style={S.kpiTile}>
+                            <Text style={S.kpiLabel}>Total Orders</Text>
+                            <Text style={S.kpiVal}>{orders.length}</Text>
+                        </View>
+                        <View style={S.kpiDivider} />
+                        <View style={S.kpiTile}>
+                            <Text style={S.kpiLabel}>Lifetime Value</Text>
+                            <Text style={[S.kpiVal, { color: W.gold }]}>{fmtAmt(totalSpent)}</Text>
+                        </View>
+                        <View style={S.kpiDivider} />
+                        <View style={S.kpiTile}>
+                            <Text style={S.kpiLabel}>Tier Status</Text>
+                            <Text style={[S.kpiVal, { fontSize: 11 }]}>{tier.label}</Text>
+                        </View>
+                    </View>
+
+                    {/* 1-Tap Action Shortcuts Toolbar */}
+                    <View style={S.shortcutsBar}>
+                        {user.phone ? (
+                            <TouchableOpacity onPress={() => Linking.openURL(`tel:${user.phone}`)} style={S.shortcutBtn}>
+                                <Ionicons name="call" size={13} color={W.charcoal} />
+                                <Text style={S.shortcutBtnTxt}>Call</Text>
+                            </TouchableOpacity>
+                        ) : null}
+
+                        {user.phone ? (
+                            <TouchableOpacity
+                                onPress={() => sendWhatsApp(`Hello ${user.full_name || 'Valued Customer'}, greetings from Abu Mafhal Marketplace!`)}
+                                style={[S.shortcutBtn, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}
+                            >
+                                <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
+                                <Text style={[S.shortcutBtnTxt, { color: '#16A34A' }]}>WhatsApp</Text>
+                            </TouchableOpacity>
+                        ) : null}
+
+                        <TouchableOpacity onPress={() => handleQuickCredit(1000)} style={[S.shortcutBtn, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}>
+                            <Ionicons name="flash" size={13} color={W.emerald} />
+                            <Text style={[S.shortcutBtnTxt, { color: W.emerald }]}>+₦1K</Text>
                         </TouchableOpacity>
 
-                        <View style={[styles.heroRolePill, { borderColor: roleBorder, backgroundColor: roleBg }]}>
-                            <Ionicons
-                                name={user.role === 'admin' ? 'shield-checkmark' : user.role === 'vendor' ? 'storefront' : user.role === 'driver' ? 'bicycle' : 'person'}
-                                size={14}
-                                color={roleColor}
-                                style={{ marginRight: 5 }}
-                            />
-                            <Text style={[styles.heroRolePillTxt, { color: roleColor }]}>
-                                {(user.role || 'Customer').toUpperCase()}
+                        <TouchableOpacity onPress={() => handleQuickCredit(5000)} style={[S.shortcutBtn, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}>
+                            <Ionicons name="flash" size={13} color={W.emerald} />
+                            <Text style={[S.shortcutBtnTxt, { color: W.emerald }]}>+₦5K</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={handleToggleKYC} style={[S.shortcutBtn, isVerified && { backgroundColor: W.skyBg, borderColor: W.skyBorder }]}>
+                            <Ionicons name="shield-checkmark" size={13} color={isVerified ? W.sky : W.textMuted} />
+                            <Text style={[S.shortcutBtnTxt, isVerified && { color: W.sky }]}>
+                                {isVerified ? 'KYC ✓' : 'Verify'}
                             </Text>
-                        </View>
-
-                        <TouchableOpacity
-                            onPress={() => editMode ? handleSaveProfile() : setEditMode(true)}
-                            disabled={saving}
-                            style={[styles.heroCircleBtn, editMode && { backgroundColor: W.emerald, borderColor: W.emerald }]}
-                        >
-                            {saving ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                                <Ionicons name={editMode ? 'checkmark' : 'create-outline'} size={20} color={editMode ? '#FFFFFF' : W.charcoal} />
-                            )}
                         </TouchableOpacity>
                     </View>
-
-                    {/* Avatar & Identity Center */}
-                    <View style={styles.heroCentre}>
-                        <View style={{ position: 'relative' }}>
-                            <View style={[styles.heroAvatarRing, { borderColor: roleBorder }]}>
-                                <UserAvatar user={user} size={62} />
-                            </View>
-                            {user.is_verified && (
-                                <View style={styles.heroVerifyDot}>
-                                    <Ionicons name="checkmark-circle" size={20} color={W.sky} />
-                                </View>
-                            )}
-                        </View>
-
-                        <Text style={styles.heroName}>{user.full_name || 'Anonymous User'}</Text>
-                        <Text style={styles.heroEmail}>{user.email || 'No email registered'}</Text>
-
-                        {/* Status Pills */}
-                        <View style={styles.heroChipRow}>
-                            {user.is_banned ? (
-                                <View style={[styles.heroChip, { backgroundColor: W.crimsonBg, borderColor: W.crimsonBorder }]}>
-                                    <Ionicons name="ban" size={12} color={W.crimson} />
-                                    <Text style={[styles.heroChipTxt, { color: W.crimson }]}>Suspended</Text>
-                                </View>
-                            ) : (
-                                <View style={[styles.heroChip, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}>
-                                    <Ionicons name="shield-checkmark" size={12} color={W.emerald} />
-                                    <Text style={[styles.heroChipTxt, { color: W.emerald }]}>Active Account</Text>
-                                </View>
-                            )}
-
-                            {user.is_restricted && (
-                                <View style={[styles.heroChip, { backgroundColor: W.goldBg, borderColor: W.goldBorder }]}>
-                                    <Ionicons name="lock-closed" size={12} color={W.gold} />
-                                    <Text style={[styles.heroChipTxt, { color: W.gold }]}>Restricted</Text>
-                                </View>
-                            )}
-
-                            <View style={[styles.heroChip, { backgroundColor: '#F1F5F9', borderColor: W.cardBorder }]}>
-                                <Text style={[styles.heroChipTxt, { color: W.textMuted, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}>
-                                    ID: {user.id ? user.id.slice(0, 8) : 'N/A'}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Big Financial & Vital Summary Strip */}
-                    <View style={styles.heroStrip}>
-                        <View style={styles.heroStripItem}>
-                            <View style={[styles.heroStripIconBox, { backgroundColor: W.emeraldBg }]}>
-                                <Ionicons name="wallet-outline" size={18} color={W.emerald} />
-                            </View>
-                            <View>
-                                <Text style={styles.heroStripLbl}>Wallet Balance</Text>
-                                <Text style={[styles.heroStripVal, { color: W.emerald }]}>
-                                    ₦{(wallet?.balance || 0).toLocaleString()}
-                                </Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.heroStripDiv} />
-
-                        <View style={styles.heroStripItem}>
-                            <View style={[styles.heroStripIconBox, { backgroundColor: '#F1F5F9' }]}>
-                                <Ionicons name="calendar-outline" size={18} color={W.charcoal} />
-                            </View>
-                            <View>
-                                <Text style={styles.heroStripLbl}>Registered</Text>
-                                <Text style={styles.heroStripVal2}>
-                                    {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : 'Recent'}
-                                </Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.heroStripDiv} />
-
-                        <View style={styles.heroStripItem}>
-                            <View style={[styles.heroStripIconBox, { backgroundColor: W.skyBg }]}>
-                                <Ionicons name="call-outline" size={18} color={W.sky} />
-                            </View>
-                            <View>
-                                <Text style={styles.heroStripLbl}>Contact</Text>
-                                <Text style={styles.heroStripVal2} numberOfLines={1}>
-                                    {user.phone || 'None'}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
                 </View>
 
-                {/* ── BIGGER INTERACTIVE TABS ──────────────────────────────── */}
-                <View style={styles.tabContainer}>
-                    <TabButton title="Overview" active={activeTab === 'overview'} onPress={() => setActiveTab('overview')} icon="grid-outline" />
-                    <TabButton title="Wallet" active={activeTab === 'wallet'} onPress={() => setActiveTab('wallet')} icon="wallet-outline" />
-                    <TabButton title="Orders" count={orders.length} active={activeTab === 'orders'} onPress={() => setActiveTab('orders')} icon="cart-outline" />
-                    <TabButton title="Security" active={activeTab === 'security'} onPress={() => setActiveTab('security')} icon="shield-outline" />
+                {/* ── MODERN SEGMENTED TABS ── */}
+                <View style={S.tabsContainer}>
+                    {[
+                        { id: 'overview', label: 'Overview', icon: 'grid-outline' },
+                        { id: 'wallet', label: 'Wallet & Ledger', icon: 'wallet-outline' },
+                        { id: 'orders', label: `Orders (${orders.length})`, icon: 'cart-outline' },
+                        { id: 'security', label: 'Security & Access', icon: 'shield-outline' }
+                    ].map(t => {
+                        const active = activeTab === t.id;
+                        return (
+                            <TouchableOpacity
+                                key={t.id}
+                                onPress={() => setActiveTab(t.id)}
+                                style={[S.tabItem, active && S.tabItemActive]}
+                            >
+                                <Ionicons name={t.icon} size={14} color={active ? W.charcoal : W.textMuted} style={{ marginRight: 4 }} />
+                                <Text style={[S.tabItemText, active && S.tabItemTextActive]}>
+                                    {t.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
-                {/* ── SCROLL CONTENT (SPACIOUS) ────────────────────────────── */}
+                {/* ── SCROLLABLE TAB CONTENT ── */}
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    <ScrollView contentContainerStyle={S.scrollContent} showsVerticalScrollIndicator={false}>
 
-                        {/* ──────────────── OVERVIEW TAB ──────────────── */}
+                        {/* ────────────── TAB 1: OVERVIEW ────────────── */}
                         {activeTab === 'overview' && (
-                            <View style={{ gap: 20 }}>
-                                {/* Role & Permissions Card */}
-                                <View style={styles.card}>
-                                    <SectionHeader title="System Role & Permissions" icon="people" color={W.charcoal} />
-                                    {editMode ? (
-                                        <View style={styles.roleGrid}>
-                                            {['customer', 'vendor', 'driver', 'admin'].map(r => (
-                                                <RoleCard key={r} role={r} selected={role === r} onSelect={setRole} />
+                            <View style={{ gap: 12 }}>
+                                {/* Account Lifecycle & Metrics */}
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Ionicons name="analytics" size={15} color={W.charcoal} />
+                                        <Text style={S.cardTitle}>Account Lifecycle & Commercial Metrics</Text>
+                                    </View>
+                                    <View style={S.gridRow}>
+                                        <View style={S.gridCell}>
+                                            <Text style={S.gridCellLbl}>Registration Date</Text>
+                                            <Text style={S.gridCellVal}>
+                                                {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                                            </Text>
+                                        </View>
+                                        <View style={S.gridCell}>
+                                            <Text style={S.gridCellLbl}>Average Order Value</Text>
+                                            <Text style={S.gridCellVal}>{fmtAmt(avgOrderVal)}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={[S.gridRow, { marginTop: 8 }]}>
+                                        <View style={S.gridCell}>
+                                            <Text style={S.gridCellLbl}>User Unique ID</Text>
+                                            <Text style={[S.gridCellVal, { fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]} numberOfLines={1}>
+                                                {user.id}
+                                            </Text>
+                                        </View>
+                                        <View style={S.gridCell}>
+                                            <Text style={S.gridCellLbl}>Assigned Tier</Text>
+                                            <Text style={[S.gridCellVal, { color: tier.color }]}>{tier.label}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* WhatsApp Communication Presets */}
+                                {user.phone ? (
+                                    <View style={S.card}>
+                                        <View style={S.cardHeader}>
+                                            <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
+                                            <Text style={[S.cardTitle, { color: '#16A34A' }]}>One-Tap WhatsApp Business Presets</Text>
+                                        </View>
+                                        <View style={{ gap: 6 }}>
+                                            {[
+                                                { title: '👋 Welcome & Onboarding', msg: `Hello ${user.full_name || 'Valued Customer'}, welcome to Abu Mafhal Marketplace! Your account is active and verified. Let us know if you need assistance shopping!` },
+                                                { title: '✅ KYC Verification Approved', msg: `Congratulations ${user.full_name || ''}! Your marketplace account and identification documents have been approved successfully.` },
+                                                { title: '💰 Wallet Funding Receipt', msg: `Hello ${user.full_name || ''}, your marketplace wallet float has just been successfully updated. You can view your balance anytime.` },
+                                                { title: '📦 Order Delivery Support', msg: `Hello ${user.full_name || ''}, our customer experience desk is checking in regarding your recent orders. Can we assist you today?` },
+                                            ].map((tpl, i) => (
+                                                <TouchableOpacity
+                                                    key={i}
+                                                    onPress={() => sendWhatsApp(tpl.msg)}
+                                                    style={S.presetTmplBtn}
+                                                >
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={S.presetTmplTitle}>{tpl.title}</Text>
+                                                        <Text style={S.presetTmplSnippet} numberOfLines={1}>{tpl.msg}</Text>
+                                                    </View>
+                                                    <Ionicons name="send" size={13} color="#16A34A" style={{ marginLeft: 6 }} />
+                                                </TouchableOpacity>
                                             ))}
                                         </View>
-                                    ) : (
-                                        <View style={styles.readOnlyField}>
-                                            <Text style={styles.readOnlyLabel}>Active System Role</Text>
-                                            <Text style={styles.readOnlyValue}>{(user.role || 'customer').toUpperCase()}</Text>
-                                        </View>
-                                    )}
-                                </View>
+                                    </View>
+                                ) : null}
 
-                                {/* Personal Profile Details Card */}
-                                <View style={styles.card}>
-                                    <SectionHeader title="Personal Information" icon="person-circle" color={W.charcoal} />
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Full Name</Text>
+                                {/* Personal Profile & Address */}
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Ionicons name="person-circle" size={15} color={W.charcoal} />
+                                        <Text style={S.cardTitle}>Identity & Delivery Information</Text>
+                                    </View>
+
+                                    <View style={S.fieldBox}>
+                                        <Text style={S.fieldLabel}>Full Legal Name</Text>
                                         <TextInput
-                                            style={[styles.input, !editMode && styles.inputDisabled]}
                                             value={fullName}
                                             onChangeText={setFullName}
                                             editable={editMode}
+                                            style={[S.fieldInput, !editMode && S.fieldInputDisabled]}
                                             placeholder="User's full name"
                                             placeholderTextColor={W.textSubtle}
                                         />
                                     </View>
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Phone Number</Text>
+
+                                    <View style={S.fieldBox}>
+                                        <Text style={S.fieldLabel}>Contact Telephone</Text>
                                         <TextInput
-                                            style={[styles.input, !editMode && styles.inputDisabled]}
                                             value={phone}
                                             onChangeText={setPhone}
                                             editable={editMode}
+                                            style={[S.fieldInput, !editMode && S.fieldInputDisabled]}
                                             keyboardType="phone-pad"
-                                            placeholder="Telephone number"
+                                            placeholder="Phone number"
                                             placeholderTextColor={W.textSubtle}
                                         />
                                     </View>
-                                </View>
 
-                                {/* Location Details Card */}
-                                <View style={styles.card}>
-                                    <SectionHeader title="Delivery & Shipping Address" icon="location" color={W.charcoal} />
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Street Address</Text>
+                                    <View style={S.fieldBox}>
+                                        <Text style={S.fieldLabel}>Street Address</Text>
                                         <TextInput
-                                            style={[styles.input, !editMode && styles.inputDisabled]}
                                             value={address}
                                             onChangeText={setAddress}
                                             editable={editMode}
-                                            placeholder="Street address or landmark"
+                                            style={[S.fieldInput, !editMode && S.fieldInputDisabled]}
+                                            placeholder="Street address or delivery location"
                                             placeholderTextColor={W.textSubtle}
                                         />
                                     </View>
-                                    <View style={{ flexDirection: 'row', gap: 12 }}>
-                                        <View style={[styles.formGroup, { flex: 1 }]}>
-                                            <Text style={styles.label}>City</Text>
+
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <View style={[S.fieldBox, { flex: 1 }]}>
+                                            <Text style={S.fieldLabel}>City</Text>
                                             <TextInput
-                                                style={[styles.input, !editMode && styles.inputDisabled]}
                                                 value={city}
                                                 onChangeText={setCity}
                                                 editable={editMode}
+                                                style={[S.fieldInput, !editMode && S.fieldInputDisabled]}
                                                 placeholder="City"
                                                 placeholderTextColor={W.textSubtle}
                                             />
                                         </View>
-                                        <View style={[styles.formGroup, { flex: 1 }]}>
-                                            <Text style={styles.label}>State</Text>
+                                        <View style={[S.fieldBox, { flex: 1 }]}>
+                                            <Text style={S.fieldLabel}>State</Text>
                                             <TextInput
-                                                style={[styles.input, !editMode && styles.inputDisabled]}
                                                 value={state}
                                                 onChangeText={setState}
                                                 editable={editMode}
+                                                style={[S.fieldInput, !editMode && S.fieldInputDisabled]}
                                                 placeholder="State"
                                                 placeholderTextColor={W.textSubtle}
                                             />
@@ -609,160 +637,140 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                                     </View>
                                 </View>
 
-                                {/* Quick WhatsApp Message Templates (New Feature!) */}
-                                {user.phone && (
-                                    <View style={styles.card}>
-                                        <SectionHeader title="Instant WhatsApp Presets" icon="logo-whatsapp" color="#16A34A" />
-                                        <Text style={{ fontSize: 12, color: W.textMuted, marginBottom: 12 }}>
-                                            Launch pre-composed administrator messages to customer's WhatsApp in 1-tap:
-                                        </Text>
-                                        <View style={{ gap: 8 }}>
-                                            {[
-                                                { label: '👋 Welcome & Greeting', msg: `Hello ${user.full_name || 'Valued Customer'}, welcome to Abu Mafhal Marketplace! How may we assist you today?` },
-                                                { label: '✅ KYC Verification Approval', msg: `Congratulations ${user.full_name || ''}! Your marketplace account and identity verification have been approved successfully.` },
-                                                { label: '💰 Wallet Funding Receipt', msg: `Hello ${user.full_name || ''}, your marketplace wallet has been updated with recent funds. You can check your balance now.` },
-                                                { label: '📦 Order Status Follow-up', msg: `Hello ${user.full_name || ''}, we are following up regarding your marketplace order. Please let us know if you need any assistance.` },
-                                            ].map((tpl, idx) => (
-                                                <TouchableOpacity
-                                                    key={idx}
-                                                    onPress={() => openWhatsAppTemplate(tpl.msg)}
-                                                    style={styles.templateBtn}
-                                                >
-                                                    <Ionicons name="chatbubble-ellipses" size={16} color="#16A34A" />
-                                                    <Text style={styles.templateBtnTxt}>{tpl.label}</Text>
-                                                    <Ionicons name="arrow-forward" size={14} color="#16A34A" />
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
+                                {/* Admin Private Memo */}
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Ionicons name="document-text" size={15} color={W.gold} />
+                                        <Text style={[S.cardTitle, { color: W.gold }]}>Internal Staff Observation Memo</Text>
                                     </View>
-                                )}
-
-                                {/* Driver Fleet Details if applicable */}
-                                {user.role === 'driver' && driverInfo && (
-                                    <View style={[styles.card, { backgroundColor: W.skyBg, borderColor: W.skyBorder }]}>
-                                        <SectionHeader title="Fleet Courier Profile" icon="bicycle" color={W.sky} />
-                                        <View style={styles.driverGrid}>
-                                            <View style={styles.driverCell}>
-                                                <Text style={styles.driverCellLabel}>Vehicle Type</Text>
-                                                <Text style={styles.driverCellValue}>{driverInfo.vehicle_type || 'Motorcycle'}</Text>
-                                            </View>
-                                            <View style={styles.driverCell}>
-                                                <Text style={styles.driverCellLabel}>Plate Number</Text>
-                                                <Text style={styles.driverCellValue}>{driverInfo.plate_number || 'N/A'}</Text>
-                                            </View>
-                                            <View style={styles.driverCell}>
-                                                <Text style={styles.driverCellLabel}>Vehicle Color</Text>
-                                                <Text style={styles.driverCellValue}>{driverInfo.vehicle_color || 'Standard'}</Text>
-                                            </View>
-                                            <View style={styles.driverCell}>
-                                                <Text style={styles.driverCellLabel}>Courier Status</Text>
-                                                <Text style={[styles.driverCellValue, { color: driverInfo.status === 'active' ? W.emerald : W.crimson }]}>
-                                                    {(driverInfo.status || 'Active').toUpperCase()}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                )}
-
-                                {/* Admin Internal Memo Card */}
-                                <View style={styles.card}>
-                                    <SectionHeader title="Internal Administrator Memo" icon="document-text" color={W.gold} />
                                     <TextInput
-                                        style={[styles.input, { height: 110, textAlignVertical: 'top' }, !editMode && styles.inputDisabled]}
                                         value={adminNotes}
                                         onChangeText={setAdminNotes}
                                         editable={editMode}
                                         multiline
-                                        placeholder="Private administrative observations visible only to staff…"
+                                        style={[S.fieldInput, { height: 70, textAlignVertical: 'top' }, !editMode && S.fieldInputDisabled]}
+                                        placeholder="Add private staff records or compliance notes…"
                                         placeholderTextColor={W.textSubtle}
                                     />
-                                </View>
-
-                                {/* Direct Action Buttons */}
-                                <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-                                    {user.phone ? (
-                                        <TouchableOpacity
-                                            onPress={() => Linking.openURL(`tel:${user.phone}`)}
-                                            style={[styles.actionBtn, { backgroundColor: W.charcoal }]}
-                                        >
-                                            <Ionicons name="call" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                                            <Text style={styles.actionBtnText}>Direct Call</Text>
-                                        </TouchableOpacity>
-                                    ) : null}
-
-                                    {user.phone ? (
-                                        <TouchableOpacity
-                                            onPress={() => Linking.openURL(`https://wa.me/${user.phone.replace(/[^0-9]/g, '')}`)}
-                                            style={[styles.actionBtn, { backgroundColor: '#16A34A' }]}
-                                        >
-                                            <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                                            <Text style={styles.actionBtnText}>WhatsApp</Text>
-                                        </TouchableOpacity>
-                                    ) : null}
                                 </View>
                             </View>
                         )}
 
-                        {/* ──────────────── WALLET TAB ──────────────── */}
+                        {/* ────────────── TAB 2: WALLET & LEDGER ────────────── */}
                         {activeTab === 'wallet' && (
-                            <View style={{ gap: 20 }}>
-                                <View style={styles.balanceCard}>
-                                    <Text style={styles.balanceLabel}>Current Wallet Balance</Text>
-                                    <Text style={styles.balanceValue}>₦{(wallet?.balance || 0).toLocaleString()}</Text>
+                            <View style={{ gap: 12 }}>
+                                {/* Float Balance Card */}
+                                <View style={S.card}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                        <Text style={S.cardTitle}>Marketplace Float Balance</Text>
+                                        <View style={[S.badge, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}>
+                                            <Text style={[S.badgeTxt, { color: W.emerald }]}>LIVE LEDGER</Text>
+                                        </View>
+                                    </View>
 
-                                    <View style={styles.balanceActions}>
+                                    <Text style={S.walletBalanceNum}>{fmtAmt(wallet?.balance || 0)}</Text>
+                                    <Text style={{ fontSize: 11, color: W.textMuted, marginTop: 2 }}>
+                                        Pending clearing: <Text style={{ color: W.gold, fontWeight: '700' }}>{fmtAmt(wallet?.pending_balance || 0)}</Text>
+                                    </Text>
+
+                                    {/* Action Buttons */}
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                                         <TouchableOpacity
                                             onPress={() => { setTransactType('credit'); setTransactVisible(true); }}
-                                            style={[styles.balanceBtn, { backgroundColor: W.emerald }]}
+                                            style={[S.transactBtn, { backgroundColor: W.emerald }]}
                                         >
-                                            <Ionicons name="arrow-down-circle" size={20} color="white" style={{ marginRight: 6 }} />
-                                            <Text style={styles.balanceBtnText}>Credit Funds</Text>
+                                            <Ionicons name="add-circle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                            <Text style={S.transactBtnText}>Credit Funds</Text>
                                         </TouchableOpacity>
 
                                         <TouchableOpacity
                                             onPress={() => { setTransactType('debit'); setTransactVisible(true); }}
-                                            style={[styles.balanceBtn, { backgroundColor: W.crimson }]}
+                                            style={[S.transactBtn, { backgroundColor: W.crimson }]}
                                         >
-                                            <Ionicons name="arrow-up-circle" size={20} color="white" style={{ marginRight: 6 }} />
-                                            <Text style={styles.balanceBtnText}>Debit Funds</Text>
+                                            <Ionicons name="remove-circle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                            <Text style={S.transactBtnText}>Debit Funds</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
 
-                                <View style={styles.infoBox}>
-                                    <Ionicons name="information-circle" size={22} color={W.sky} />
-                                    <Text style={styles.infoText}>
-                                        Manual balance adjustments directly affect the customer's spendable marketplace float. All modifications are logged in audit ledger.
-                                    </Text>
+                                {/* Recent Wallet Transactions History Statement */}
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Ionicons name="receipt" size={15} color={W.charcoal} />
+                                        <Text style={S.cardTitle}>Recent Ledger Transactions ({transactions.length})</Text>
+                                    </View>
+
+                                    {transactions.length === 0 ? (
+                                        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                                            <Ionicons name="receipt-outline" size={32} color={W.textSubtle} />
+                                            <Text style={{ fontSize: 12, color: W.textMuted, marginTop: 6, fontWeight: '600' }}>
+                                                No wallet transactions found.
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <View style={{ gap: 6 }}>
+                                            {transactions.map(tx => {
+                                                const isCredit = tx.type?.includes('credit') || tx.type === 'deposit';
+                                                return (
+                                                    <View key={tx.id} style={S.txRow}>
+                                                        <View style={[S.txIconBox, { backgroundColor: isCredit ? W.emeraldBg : W.crimsonBg }]}>
+                                                            <Ionicons
+                                                                name={isCredit ? "arrow-down" : "arrow-up"}
+                                                                size={13}
+                                                                color={isCredit ? W.emerald : W.crimson}
+                                                            />
+                                                        </View>
+                                                        <View style={{ flex: 1, minWidth: 0 }}>
+                                                            <Text style={S.txDesc} numberOfLines={1}>
+                                                                {tx.description || (isCredit ? 'Wallet Credit' : 'Wallet Debit')}
+                                                            </Text>
+                                                            <Text style={S.txDate}>
+                                                                {tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                                                            </Text>
+                                                        </View>
+                                                        <Text style={[S.txAmount, { color: isCredit ? W.emerald : W.crimson }]}>
+                                                            {isCredit ? '+' : '-'}{fmtAmt(tx.amount || 0)}
+                                                        </Text>
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                    )}
                                 </View>
                             </View>
                         )}
 
-                        {/* ──────────────── ORDERS TAB ──────────────── */}
+                        {/* ────────────── TAB 3: ORDERS ────────────── */}
                         {activeTab === 'orders' && (
-                            <View style={{ gap: 14 }}>
+                            <View style={{ gap: 10 }}>
                                 {orders.length === 0 ? (
-                                    <View style={styles.emptyState}>
-                                        <Ionicons name="cart-outline" size={60} color="#CBD5E1" />
-                                        <Text style={styles.emptyText}>No orders recorded yet</Text>
-                                        <Text style={{ fontSize: 13, color: W.textMuted, marginTop: 4 }}>This customer has not placed any marketplace orders.</Text>
+                                    <View style={[S.card, { alignItems: 'center', paddingVertical: 30 }]}>
+                                        <Ionicons name="cart-outline" size={40} color={W.textSubtle} />
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: W.charcoal, marginTop: 8 }}>No Marketplace Orders</Text>
+                                        <Text style={{ fontSize: 11, color: W.textMuted, marginTop: 2 }}>This user has not completed any orders yet.</Text>
                                     </View>
                                 ) : (
                                     orders.map(order => (
-                                        <View key={order.id} style={styles.orderItem}>
-                                            <View style={styles.orderHeader}>
-                                                <Text style={styles.orderNumber}>Order #{order.id.toString().slice(0, 8)}</Text>
-                                                <View style={[styles.statusPill, {
-                                                    backgroundColor: order.status === 'delivered' ? W.emeraldBg : '#F1F5F9'
+                                        <View key={order.id} style={S.orderCard}>
+                                            <View style={S.orderTopRow}>
+                                                <Text style={S.orderNum}>Order #{order.id.toString().slice(0, 8)}</Text>
+                                                <View style={[S.badge, {
+                                                    backgroundColor: order.status === 'delivered' ? W.emeraldBg : W.goldBg,
+                                                    borderColor: order.status === 'delivered' ? W.emeraldBorder : W.goldBorder
                                                 }]}>
-                                                    <Text style={[styles.statusPillText, {
-                                                        color: order.status === 'delivered' ? W.emerald : W.textMuted
-                                                    }]}>{(order.status || 'PENDING').toUpperCase()}</Text>
+                                                    <Text style={[S.badgeTxt, { color: order.status === 'delivered' ? W.emerald : W.gold }]}>
+                                                        {(order.status || 'PENDING').toUpperCase()}
+                                                    </Text>
                                                 </View>
                                             </View>
-                                            <View style={styles.orderRow}>
-                                                <Text style={styles.orderDate}>{new Date(order.created_at).toDateString()}</Text>
-                                                <Text style={styles.orderAmount}>₦{order.total_amount?.toLocaleString()}</Text>
+
+                                            <View style={S.orderBottomRow}>
+                                                <Text style={S.orderDate}>
+                                                    {order.created_at ? new Date(order.created_at).toDateString() : 'Recent'}
+                                                </Text>
+                                                <Text style={S.orderTotal}>
+                                                    {fmtAmt(order.total_amount || 0)}
+                                                </Text>
                                             </View>
                                         </View>
                                     ))
@@ -770,74 +778,84 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                             </View>
                         )}
 
-                        {/* ──────────────── SECURITY TAB ──────────────── */}
+                        {/* ────────────── TAB 4: SECURITY & ACCESS ────────────── */}
                         {activeTab === 'security' && (
-                            <View style={{ gap: 20 }}>
-                                <View style={styles.card}>
-                                    <SectionHeader title="Authentication Controls" icon="lock-closed" color={W.charcoal} />
+                            <View style={{ gap: 12 }}>
+                                {/* Account Freeze & Restriction Toggles */}
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Ionicons name="lock-closed" size={15} color={W.crimson} />
+                                        <Text style={[S.cardTitle, { color: W.crimson }]}>Security Controls & Access Locks</Text>
+                                    </View>
 
-                                    <TouchableOpacity style={styles.securityActionRow} onPress={handleEmailReset}>
-                                        <View style={[styles.securityIconBox, { backgroundColor: W.skyBg }]}>
-                                            <Ionicons name="mail" size={20} color={W.sky} />
+                                    <View style={S.switchRow}>
+                                        <View style={{ flex: 1, paddingRight: 8 }}>
+                                            <Text style={S.switchTitle}>Account Suspension (Freeze)</Text>
+                                            <Text style={S.switchSub}>Completely locks customer out of logging in.</Text>
                                         </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.securityActionTitle}>Send Password Reset Email</Text>
-                                            <Text style={styles.securityActionDesc}>Dispatches recovery instructions to {user.email}.</Text>
-                                        </View>
-                                        <Ionicons name="chevron-forward" size={18} color={W.textSubtle} />
-                                    </TouchableOpacity>
-
-                                    <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 16 }} />
-
-                                    <Text style={styles.label}>Direct Admin Password Override</Text>
-                                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                                        <TextInput
-                                            style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                                            placeholder="Enter new account password"
-                                            placeholderTextColor={W.textSubtle}
-                                            value={newPassword}
-                                            onChangeText={setNewPassword}
-                                            secureTextEntry
-                                        />
                                         <TouchableOpacity
-                                            onPress={handleManualPasswordReset}
-                                            disabled={!newPassword}
-                                            style={[styles.btnSmall, { backgroundColor: newPassword ? W.charcoal : '#E2E8F0' }]}
+                                            onPress={handleToggleSuspend}
+                                            style={[S.togglePill, isSuspended ? { backgroundColor: W.crimson } : { backgroundColor: '#E2E8F0' }]}
                                         >
-                                            <Text style={{ color: newPassword ? '#FFFFFF' : W.textMuted, fontWeight: '800', fontSize: 13.5 }}>Override</Text>
+                                            <Text style={[S.togglePillText, isSuspended && { color: '#FFFFFF' }]}>
+                                                {isSuspended ? 'SUSPENDED' : 'ACTIVE'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <View style={{ height: 1, backgroundColor: W.canvasAlt, marginVertical: 10 }} />
+
+                                    <View style={S.switchRow}>
+                                        <View style={{ flex: 1, paddingRight: 8 }}>
+                                            <Text style={S.switchTitle}>Restrict Purchases</Text>
+                                            <Text style={S.switchSub}>User can browse but checkout is blocked.</Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={handleToggleRestricted}
+                                            style={[S.togglePill, isRestricted ? { backgroundColor: W.gold } : { backgroundColor: '#E2E8F0' }]}
+                                        >
+                                            <Text style={[S.togglePillText, isRestricted && { color: '#FFFFFF' }]}>
+                                                {isRestricted ? 'RESTRICTED' : 'ALLOWED'}
+                                            </Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
 
-                                {/* Danger Zone Card */}
-                                <View style={[styles.card, { borderColor: '#FECACA', backgroundColor: '#FFF5F5' }]}>
-                                    <SectionHeader title="Account Restrictions & Enforcement" icon="alert-circle" color={W.crimson} />
-
-                                    <View style={styles.switchRow}>
-                                        <View style={{ flex: 1, paddingRight: 10 }}>
-                                            <Text style={styles.switchLabel}>Suspend Full Access</Text>
-                                            <Text style={styles.switchDesc}>Completely blocks customer from logging into the platform.</Text>
-                                        </View>
-                                        <SwitchBtn
-                                            value={user.is_banned}
-                                            onToggle={() => handleToggleStatus('is_banned', user.is_banned)}
-                                            color={W.crimson}
+                                {/* Direct Password Override */}
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Ionicons name="key" size={15} color={W.charcoal} />
+                                        <Text style={S.cardTitle}>Manual Password Override</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 11, color: W.textMuted, marginBottom: 8 }}>
+                                        Set a new temporary password for this user immediately:
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <TextInput
+                                            value={newPassword}
+                                            onChangeText={setNewPassword}
+                                            secureTextEntry
+                                            placeholder="Enter new password (min 6 chars)"
+                                            placeholderTextColor={W.textSubtle}
+                                            style={[S.fieldInput, { flex: 1, marginBottom: 0 }]}
                                         />
+                                        <TouchableOpacity
+                                            onPress={handleManualPasswordReset}
+                                            disabled={!newPassword}
+                                            style={[S.btnAction, { backgroundColor: newPassword ? W.charcoal : '#CBD5E1' }]}
+                                        >
+                                            <Text style={S.btnActionText}>Override</Text>
+                                        </TouchableOpacity>
                                     </View>
 
-                                    <View style={{ height: 1, backgroundColor: '#FEE2E2', marginVertical: 14 }} />
+                                    <View style={{ height: 1, backgroundColor: W.canvasAlt, marginVertical: 12 }} />
 
-                                    <View style={styles.switchRow}>
-                                        <View style={{ flex: 1, paddingRight: 10 }}>
-                                            <Text style={styles.switchLabel}>Restrict Transactions</Text>
-                                            <Text style={styles.switchDesc}>User can browse listings, but purchasing and ordering are blocked.</Text>
-                                        </View>
-                                        <SwitchBtn
-                                            value={user.is_restricted}
-                                            onToggle={() => handleToggleStatus('is_restricted', user.is_restricted)}
-                                            color={W.gold}
-                                        />
-                                    </View>
+                                    <TouchableOpacity onPress={handleEmailReset} style={S.emailResetBtn}>
+                                        <Ionicons name="mail-outline" size={15} color={W.sky} style={{ marginRight: 6 }} />
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: W.sky }}>
+                                            Dispatch Password Recovery Link via Email
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         )}
@@ -846,34 +864,42 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                     </ScrollView>
                 </KeyboardAvoidingView>
 
-                {/* ── WALLET CREDIT/DEBIT MODAL WITH QUICK-AMOUNT BUTTONS ──────── */}
+                {/* ── CUSTOM WALLET ADJUSTMENT MODAL ── */}
                 <Modal visible={transactVisible} transparent animationType="fade" onRequestClose={() => setTransactVisible(false)}>
-                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-                        <View style={styles.transactCard}>
-                            <View style={[styles.transactIconBox, { backgroundColor: transactType === 'credit' ? W.emeraldBg : W.crimsonBg }]}>
-                                <Ionicons
-                                    name={transactType === 'credit' ? "wallet" : "card"}
-                                    size={32}
-                                    color={transactType === 'credit' ? W.emerald : W.crimson}
-                                />
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={S.modalOverlay}>
+                        <View style={S.transactCard}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons
+                                        name={transactType === 'credit' ? "arrow-down-circle" : "arrow-up-circle"}
+                                        size={20}
+                                        color={transactType === 'credit' ? W.emerald : W.crimson}
+                                    />
+                                    <Text style={S.transactTitle}>
+                                        {transactType === 'credit' ? 'Credit Wallet Funds' : 'Debit Wallet Funds'}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setTransactVisible(false)}>
+                                    <Ionicons name="close" size={18} color={W.textMuted} />
+                                </TouchableOpacity>
                             </View>
 
-                            <Text style={styles.transactTitle}>
-                                {transactType === 'credit' ? 'Credit Wallet Funds' : 'Debit Wallet Funds'}
-                            </Text>
-                            <Text style={styles.transactSub}>
-                                Enter the Naira amount to {transactType} for {user.full_name || 'user'}.
+                            <Text style={S.transactSub}>
+                                Current balance: <Text style={{ fontWeight: '800', color: W.emerald }}>{fmtAmt(wallet?.balance || 0)}</Text>
                             </Text>
 
-                            {/* Quick picks */}
-                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, width: '100%' }}>
+                            {/* Preset Buttons */}
+                            <View style={{ flexDirection: 'row', gap: 6, marginVertical: 10 }}>
                                 {['1000', '5000', '10000', '50000'].map(val => (
                                     <TouchableOpacity
                                         key={val}
-                                        onPress={() => setAmount(val)}
-                                        style={{ flex: 1, paddingVertical: 8, borderRadius: 10, backgroundColor: amount === val ? W.goldBg : '#F8FAFC', borderWidth: 1, borderColor: amount === val ? W.gold : W.cardBorder, alignItems: 'center' }}
+                                        onPress={() => setTransactAmount(val)}
+                                        style={[
+                                            S.presetBtn,
+                                            transactAmount === val && { backgroundColor: W.goldBg, borderColor: W.gold }
+                                        ]}
                                     >
-                                        <Text style={{ fontSize: 11, fontWeight: '800', color: amount === val ? W.gold : W.textBody }}>
+                                        <Text style={[S.presetBtnText, transactAmount === val && { color: W.gold }]}>
                                             +{fmtAmt(val)}
                                         </Text>
                                     </TouchableOpacity>
@@ -884,34 +910,39 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                                 placeholder="Amount in Naira (₦)"
                                 placeholderTextColor={W.textSubtle}
                                 keyboardType="numeric"
-                                value={amount}
-                                onChangeText={setAmount}
-                                style={styles.transactInput}
+                                value={transactAmount}
+                                onChangeText={setTransactAmount}
+                                style={S.transactInput}
                                 autoFocus
                             />
 
                             <TextInput
-                                placeholder="Transaction note / reason (optional)"
+                                placeholder="Memo / Reason for adjustment"
                                 placeholderTextColor={W.textSubtle}
-                                value={note}
-                                onChangeText={setNote}
-                                style={styles.transactNoteInput}
+                                value={transactReason}
+                                onChangeText={setTransactReason}
+                                style={[S.transactInput, { marginTop: 8 }]}
                             />
 
-                            <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-                                <TouchableOpacity onPress={() => setTransactVisible(false)} style={styles.btnSecondary}>
-                                    <Text style={styles.btnSecondaryText}>Cancel</Text>
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                                <TouchableOpacity onPress={() => setTransactVisible(false)} style={S.modalCancelBtn}>
+                                    <Text style={S.modalCancelBtnText}>Cancel</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    onPress={handleTransaction}
+                                    onPress={handleCustomTransact}
                                     disabled={transacting}
-                                    style={[styles.btnPrimary, { backgroundColor: transactType === 'credit' ? W.emerald : W.crimson }]}
+                                    style={[
+                                        S.modalConfirmBtn,
+                                        { backgroundColor: transactType === 'credit' ? W.emerald : W.crimson }
+                                    ]}
                                 >
                                     {transacting ? (
                                         <ActivityIndicator color="#FFFFFF" size="small" />
                                     ) : (
-                                        <Text style={styles.btnPrimaryText}>Confirm Transaction</Text>
+                                        <Text style={S.modalConfirmBtnText}>
+                                            Confirm {transactType === 'credit' ? 'Credit' : 'Debit'}
+                                        </Text>
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -923,578 +954,504 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
     );
 };
 
-// ─── Warm Luxury Styling ──────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+// ─── Executive Stylesheet ──────────────────────────────────────────────────
+const S = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: W.canvas,
     },
-    heroHdr: {
-        backgroundColor: W.cardBg,
-        paddingTop: 12,
-        paddingHorizontal: 16,
-        paddingBottom: 0,
-        borderBottomWidth: 1,
-        borderBottomColor: W.cardBorder,
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6 },
-            android: { elevation: 2 }
-        })
-    },
-    heroTopBar: {
+    topBar: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        backgroundColor: W.cardBg,
+        borderBottomWidth: 1,
+        borderBottomColor: W.cardBorder,
     },
-    heroCircleBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+    topBarCenter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    iconCircleBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: W.cardBorder,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    heroRolePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 18,
-        borderWidth: 1,
-    },
-    heroRolePillTxt: {
-        fontSize: 11,
-        fontWeight: '900',
-        letterSpacing: 0.3,
-    },
-    heroCentre: {
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    heroAvatarRing: {
-        borderRadius: 36,
-        borderWidth: 2,
-        padding: 2,
-    },
-    heroVerifyDot: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-    },
-    heroName: {
-        fontSize: 18,
-        fontWeight: '900',
-        color: W.charcoal,
-        marginTop: 8,
-        letterSpacing: -0.3,
-    },
-    heroEmail: {
-        fontSize: 12,
-        color: W.textMuted,
-        marginTop: 2,
-        fontWeight: '500',
-    },
-    heroChipRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-        marginTop: 8,
-        justifyContent: 'center',
-    },
-    heroChip: {
+    editSaveBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 16,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
         borderWidth: 1,
+        borderColor: W.cardBorder,
     },
-    heroChipTxt: {
-        fontSize: 10,
-        fontWeight: '800',
-    },
-    heroStrip: {
-        flexDirection: 'row',
-        backgroundColor: '#FAF8F5',
-        marginHorizontal: -16,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderTopWidth: 1,
-        borderTopColor: W.cardBorder,
-    },
-    heroStripItem: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 7,
-    },
-    heroStripIconBox: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    heroStripDiv: {
-        width: 1,
-        backgroundColor: W.cardBorder,
-        marginHorizontal: 3,
-    },
-    heroStripLbl: {
-        fontSize: 9.5,
-        color: W.textMuted,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-    },
-    heroStripVal: {
-        fontSize: 13.5,
-        fontWeight: '900',
-    },
-    heroStripVal2: {
+    editSaveBtnText: {
         fontSize: 11.5,
         fontWeight: '800',
         color: W.charcoal,
     },
-    tabContainer: {
+    badge: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
         flexDirection: 'row',
-        padding: 3,
+        alignItems: 'center',
+    },
+    badgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '900',
+    },
+
+    // Hero Identity Card
+    heroCard: {
+        backgroundColor: W.cardBg,
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: W.cardBorder,
+    },
+    heroTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    avatarWrap: {
+        position: 'relative',
+        marginRight: 10,
+    },
+    verifyBadge: {
+        position: 'absolute',
+        top: -3,
+        right: -3,
         backgroundColor: '#FFFFFF',
-        marginHorizontal: 14,
-        marginVertical: 10,
-        borderRadius: 14,
+        borderRadius: 8,
+    },
+    heroDetails: {
+        flex: 1,
+        minWidth: 0,
+    },
+    heroName: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: W.charcoal,
+        letterSpacing: -0.2,
+    },
+    contactRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    heroContactTxt: {
+        fontSize: 11,
+        color: W.textMuted,
+        fontWeight: '500',
+    },
+
+    // KPI Ribbon
+    kpiRibbon: {
+        flexDirection: 'row',
+        backgroundColor: '#FAF8F5',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        marginTop: 10,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    kpiTile: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    kpiLabel: {
+        fontSize: 8.5,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        color: W.textMuted,
+        letterSpacing: 0.2,
+    },
+    kpiVal: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: W.charcoal,
+        marginTop: 1,
+    },
+    kpiDivider: {
+        width: 1,
+        height: 18,
+        backgroundColor: W.cardBorder,
+    },
+
+    // Shortcuts Bar
+    shortcutsBar: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 8,
+    },
+    shortcutBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 3,
+        paddingVertical: 5.5,
+        borderRadius: 8,
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
         borderColor: W.cardBorder,
     },
-    tabBtn: {
+    shortcutBtnTxt: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: W.charcoal,
+    },
+
+    // Tabs
+    tabsContainer: {
+        flexDirection: 'row',
+        padding: 2.5,
+        backgroundColor: W.cardBg,
+        marginHorizontal: 12,
+        marginVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+    },
+    tabItem: {
         flex: 1,
         flexDirection: 'row',
-        paddingVertical: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 10,
+        paddingVertical: 6.5,
+        borderRadius: 8,
     },
-    tabBtnActive: {
+    tabItemActive: {
         backgroundColor: W.canvas,
     },
-    tabText: {
-        fontSize: 12,
+    tabItemText: {
+        fontSize: 11,
         fontWeight: '700',
         color: W.textMuted,
     },
-    tabTextActive: {
+    tabItemTextActive: {
         color: W.charcoal,
         fontWeight: '900',
     },
+
+    // Content cards
     scrollContent: {
-        paddingHorizontal: 14,
+        paddingHorizontal: 12,
+        paddingBottom: 20,
     },
     card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 14,
-        borderWidth: 1,
-        borderColor: W.cardBorder,
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4 },
-            android: { elevation: 2 }
-        })
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 16,
-    },
-    sectionTitle: {
-        fontSize: 13,
-        fontWeight: '900',
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-    },
-    formGroup: {
-        marginBottom: 14,
-    },
-    label: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#475569',
-        marginBottom: 6,
-    },
-    input: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: W.cardBorder,
-        borderRadius: 14,
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        fontSize: 15,
-        color: W.charcoal,
-    },
-    inputDisabled: {
-        backgroundColor: '#F1F5F9',
-        color: '#475569',
-        borderColor: W.cardBorder,
-    },
-    roleGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    roleCard: {
-        width: (width - 68) / 2,
-        padding: 14,
-        borderRadius: 16,
-        borderWidth: 1.5,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        position: 'relative',
-    },
-    roleIconBox: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    roleCardText: {
-        fontSize: 13.5,
-    },
-    checkCircle: {
-        position: 'absolute',
-        top: -5,
-        right: -5,
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: 'white',
-    },
-    readOnlyField: {
-        backgroundColor: '#F8FAFC',
-        padding: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: W.cardBorder,
-    },
-    readOnlyLabel: {
-        fontSize: 10.5,
-        color: W.textMuted,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-    },
-    readOnlyValue: {
-        fontSize: 15,
-        fontWeight: '900',
-        color: W.charcoal,
-        marginTop: 3,
-    },
-    driverGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    driverCell: {
-        width: '47%',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
+        backgroundColor: W.cardBg,
+        borderRadius: 12,
         padding: 12,
         borderWidth: 1,
-        borderColor: '#BAE6FD',
-    },
-    driverCellLabel: {
-        fontSize: 10.5,
-        color: W.sky,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        marginBottom: 4,
-    },
-    driverCellValue: {
-        fontSize: 14,
-        fontWeight: '900',
-        color: W.charcoal,
-    },
-    templateBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#DCFCE7',
-        borderWidth: 1,
-        borderColor: '#BBF7D0',
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        borderRadius: 14,
-    },
-    templateBtnTxt: {
-        flex: 1,
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#166534',
-        marginLeft: 10,
-    },
-    actionBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 11,
-        borderRadius: 12,
-    },
-    actionBtnText: {
-        color: '#FFFFFF',
-        fontWeight: '900',
-        fontSize: 13.5,
-    },
-    balanceCard: {
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: W.cardBorder,
-        alignItems: 'center',
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6 },
-            android: { elevation: 2 }
-        })
-    },
-    balanceLabel: {
-        color: W.textMuted,
-        fontSize: 11,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        marginBottom: 4,
-    },
-    balanceValue: {
-        color: W.emerald,
-        fontSize: 26,
-        fontWeight: '900',
-    },
-    balanceActions: {
-        flexDirection: 'row',
-        gap: 10,
-        marginTop: 14,
-        width: '100%',
-    },
-    balanceBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 11,
-        borderRadius: 12,
-    },
-    balanceBtnText: {
-        color: '#FFFFFF',
-        fontWeight: '900',
-        fontSize: 13,
-    },
-    infoBox: {
-        flexDirection: 'row',
-        gap: 12,
-        padding: 16,
-        backgroundColor: '#F0F9FF',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#BAE6FD',
-    },
-    infoText: {
-        flex: 1,
-        fontSize: 13,
-        lineHeight: 19,
-        color: '#0369A1',
-        fontWeight: '600',
-    },
-    orderItem: {
-        backgroundColor: '#FFFFFF',
-        padding: 18,
-        borderRadius: 18,
-        borderWidth: 1,
         borderColor: W.cardBorder,
     },
-    orderHeader: {
+    cardHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        gap: 6,
         marginBottom: 8,
     },
-    orderNumber: {
+    cardTitle: {
+        fontSize: 11.5,
         fontWeight: '900',
-        fontSize: 15,
         color: W.charcoal,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
     },
-    statusPill: {
-        paddingHorizontal: 9,
-        paddingVertical: 3.5,
-        borderRadius: 7,
-    },
-    statusPillText: {
-        fontSize: 10.5,
-        fontWeight: '800',
-    },
-    orderRow: {
+
+    gridRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        gap: 8,
     },
-    orderDate: {
-        fontSize: 13,
-        color: W.textMuted,
-    },
-    orderAmount: {
-        fontSize: 16,
-        fontWeight: '900',
-        color: W.charcoal,
-    },
-    emptyState: {
-        alignItems: 'center',
-        paddingVertical: 54,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
+    gridCell: {
+        flex: 1,
+        backgroundColor: '#FAF8F5',
+        padding: 8,
+        borderRadius: 8,
         borderWidth: 1,
         borderColor: W.cardBorder,
     },
-    emptyText: {
-        color: W.charcoal,
-        fontSize: 16,
-        fontWeight: '900',
-        marginTop: 12,
-    },
-    securityActionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-    },
-    securityIconBox: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    securityActionTitle: {
-        fontSize: 14,
-        fontWeight: '900',
-        color: W.charcoal,
-    },
-    securityActionDesc: {
-        fontSize: 11.5,
+    gridCellLbl: {
+        fontSize: 9,
+        fontWeight: '800',
         color: W.textMuted,
+        textTransform: 'uppercase',
+    },
+    gridCellVal: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: W.charcoal,
         marginTop: 2,
     },
-    btnSmall: {
-        paddingHorizontal: 18,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
+
+    // Form inputs
+    fieldBox: {
+        marginBottom: 7,
     },
-    switchRow: {
+    fieldLabel: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: W.textMuted,
+        textTransform: 'uppercase',
+        marginBottom: 3,
+    },
+    fieldInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        fontSize: 12,
+        color: W.charcoal,
+    },
+    fieldInputDisabled: {
+        backgroundColor: '#FAF8F5',
+        color: W.charcoal,
+    },
+
+    // Presets
+    presetTmplBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        borderRadius: 8,
+    },
+    presetTmplTitle: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#15803D',
+    },
+    presetTmplSnippet: {
+        fontSize: 9.5,
+        color: '#166534',
+        marginTop: 1,
+    },
+
+    // Wallet
+    walletBalanceNum: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: W.emerald,
+    },
+    transactBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    transactBtnText: {
+        fontSize: 11.5,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    txRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        gap: 8,
+    },
+    txIconBox: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    txDesc: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: W.charcoal,
+    },
+    txDate: {
+        fontSize: 9.5,
+        color: W.textMuted,
+    },
+    txAmount: {
+        fontSize: 12,
+        fontWeight: '900',
+    },
+
+    // Orders
+    orderCard: {
+        backgroundColor: W.cardBg,
+        borderRadius: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+    },
+    orderTopRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    switchLabel: {
-        fontSize: 14,
+    orderNum: {
+        fontSize: 12,
         fontWeight: '900',
         color: W.charcoal,
     },
-    switchDesc: {
-        fontSize: 11.5,
-        color: W.textMuted,
-        marginTop: 3,
+    orderBottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
     },
+    orderDate: {
+        fontSize: 10.5,
+        color: W.textMuted,
+    },
+    orderTotal: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: W.charcoal,
+    },
+
+    // Security
+    switchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    switchTitle: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: W.charcoal,
+    },
+    switchSub: {
+        fontSize: 10,
+        color: W.textMuted,
+        marginTop: 1,
+    },
+    togglePill: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+    },
+    togglePillText: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: W.textBody,
+    },
+    btnAction: {
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    btnActionText: {
+        fontSize: 11.5,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    emailResetBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: W.skyBg,
+        borderWidth: 1,
+        borderColor: W.skyBorder,
+    },
+
+    // Modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        alignItems: 'center',
         justifyContent: 'center',
-        padding: 20,
+        padding: 16,
     },
     transactCard: {
         backgroundColor: '#FFFFFF',
-        padding: 26,
-        borderRadius: 26,
-        alignItems: 'center',
+        borderRadius: 14,
+        padding: 16,
+        width: '100%',
+        maxWidth: 360,
         borderWidth: 1,
         borderColor: W.cardBorder,
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20 },
-            android: { elevation: 8 }
-        })
-    },
-    transactIconBox: {
-        width: 66,
-        height: 66,
-        borderRadius: 33,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
     },
     transactTitle: {
-        fontSize: 20,
+        fontSize: 13.5,
         fontWeight: '900',
         color: W.charcoal,
-        marginBottom: 4,
     },
     transactSub: {
-        fontSize: 13,
+        fontSize: 11,
         color: W.textMuted,
-        textAlign: 'center',
-        marginBottom: 20,
+    },
+    presetBtn: {
+        flex: 1,
+        paddingVertical: 6,
+        borderRadius: 6,
+        backgroundColor: '#FAF8F5',
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+        alignItems: 'center',
+    },
+    presetBtnText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: W.charcoal,
     },
     transactInput: {
-        width: '100%',
-        fontSize: 24,
-        fontWeight: '900',
-        textAlign: 'center',
-        padding: 15,
-        backgroundColor: '#F8FAFC',
-        borderRadius: 16,
+        backgroundColor: '#FAF8F5',
         borderWidth: 1,
         borderColor: W.cardBorder,
-        marginBottom: 12,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        fontSize: 13,
         color: W.charcoal,
+        fontWeight: '700',
     },
-    transactNoteInput: {
-        width: '100%',
-        fontSize: 14,
-        padding: 15,
-        backgroundColor: '#F8FAFC',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: W.cardBorder,
-        marginBottom: 22,
-        color: W.charcoal,
-    },
-    btnPrimary: {
-        flex: 2,
-        paddingVertical: 15,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    btnPrimaryText: {
-        color: '#FFFFFF',
-        fontWeight: '900',
-        fontSize: 15,
-    },
-    btnSecondary: {
+    modalCancelBtn: {
         flex: 1,
-        paddingVertical: 15,
-        borderRadius: 16,
-        backgroundColor: '#F1F5F9',
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: W.cardBorder,
         alignItems: 'center',
-        justifyContent: 'center',
     },
-    btnSecondaryText: {
-        color: '#64748B',
-        fontWeight: '800',
-        fontSize: 14.5,
+    modalCancelBtnText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: W.charcoal,
+    },
+    modalConfirmBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    modalConfirmBtnText: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#FFFFFF',
     },
 });
