@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, FlatList, RefreshControl, Linking, Modal, TextInput } from 'react-native';
+import {
+    View, Text, TouchableOpacity, Image, ScrollView, Alert,
+    ActivityIndicator, FlatList, RefreshControl, Linking, Modal,
+    TextInput, StyleSheet, Platform, Dimensions
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { NotificationService } from '../../lib/notifications';
@@ -7,29 +11,56 @@ import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
 import { StoreService } from '../../services/storeService';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadService } from '../../services/uploadService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const NAVY = '#0E1A2E';
-const GOLD = '#D9A73A';
+const { width } = Dimensions.get('window');
+
+// ─── Pristine Modern Color System (Clean, Structured, Airy) ─────────────────
+const C = {
+    canvas: '#F8FAFC',          // Slate-50 clean canvas
+    cardBg: '#FFFFFF',          // Pure white card
+    border: '#E2E8F0',          // Slate-200 border
+    borderLight: '#F1F5F9',     // Slate-100 separator
+    dark: '#0F172A',            // Slate-900 typography
+    body: '#334155',            // Slate-700 typography
+    muted: '#64748B',           // Slate-500 secondary
+    subtle: '#94A3B8',          // Slate-400 placeholder
+    gold: '#D97706',            // Amber-600 gold
+    goldBg: '#FEF3C7',
+    goldBorder: '#FDE68A',
+    emerald: '#059669',         // Emerald-600
+    emeraldBg: '#ECFDF5',
+    emeraldBorder: '#A7F3D0',
+    rose: '#E11D48',            // Rose-600
+    roseBg: '#FFF1F2',
+    roseBorder: '#FECDD3',
+    blue: '#2563EB',            // Blue-600
+    blueBg: '#EFF6FF',
+    blueBorder: '#BFDBFE',
+};
 
 export const AdminVendors = () => {
-    const [view, setView] = useState('list'); // 'list' or 'detail'
+    const insets = useSafeAreaInsets();
+    const [view, setView] = useState('list'); // 'list' | 'detail'
     const [selectedApp, setSelectedApp] = useState(null);
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected', 'recommended'
+    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'verified', 'recommended', 'pending', 'rejected'
     const [searchQuery, setSearchQuery] = useState('');
 
+    // WhatsApp Modal
     const [whatsappVisible, setWhatsappVisible] = useState(false);
     const [whatsappPhone, setWhatsappPhone] = useState('');
     const [whatsappUserId, setWhatsappUserId] = useState(null);
     const [whatsappRecipientName, setWhatsappRecipientName] = useState('Vendor');
 
+    // Reject Modal
     const [rejectionModalVisible, setRejectionModalVisible] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
     const [appToReject, setAppToReject] = useState(null);
 
-    // Store Profile Edit Modal State
+    // Edit Store Modal
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingStore, setEditingStore] = useState(null);
     const [editStoreName, setEditStoreName] = useState('');
@@ -101,9 +132,9 @@ export const AdminVendors = () => {
                         user_id: p.id,
                         business_name: p.business_name || (isOfficial ? 'Abu Mafhal Official Store' : (p.full_name || 'Merchant Store')),
                         tagline: tagline,
-                        business_category: p.business_category || addrMeta?.category || (isOfficial ? 'Official Mall & Flagship Store' : 'General Merchant'),
+                        business_category: p.business_category || addrMeta?.category || (isOfficial ? 'Official Mall & Flagship' : 'General Merchant'),
                         business_address: addrMeta?.address || p.address || p.state || 'Nigeria',
-                        phone: p.phone || p.phone_number || '08145853539',
+                        phone: p.phone || p.phone_number || '',
                         about: p.about || addrMeta?.about || local.about || '',
                         cover_image: p.cover_image || addrMeta?.cover_image || local.cover_image || '',
                         logo_url: p.avatar_url || local.logo || null,
@@ -122,14 +153,14 @@ export const AdminVendors = () => {
                 });
             }
 
-            // Also merge any pending applications that aren't yet active stores
+            // Merge pending applications
             appData.forEach(app => {
                 const alreadyAdded = storesList.some(s => s.user_id === app.user_id);
                 if (!alreadyAdded) {
                     storesList.push({
                         ...app,
                         user_id: app.user_id || app.id,
-                        tagline: app.tagline || 'Merchant on Abu Mafhal',
+                        tagline: app.tagline || 'Merchant Applicant',
                         is_recommended: false,
                         is_verified: false,
                         is_official: false
@@ -147,6 +178,16 @@ export const AdminVendors = () => {
         }
     };
 
+    // KPI Metrics Computation
+    const stats = React.useMemo(() => {
+        return {
+            total: applications.length,
+            verified: applications.filter(a => a.is_verified).length,
+            recommended: applications.filter(a => a.is_recommended).length,
+            pending: applications.filter(a => a.status === 'pending').length,
+        };
+    }, [applications]);
+
     const handleToggleRecommended = async (item) => {
         try {
             const nextState = !item.is_recommended;
@@ -155,7 +196,7 @@ export const AdminVendors = () => {
             if (selectedApp?.id === item.id) {
                 setSelectedApp(prev => ({ ...prev, is_recommended: nextState }));
             }
-            Alert.alert('Recommended Vendors', nextState ? `Marked "${item.business_name}" as Recommended!` : `Removed "${item.business_name}" from Recommended.`);
+            Alert.alert('Featured Status', nextState ? `"${item.business_name}" is now Recommended on homepage!` : `Removed "${item.business_name}" from Recommended.`);
         } catch (err) {
             Alert.alert('Error', 'Failed to toggle recommendation: ' + err.message);
         }
@@ -170,9 +211,9 @@ export const AdminVendors = () => {
                 setSelectedApp(prev => ({ ...prev, is_verified: nextState }));
             }
             Alert.alert(
-                'Vendor Verification',
+                'Verification',
                 nextState
-                    ? `Verified "${item.business_name}"! Store badge and verified checkmarks are now live.`
+                    ? `Verified "${item.business_name}"! Green checkmark badge is active.`
                     : `Revoked verification badge for "${item.business_name}".`
             );
         } catch (err) {
@@ -250,7 +291,7 @@ export const AdminVendors = () => {
                 isVerified: editIsVerified
             });
 
-            Alert.alert('Success', 'Store profile, verification badge and branding updated successfully!');
+            Alert.alert('Saved', 'Store profile and branding updated successfully!');
             setEditModalVisible(false);
             fetchApplications();
         } catch (err) {
@@ -268,14 +309,12 @@ export const AdminVendors = () => {
                 onPress: async () => {
                     setLoading(true);
                     try {
-                        // 1. Update Application Status
                         await supabase
                             .from('vendor_applications')
                             .update({ status: 'approved' })
                             .eq('id', app.id);
 
-                        // 2. [CRUCIAL] Update PROFILES table role to 'vendor' so login role works everywhere
-                        const { error: profileError } = await supabase
+                        await supabase
                             .from('profiles')
                             .update({
                                 role: 'vendor',
@@ -287,12 +326,7 @@ export const AdminVendors = () => {
                             })
                             .eq('id', app.user_id);
 
-                        if (profileError) {
-                            console.error('Profile role update error:', profileError);
-                        }
-
-                        // 3. Update or Upsert VENDORS table to Active
-                        const { error: vendorError } = await supabase
+                        await supabase
                             .from('vendors')
                             .upsert({
                                 user_id: app.user_id,
@@ -303,11 +337,6 @@ export const AdminVendors = () => {
                                 is_verified: true
                             }, { onConflict: 'user_id' });
 
-                        if (vendorError) {
-                            console.log('Vendor Table Update Note:', vendorError);
-                        }
-
-                        // Sync Store Profile cache & stores table
                         await StoreService.updateStoreProfile({
                             userId: app.user_id,
                             storeName: app.business_name || 'Vendor Store',
@@ -315,25 +344,16 @@ export const AdminVendors = () => {
                             isVerified: true
                         }).catch(() => {});
 
-                        // 4. Update USERS table role to 'vendor' if present
-                        await supabase
-                            .from('users')
-                            .update({ role: 'vendor' })
-                            .eq('id', app.user_id)
-                            .catch(() => {});
-
-                        // 5. Send Notification (In-App + Email)
                         const vendorEmail = app.profiles?.email;
                         await NotificationService.send({
                             userId: app.user_id,
-                            title: 'Vendor Application Approved! 🎉',
-                            message: `Congratulations! Your store application for "${app.business_name}" has been approved. You can now access your vendor dashboard to start selling.`,
+                            title: 'Vendor Store Approved! 🎉',
+                            message: `Congratulations! Your store application for "${app.business_name}" has been approved. You can now access your vendor console.`,
                             type: 'system',
                             email: vendorEmail
                         }).catch(() => {});
 
-                        // 6. Refresh List
-                        Alert.alert('Approved!', 'Vendor store has been approved and account upgraded successfully.');
+                        Alert.alert('Approved!', 'Vendor store approved and permissions activated.');
                         setView('list');
                         fetchApplications();
                     } catch (err) {
@@ -354,7 +374,6 @@ export const AdminVendors = () => {
 
     const confirmReject = async () => {
         if (!appToReject) return;
-
         try {
             setLoading(true);
             await supabase
@@ -374,7 +393,7 @@ export const AdminVendors = () => {
                 email: vendorEmail
             }).catch(() => {});
 
-            Alert.alert('Rejected', 'Vendor application rejected and notification sent.');
+            Alert.alert('Rejected', 'Application status updated.');
             setView('list');
             fetchApplications();
         } catch (err) {
@@ -383,20 +402,6 @@ export const AdminVendors = () => {
             setLoading(false);
             setRejectionModalVisible(false);
         }
-    };
-
-    const StatusBadge = ({ status }) => {
-        let color = '#64748B';
-        let bg = '#F1F5F9';
-        if (status === 'approved') { color = '#10B981'; bg = '#DCFCE7'; }
-        if (status === 'pending') { color = GOLD; bg = 'rgba(217, 167, 58, 0.15)'; }
-        if (status === 'rejected') { color = '#EF4444'; bg = '#FEE2E2'; }
-
-        return (
-            <View style={{ backgroundColor: bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: color + '40' }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: color, textTransform: 'uppercase' }}>{status}</Text>
-            </View>
-        );
     };
 
     const filteredApplications = applications.filter(app => {
@@ -416,185 +421,114 @@ export const AdminVendors = () => {
         return matchesStatus && matchesSearch;
     });
 
-    const InfoRow = ({ label, value }) => (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' }}>
-            <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>{label}</Text>
-            <Text style={{ fontWeight: '700', color: NAVY, fontSize: 13 }}>{value || 'None'}</Text>
-        </View>
-    );
+    // ── STORE DETAILS VIEW ──────────────────────────────────────────────────
+    const renderDetail = () => {
+        if (!selectedApp) return null;
+        return (
+            <ScrollView style={{ flex: 1, backgroundColor: C.canvas }} contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
+                {/* Back & Edit Action Row */}
+                <View style={S.detailTopNav}>
+                    <TouchableOpacity 
+                        onPress={() => setView('list')} 
+                        style={S.backBtn}
+                    >
+                        <Ionicons name="arrow-back" size={17} color={C.dark} />
+                        <Text style={S.backBtnText}>Back to Stores</Text>
+                    </TouchableOpacity>
 
-    const Section = ({ title, children }) => (
-        <View style={{ marginBottom: 18 }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD, textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.8 }}>
-                {title}
-            </Text>
-            <View style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                {children}
-            </View>
-        </View>
-    );
-
-    const DocCard = ({ label, url, icon, color = NAVY }) => (
-        <TouchableOpacity
-            onPress={() => url && Linking.openURL(url)}
-            style={{ padding: 12, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', minWidth: 100, flex: 1 }}
-        >
-            <Ionicons name={icon} size={22} color={color} />
-            <Text style={{ fontSize: 11, fontWeight: '700', marginTop: 6, color: NAVY }}>{label}</Text>
-            <Text style={{ fontSize: 9.5, color: GOLD, fontWeight: '700', marginTop: 2 }}>View Document →</Text>
-        </TouchableOpacity>
-    );
-
-    const renderDetail = () => (
-        <ScrollView style={{ flex: 1, backgroundColor: '#F8FAFC' }} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <TouchableOpacity 
-                    onPress={() => setView('list')} 
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}
-                >
-                    <Ionicons name="arrow-back" size={18} color={NAVY} />
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Back to List</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    onPress={() => openEditStoreModal(selectedApp)}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: NAVY, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: GOLD }}
-                >
-                    <Ionicons name="create-outline" size={16} color={GOLD} />
-                    <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>Edit Store</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Business Profile Card */}
-            <View style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 22,
-                overflow: 'hidden',
-                marginBottom: 20,
-                borderWidth: 1,
-                borderColor: selectedApp.is_recommended ? GOLD : '#E2E8F0',
-                elevation: 2
-            }}>
-                {/* Cover Banner */}
-                <View style={{ height: 110, backgroundColor: '#CBD5E1', position: 'relative' }}>
-                    <Image
-                        source={{ uri: selectedApp.cover_image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=900&auto=format&fit=crop' }}
-                        style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
-                    />
-                    <View style={{ position: 'absolute', top: 10, right: 10, flexDirection: 'row', gap: 6 }}>
-                        {selectedApp.is_official && (
-                            <View style={{ backgroundColor: NAVY, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: GOLD }}>
-                                <Text style={{ color: GOLD, fontSize: 9.5, fontWeight: '900' }}>OFFICIAL MALL</Text>
-                            </View>
-                        )}
-                        {selectedApp.is_verified ? (
-                            <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                <Ionicons name="shield-checkmark" size={10} color="#FFFFFF" />
-                                <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>VERIFIED</Text>
-                            </View>
-                        ) : (
-                            <View style={{ backgroundColor: '#64748B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                <Ionicons name="shield-outline" size={10} color="#FFFFFF" />
-                                <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>UNVERIFIED</Text>
-                            </View>
-                        )}
-                        {selectedApp.is_recommended && (
-                            <View style={{ backgroundColor: GOLD, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                                <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>⭐ RECOMMENDED</Text>
-                            </View>
-                        )}
-                    </View>
+                    <TouchableOpacity
+                        onPress={() => openEditStoreModal(selectedApp)}
+                        style={S.editStoreTopBtn}
+                    >
+                        <Ionicons name="create-outline" size={15} color="#FFFFFF" />
+                        <Text style={S.editStoreTopBtnText}>Edit Branding</Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Profile Header */}
-                <View style={{ padding: 16, alignItems: 'center' }}>
-                    <View style={{ marginTop: -40, marginBottom: 6 }}>
+                {/* Hero Showcase Card */}
+                <View style={S.storeHeroCard}>
+                    {/* Cover Banner */}
+                    <View style={S.heroBanner}>
                         <Image
-                            source={{ uri: selectedApp.logo_url || selectedApp.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
-                            style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: '#FFFFFF' }}
+                            source={{ uri: selectedApp.cover_image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=900&auto=format&fit=crop' }}
+                            style={S.heroBannerImg}
                         />
+                        <View style={S.bannerBadges}>
+                            {selectedApp.is_official && (
+                                <View style={[S.pillBadge, { backgroundColor: C.dark }]}>
+                                    <Text style={[S.pillBadgeTxt, { color: C.gold }]}>OFFICIAL MALL</Text>
+                                </View>
+                            )}
+                            <View style={[S.pillBadge, selectedApp.is_verified ? { backgroundColor: C.emeraldBg } : { backgroundColor: '#F1F5F9' }]}>
+                                <Ionicons name={selectedApp.is_verified ? "shield-checkmark" : "shield-outline"} size={10} color={selectedApp.is_verified ? C.emerald : C.muted} />
+                                <Text style={[S.pillBadgeTxt, { color: selectedApp.is_verified ? C.emerald : C.muted, marginLeft: 3 }]}>
+                                    {selectedApp.is_verified ? 'VERIFIED' : 'UNVERIFIED'}
+                                </Text>
+                            </View>
+                            {selectedApp.is_recommended && (
+                                <View style={[S.pillBadge, { backgroundColor: C.goldBg }]}>
+                                    <Text style={[S.pillBadgeTxt, { color: C.gold }]}>⭐ FEATURED</Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>{selectedApp.business_name}</Text>
-                    {selectedApp.tagline ? (
-                        <Text style={{ fontSize: 12, color: GOLD, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>
-                            "{selectedApp.tagline}"
-                        </Text>
-                    ) : null}
-                    <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600', marginTop: 2 }}>{selectedApp.business_category}</Text>
 
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-                        <StatusBadge status={selectedApp.status} />
+                    {/* Store Identity Content */}
+                    <View style={S.heroBody}>
+                        <View style={S.logoFrame}>
+                            <Image
+                                source={{ uri: selectedApp.logo_url || selectedApp.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
+                                style={S.logoImg}
+                            />
+                        </View>
 
-                        {/* Direct Toggle Verification Button */}
-                        <TouchableOpacity
-                            onPress={() => handleToggleVerified(selectedApp)}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                paddingHorizontal: 10,
-                                paddingVertical: 4,
-                                borderRadius: 10,
-                                backgroundColor: selectedApp.is_verified ? '#DCFCE7' : '#F1F5F9',
-                                borderWidth: 1,
-                                borderColor: selectedApp.is_verified ? '#10B981' : '#CBD5E1'
-                            }}
-                        >
-                            <Ionicons name={selectedApp.is_verified ? "shield-checkmark" : "shield-outline"} size={12} color={selectedApp.is_verified ? "#16A34A" : "#64748B"} />
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: selectedApp.is_verified ? "#16A34A" : "#64748B" }}>
-                                {selectedApp.is_verified ? "VERIFIED" : "UNVERIFIED (TAP TO VERIFY)"}
-                            </Text>
-                        </TouchableOpacity>
+                        <Text style={S.heroStoreName}>{selectedApp.business_name}</Text>
+                        {selectedApp.tagline ? (
+                            <Text style={S.heroTagline}>"{selectedApp.tagline}"</Text>
+                        ) : null}
+                        <Text style={S.heroCategory}>{selectedApp.business_category}</Text>
 
-                        <TouchableOpacity
-                            onPress={() => handleToggleRecommended(selectedApp)}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                paddingHorizontal: 10,
-                                paddingVertical: 4,
-                                borderRadius: 10,
-                                backgroundColor: selectedApp.is_recommended ? '#FEF3C7' : '#F1F5F9',
-                                borderWidth: 1,
-                                borderColor: selectedApp.is_recommended ? GOLD : '#CBD5E1'
-                            }}
-                        >
-                            <Ionicons name={selectedApp.is_recommended ? "star" : "star-outline"} size={12} color={selectedApp.is_recommended ? GOLD : "#64748B"} />
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: selectedApp.is_recommended ? GOLD : "#64748B" }}>
-                                {selectedApp.is_recommended ? "RECOMMENDED" : "RECOMMEND"}
-                            </Text>
-                        </TouchableOpacity>
+                        {/* Interactive Toggles */}
+                        <View style={S.heroTogglesRow}>
+                            <TouchableOpacity
+                                onPress={() => handleToggleVerified(selectedApp)}
+                                style={[S.heroToggleBtn, selectedApp.is_verified && { backgroundColor: C.emeraldBg, borderColor: C.emeraldBorder }]}
+                            >
+                                <Ionicons name={selectedApp.is_verified ? "shield-checkmark" : "shield-outline"} size={13} color={selectedApp.is_verified ? C.emerald : C.muted} />
+                                <Text style={[S.heroToggleBtnTxt, selectedApp.is_verified && { color: C.emerald }]}>
+                                    {selectedApp.is_verified ? "Verified Merchant" : "Tap to Verify"}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => handleToggleRecommended(selectedApp)}
+                                style={[S.heroToggleBtn, selectedApp.is_recommended && { backgroundColor: C.goldBg, borderColor: C.goldBorder }]}
+                            >
+                                <Ionicons name={selectedApp.is_recommended ? "star" : "star-outline"} size={13} color={selectedApp.is_recommended ? C.gold : C.muted} />
+                                <Text style={[S.heroToggleBtnTxt, selectedApp.is_recommended && { color: C.gold }]}>
+                                    {selectedApp.is_recommended ? "Featured on Home" : "Tap to Feature"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
-            </View>
 
-            {/* Slogan / Tagline Section */}
-            <Section title="Store Slogan & Tagline (Admin Controlled)">
-                <Text style={{ fontSize: 13, color: '#334155', fontWeight: '700' }}>
-                    {selectedApp.tagline || 'No tagline assigned by administrator yet. Click "Edit Store" to set one.'}
-                </Text>
-            </Section>
-
-            {/* About Store Section */}
-            <Section title="About This Store (Customer Bio)">
-                <Text style={{ fontSize: 13, color: '#334155', lineHeight: 19 }}>
-                    {selectedApp.about || 'No custom store description provided yet. Click "Edit Store" to write one.'}
-                </Text>
-            </Section>
-
-            {/* Owner Information */}
-            <Section title="Owner Information">
-                <InfoRow label="Full Name" value={selectedApp.profiles?.full_name} />
-                <InfoRow label="Email" value={selectedApp.profiles?.email} />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-                    <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>Phone / WhatsApp</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ fontWeight: '700', color: NAVY, fontSize: 13 }}>
-                            {selectedApp.phone || selectedApp.profiles?.phone || 'None'}
-                        </Text>
+                {/* Direct Communications Dock */}
+                <View style={S.dockCard}>
+                    <Text style={S.sectionHeading}>Merchant Communications</Text>
+                    <View style={S.dockRow}>
                         {(selectedApp.phone || selectedApp.profiles?.phone) ? (
-                            <TouchableOpacity 
+                            <TouchableOpacity
+                                onPress={() => Linking.openURL(`tel:${selectedApp.phone || selectedApp.profiles?.phone}`)}
+                                style={S.dockBtn}
+                            >
+                                <Ionicons name="call-outline" size={15} color={C.dark} />
+                                <Text style={S.dockBtnText}>Call</Text>
+                            </TouchableOpacity>
+                        ) : null}
+
+                        {(selectedApp.phone || selectedApp.profiles?.phone) ? (
+                            <TouchableOpacity
                                 onPress={() => {
                                     const rawPhone = selectedApp.phone || selectedApp.profiles?.phone;
                                     setWhatsappPhone(rawPhone);
@@ -602,230 +536,268 @@ export const AdminVendors = () => {
                                     setWhatsappRecipientName(selectedApp.profiles?.full_name || selectedApp.business_name || 'Vendor');
                                     setWhatsappVisible(true);
                                 }}
-                                style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                style={[S.dockBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
                             >
-                                <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>Chat</Text>
+                                <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
+                                <Text style={[S.dockBtnText, { color: '#16A34A' }]}>WhatsApp</Text>
+                            </TouchableOpacity>
+                        ) : null}
+
+                        {selectedApp.profiles?.email ? (
+                            <TouchableOpacity
+                                onPress={() => Linking.openURL(`mailto:${selectedApp.profiles?.email}`)}
+                                style={S.dockBtn}
+                            >
+                                <Ionicons name="mail-outline" size={15} color={C.blue} />
+                                <Text style={[S.dockBtnText, { color: C.blue }]}>Email</Text>
                             </TouchableOpacity>
                         ) : null}
                     </View>
                 </View>
-                <InfoRow label="Store Location" value={selectedApp.business_address} />
-            </Section>
 
-            {/* Action Buttons */}
-            {selectedApp.status === 'pending' && (
-                <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-                    <TouchableOpacity
-                        onPress={() => openRejectModal(selectedApp)}
-                        style={{ flex: 1, backgroundColor: '#FEE2E2', padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FECACA' }}
-                    >
-                        <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13 }}>Reject Application</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => handleApprove(selectedApp)}
-                        style={{ flex: 2, backgroundColor: NAVY, padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: GOLD }}
-                    >
-                        <Text style={{ color: GOLD, fontWeight: '900', fontSize: 13 }}>Approve Vendor</Text>
-                    </TouchableOpacity>
+                {/* Store Profile Sections */}
+                <View style={S.sectionCard}>
+                    <Text style={S.sectionHeading}>Store Promotional Slogan</Text>
+                    <Text style={S.sectionBodyText}>
+                        {selectedApp.tagline || 'No custom slogan set. Click "Edit Branding" to write one.'}
+                    </Text>
                 </View>
-            )}
-        </ScrollView>
-    );
 
+                <View style={S.sectionCard}>
+                    <Text style={S.sectionHeading}>About Store (Customer Bio)</Text>
+                    <Text style={[S.sectionBodyText, { lineHeight: 20 }]}>
+                        {selectedApp.about || 'No custom store description provided yet.'}
+                    </Text>
+                </View>
+
+                <View style={S.sectionCard}>
+                    <Text style={S.sectionHeading}>Store Ownership & Location</Text>
+                    <View style={S.infoItemRow}>
+                        <Text style={S.infoItemLbl}>Owner Legal Name</Text>
+                        <Text style={S.infoItemVal}>{selectedApp.profiles?.full_name || 'N/A'}</Text>
+                    </View>
+                    <View style={S.infoItemRow}>
+                        <Text style={S.infoItemLbl}>Account Email</Text>
+                        <Text style={S.infoItemVal}>{selectedApp.profiles?.email || 'N/A'}</Text>
+                    </View>
+                    <View style={S.infoItemRow}>
+                        <Text style={S.infoItemLbl}>Contact Phone</Text>
+                        <Text style={S.infoItemVal}>{selectedApp.phone || selectedApp.profiles?.phone || 'N/A'}</Text>
+                    </View>
+                    <View style={[S.infoItemRow, { borderBottomWidth: 0 }]}>
+                        <Text style={S.infoItemLbl}>Business Location</Text>
+                        <Text style={S.infoItemVal}>{selectedApp.business_address || 'Nigeria'}</Text>
+                    </View>
+                </View>
+
+                {/* Approval Action Bar for Pending Applications */}
+                {selectedApp.status === 'pending' && (
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                        <TouchableOpacity
+                            onPress={() => openRejectModal(selectedApp)}
+                            style={[S.mainBtn, { backgroundColor: C.roseBg, borderColor: C.roseBorder }]}
+                        >
+                            <Text style={[S.mainBtnText, { color: C.rose }]}>Reject Application</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => handleApprove(selectedApp)}
+                            style={[S.mainBtn, { backgroundColor: C.dark, flex: 2 }]}
+                        >
+                            <Text style={[S.mainBtnText, { color: '#FFFFFF' }]}>Approve Store ✓</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </ScrollView>
+        );
+    };
+
+    // ── VENDOR / STORE CARD ITEM ─────────────────────────────────────────────
     const renderItem = ({ item }) => (
-        <View
-            style={{
-                padding: 14,
-                backgroundColor: '#FFFFFF',
-                marginBottom: 12,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: item.is_recommended ? GOLD : '#E2E8F0',
-                shadowColor: NAVY,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.04,
-                shadowRadius: 5,
-                elevation: 1
-            }}
-        >
+        <View style={S.storeCard}>
             <TouchableOpacity
                 onPress={() => { setSelectedApp(item); setView('detail'); }}
-                style={{ flexDirection: 'row', alignItems: 'center' }}
+                style={S.storeCardMainRow}
             >
-                <Image
-                    source={{ uri: item.logo_url || item.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
-                    style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: item.is_recommended ? GOLD : '#CBD5E1' }}
-                />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <Text style={{ fontWeight: '800', color: NAVY, fontSize: 14 }} numberOfLines={1}>
+                {/* Store Logo with Status Indicator */}
+                <View style={S.cardLogoWrap}>
+                    <Image
+                        source={{ uri: item.logo_url || item.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
+                        style={S.cardLogoImg}
+                    />
+                    {item.is_verified && (
+                        <View style={S.cardVerifyDot}>
+                            <Ionicons name="checkmark" size={8} color="#FFFFFF" />
+                        </View>
+                    )}
+                </View>
+
+                {/* Info Column */}
+                <View style={S.cardInfoCol}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={S.cardStoreTitle} numberOfLines={1}>
                             {item.business_name}
                         </Text>
-                        {item.is_verified ? (
-                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#10B981', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                <Ionicons name="shield-checkmark" size={9} color="#16A34A" />
-                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#16A34A' }}>VERIFIED</Text>
-                            </View>
-                        ) : (
-                            <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                <Ionicons name="shield-outline" size={9} color="#64748B" />
-                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#64748B' }}>UNVERIFIED</Text>
+                        {item.is_official && (
+                            <View style={[S.microTag, { backgroundColor: C.dark }]}>
+                                <Text style={[S.microTagTxt, { color: C.gold }]}>OFFICIAL</Text>
                             </View>
                         )}
                         {item.is_recommended && (
-                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: GOLD }}>
-                                <Text style={{ fontSize: 9, fontWeight: '800', color: GOLD }}>⭐ RECOMMENDED</Text>
+                            <View style={[S.microTag, { backgroundColor: C.goldBg }]}>
+                                <Text style={[S.microTagTxt, { color: C.gold }]}>⭐</Text>
                             </View>
                         )}
                     </View>
+
                     {item.tagline ? (
-                        <Text style={{ fontSize: 11, color: GOLD, fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
-                            "{item.tagline}"
-                        </Text>
+                        <Text style={S.cardTagline} numberOfLines={1}>"{item.tagline}"</Text>
                     ) : null}
-                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.business_category}</Text>
-                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                        Phone: {item.phone || 'None'} • {item.is_official ? 'Official Store' : 'Vendor'}
+
+                    <Text style={S.cardCategory} numberOfLines={1}>
+                        {item.business_category} • {item.phone || item.profiles?.phone || 'No phone'}
                     </Text>
                 </View>
-                <StatusBadge status={item.status} />
+
+                {/* Right Status & Arrow */}
+                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <View style={[
+                        S.statusPill,
+                        item.status === 'approved' ? { backgroundColor: C.emeraldBg } :
+                        item.status === 'pending' ? { backgroundColor: C.goldBg } :
+                        { backgroundColor: C.roseBg }
+                    ]}>
+                        <Text style={[
+                            S.statusPillTxt,
+                            item.status === 'approved' ? { color: C.emerald } :
+                            item.status === 'pending' ? { color: C.gold } :
+                            { color: C.rose }
+                        ]}>
+                            {item.status?.toUpperCase() || 'APPROVED'}
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={14} color={C.subtle} style={{ marginTop: 4 }} />
+                </View>
             </TouchableOpacity>
 
             {/* Quick Action Dock */}
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+            <View style={S.cardActionsDock}>
                 <TouchableOpacity
                     onPress={() => handleToggleVerified(item)}
-                    style={{
-                        flex: 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 3,
-                        paddingVertical: 7,
-                        borderRadius: 10,
-                        backgroundColor: item.is_verified ? '#DCFCE7' : '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: item.is_verified ? '#10B981' : '#E2E8F0'
-                    }}
+                    style={[S.cardActionBtn, item.is_verified && { backgroundColor: C.emeraldBg, borderColor: C.emeraldBorder }]}
                 >
-                    <Ionicons name={item.is_verified ? "shield-checkmark" : "shield-outline"} size={13} color={item.is_verified ? "#16A34A" : "#64748B"} />
-                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: item.is_verified ? "#16A34A" : '#475569' }}>
+                    <Ionicons name={item.is_verified ? "shield-checkmark" : "shield-outline"} size={13} color={item.is_verified ? C.emerald : C.muted} />
+                    <Text style={[S.cardActionBtnTxt, item.is_verified && { color: C.emerald }]}>
                         {item.is_verified ? "Verified" : "Verify"}
                     </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     onPress={() => handleToggleRecommended(item)}
-                    style={{
-                        flex: 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 3,
-                        paddingVertical: 7,
-                        borderRadius: 10,
-                        backgroundColor: item.is_recommended ? '#FEF3C7' : '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: item.is_recommended ? GOLD : '#E2E8F0'
-                    }}
+                    style={[S.cardActionBtn, item.is_recommended && { backgroundColor: C.goldBg, borderColor: C.goldBorder }]}
                 >
-                    <Ionicons name={item.is_recommended ? "star" : "star-outline"} size={13} color={item.is_recommended ? GOLD : "#64748B"} />
-                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: item.is_recommended ? GOLD : '#475569' }}>
+                    <Ionicons name={item.is_recommended ? "star" : "star-outline"} size={13} color={item.is_recommended ? C.gold : C.muted} />
+                    <Text style={[S.cardActionBtnTxt, item.is_recommended && { color: C.gold }]}>
                         {item.is_recommended ? "Featured" : "Feature"}
                     </Text>
                 </TouchableOpacity>
 
+                {(item.phone || item.profiles?.phone) ? (
+                    <TouchableOpacity
+                        onPress={() => {
+                            const rawPhone = item.phone || item.profiles?.phone;
+                            setWhatsappPhone(rawPhone);
+                            setWhatsappUserId(item.user_id || null);
+                            setWhatsappRecipientName(item.profiles?.full_name || item.business_name || 'Vendor');
+                            setWhatsappVisible(true);
+                        }}
+                        style={[S.cardActionBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
+                    >
+                        <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
+                        <Text style={[S.cardActionBtnTxt, { color: '#16A34A' }]}>Chat</Text>
+                    </TouchableOpacity>
+                ) : null}
+
                 <TouchableOpacity
                     onPress={() => openEditStoreModal(item)}
-                    style={{
-                        flex: 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 3,
-                        paddingVertical: 7,
-                        borderRadius: 10,
-                        backgroundColor: NAVY,
-                        borderWidth: 1,
-                        borderColor: GOLD + '60'
-                    }}
+                    style={[S.cardActionBtn, { backgroundColor: '#F8FAFC' }]}
                 >
-                    <Ionicons name="create-outline" size={13} color={GOLD} />
-                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
-                        Edit / Tagline
-                    </Text>
+                    <Ionicons name="create-outline" size={13} color={C.dark} />
+                    <Text style={S.cardActionBtnTxt}>Edit</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        <View style={S.container}>
             {view === 'detail' ? (
                 renderDetail()
             ) : (
                 <>
-                    {/* Header & Filter Area */}
-                    <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
-                        <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                            Vendors & Stores Console
-                        </Text>
-                        <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                            Manage real merchant stores, branding, and recommended vendors
-                        </Text>
+                    {/* Header with Search & KPIs */}
+                    <View style={S.header}>
+                        <View style={S.headerTopRow}>
+                            <View>
+                                <Text style={S.headerTitle}>Vendors & Stores</Text>
+                                <Text style={S.headerSubtitle}>Manage merchant stores, branding, and verified status</Text>
+                            </View>
+                        </View>
+
+                        {/* 4 Metric Summary Tiles */}
+                        <View style={S.kpiRow}>
+                            <View style={S.kpiCard}>
+                                <Text style={S.kpiLbl}>Total Stores</Text>
+                                <Text style={S.kpiVal}>{stats.total}</Text>
+                            </View>
+                            <View style={S.kpiCard}>
+                                <Text style={S.kpiLbl}>Verified</Text>
+                                <Text style={[S.kpiVal, { color: C.emerald }]}>{stats.verified}</Text>
+                            </View>
+                            <View style={S.kpiCard}>
+                                <Text style={S.kpiLbl}>Featured</Text>
+                                <Text style={[S.kpiVal, { color: C.gold }]}>{stats.recommended}</Text>
+                            </View>
+                            <View style={S.kpiCard}>
+                                <Text style={S.kpiLbl}>Pending</Text>
+                                <Text style={[S.kpiVal, { color: stats.pending > 0 ? C.rose : C.dark }]}>{stats.pending}</Text>
+                            </View>
+                        </View>
 
                         {/* Search Bar */}
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: '#F8FAFC',
-                            borderRadius: 12,
-                            paddingHorizontal: 12,
-                            paddingVertical: 8,
-                            marginTop: 12,
-                            borderWidth: 1,
-                            borderColor: '#E2E8F0'
-                        }}>
-                            <Ionicons name="search" size={16} color="#94A3B8" />
+                        <View style={S.searchBox}>
+                            <Ionicons name="search" size={16} color={C.subtle} />
                             <TextInput
-                                placeholder="Search store by name, category, phone..."
+                                placeholder="Search store name, category, phone..."
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
-                                style={{ flex: 1, marginLeft: 8, fontSize: 12.5, color: NAVY }}
-                                placeholderTextColor="#94A3B8"
+                                style={S.searchInput}
+                                placeholderTextColor={C.subtle}
                             />
                             {searchQuery.length > 0 && (
                                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                    <Ionicons name="close-circle" size={16} color={C.subtle} />
                                 </TouchableOpacity>
                             )}
                         </View>
 
-                        {/* Status & Recommendation Filter Pills */}
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 12 }}>
-                            {['all', 'verified', 'recommended', 'approved', 'pending', 'rejected'].map(st => {
-                                const active = statusFilter === st;
+                        {/* Filter Tabs */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterScroll}>
+                            {[
+                                { id: 'all', label: 'All Stores' },
+                                { id: 'verified', label: '🛡️ Verified' },
+                                { id: 'recommended', label: '⭐ Featured' },
+                                { id: 'pending', label: '⏳ Pending' },
+                                { id: 'rejected', label: 'Suspended' }
+                            ].map(tab => {
+                                const active = statusFilter === tab.id;
                                 return (
                                     <TouchableOpacity
-                                        key={st}
-                                        onPress={() => setStatusFilter(st)}
-                                        style={{
-                                            paddingHorizontal: 12,
-                                             paddingVertical: 6,
-                                            borderRadius: 10,
-                                            backgroundColor: active ? NAVY : '#F1F5F9',
-                                            borderWidth: 1,
-                                            borderColor: active ? GOLD : 'transparent'
-                                        }}
+                                        key={tab.id}
+                                        onPress={() => setStatusFilter(tab.id)}
+                                        style={[S.filterPill, active && S.filterPillActive]}
                                     >
-                                        <Text style={{
-                                            fontSize: 11,
-                                            fontWeight: '800',
-                                            color: active ? GOLD : '#64748B',
-                                            textTransform: 'capitalize'
-                                        }}>
-                                            {st === 'verified' ? '🛡️ Verified' : (st === 'recommended' ? '⭐ Recommended' : (st === 'all' ? 'All Stores' : st))}
+                                        <Text style={[S.filterPillTxt, active && S.filterPillTxtActive]}>
+                                            {tab.label}
                                         </Text>
                                     </TouchableOpacity>
                                 );
@@ -833,26 +805,25 @@ export const AdminVendors = () => {
                         </ScrollView>
                     </View>
 
+                    {/* Stores List */}
                     {loading && !refreshing ? (
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                            <ActivityIndicator size="large" color={GOLD} />
-                            <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading real vendor stores...</Text>
+                        <View style={S.loadingContainer}>
+                            <ActivityIndicator size="large" color={C.dark} />
+                            <Text style={S.loadingText}>Loading merchant stores…</Text>
                         </View>
                     ) : (
                         <FlatList
                             data={filteredApplications}
                             keyExtractor={item => item.id}
                             renderItem={renderItem}
-                            contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+                            contentContainerStyle={S.listContent}
                             refreshControl={
-                                <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchApplications(); }} colors={[GOLD, NAVY]} />
+                                <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchApplications(); }} colors={[C.dark]} />
                             }
                             ListEmptyComponent={
-                                <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.7 }}>
-                                    <Ionicons name="storefront-outline" size={48} color="#94A3B8" />
-                                    <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
-                                        No vendors found matching this filter.
-                                    </Text>
+                                <View style={S.emptyState}>
+                                    <Ionicons name="storefront-outline" size={44} color={C.subtle} />
+                                    <Text style={S.emptyStateText}>No stores match this filter.</Text>
                                 </View>
                             }
                         />
@@ -860,179 +831,147 @@ export const AdminVendors = () => {
                 </>
             )}
 
-            {/* Store Profile Edit Modal */}
+            {/* ── STORE PROFILE & BRANDING EDIT MODAL ── */}
             <Modal
                 animationType="slide"
                 transparent={true}
                 visible={editModalVisible}
                 onRequestClose={() => setEditModalVisible(false)}
             >
-                <View style={{ flex: 1, backgroundColor: 'rgba(14, 26, 46, 0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '85%' }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                            <Text style={{ fontSize: 17, fontWeight: '900', color: NAVY }}>Edit Store Profile & Branding</Text>
+                <View style={S.modalOverlay}>
+                    <View style={S.modalSheet}>
+                        <View style={S.modalHeader}>
+                            <Text style={S.modalTitle}>Edit Store Branding</Text>
                             <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                                <Ionicons name="close" size={22} color="#64748B" />
+                                <Ionicons name="close" size={22} color={C.muted} />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Name</Text>
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+                            <Text style={S.fieldLabel}>Store Name</Text>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editStoreName}
                                 onChangeText={setEditStoreName}
-                                placeholder="Store name..."
+                                placeholder="Store name…"
+                                placeholderTextColor={C.subtle}
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Slogan / Tagline (Admin Controlled)</Text>
+                            <Text style={S.fieldLabel}>Store Slogan / Tagline (Admin Controlled)</Text>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editTagline}
                                 onChangeText={setEditTagline}
-                                placeholder="e.g. Official Dealer in Tech & Electronics..."
+                                placeholder="e.g. Official Electronics & Gadgets Dealer"
+                                placeholderTextColor={C.subtle}
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Category</Text>
+                            <Text style={S.fieldLabel}>Category</Text>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editCategory}
                                 onChangeText={setEditCategory}
-                                placeholder="Business category..."
+                                placeholder="e.g. Fashion, Tech, Groceries…"
+                                placeholderTextColor={C.subtle}
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>About Your Store / Bio</Text>
+                            <Text style={S.fieldLabel}>About Store / Bio</Text>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, height: 75, textAlignVertical: 'top', marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                style={[S.modalInput, { height: 70, textAlignVertical: 'top' }]}
                                 value={editAbout}
                                 onChangeText={setEditAbout}
-                                placeholder="Describe store goods, warranty, delivery..."
+                                placeholder="Describe store products, warranty, delivery…"
+                                placeholderTextColor={C.subtle}
                                 multiline
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Cover Banner Image</Text>
+                            <Text style={S.fieldLabel}>Cover Banner Image</Text>
                             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
                                 <TouchableOpacity
                                     onPress={() => handlePickImageForStore('banner')}
-                                    style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                                    style={S.uploadBtn}
                                 >
-                                    <Text style={{ fontSize: 11, fontWeight: '700', color: NAVY }}>Upload Banner</Text>
+                                    <Ionicons name="image-outline" size={14} color={C.dark} />
+                                    <Text style={S.uploadBtnTxt}>Upload Banner</Text>
                                 </TouchableOpacity>
                             </View>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 12, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editCoverImage}
                                 onChangeText={setEditCoverImage}
-                                placeholder="Or paste banner image URL..."
+                                placeholder="Or paste banner image URL…"
+                                placeholderTextColor={C.subtle}
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Logo</Text>
+                            <Text style={S.fieldLabel}>Store Logo</Text>
                             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
                                 <TouchableOpacity
                                     onPress={() => handlePickImageForStore('logo')}
-                                    style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                                    style={S.uploadBtn}
                                 >
-                                    <Text style={{ fontSize: 11, fontWeight: '700', color: NAVY }}>Upload Logo</Text>
+                                    <Ionicons name="image-outline" size={14} color={C.dark} />
+                                    <Text style={S.uploadBtnTxt}>Upload Logo</Text>
                                 </TouchableOpacity>
                             </View>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 12, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editLogoUrl}
                                 onChangeText={setEditLogoUrl}
-                                placeholder="Or paste logo image URL..."
+                                placeholder="Or paste logo image URL…"
+                                placeholderTextColor={C.subtle}
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Phone / WhatsApp</Text>
+                            <Text style={S.fieldLabel}>Phone / WhatsApp</Text>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editPhone}
                                 onChangeText={setEditPhone}
-                                placeholder="Contact phone..."
+                                placeholder="Contact telephone…"
+                                placeholderTextColor={C.subtle}
                                 keyboardType="phone-pad"
                             />
 
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Address</Text>
+                            <Text style={S.fieldLabel}>Physical Store Address</Text>
                             <TextInput
-                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 16, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                style={S.modalInput}
                                 value={editAddress}
                                 onChangeText={setEditAddress}
-                                placeholder="Physical location..."
+                                placeholder="Store location / city…"
+                                placeholderTextColor={C.subtle}
                             />
 
-                            {/* Verified Merchant Toggle (Admin Badge) */}
+                            {/* Switches */}
                             <TouchableOpacity
                                 onPress={() => setEditIsVerified(!editIsVerified)}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    padding: 12,
-                                    backgroundColor: editIsVerified ? '#DCFCE7' : '#F8FAFC',
-                                    borderRadius: 12,
-                                    borderWidth: 1,
-                                    borderColor: editIsVerified ? '#10B981' : '#E2E8F0',
-                                    marginBottom: 12
-                                }}
+                                style={[S.switchTile, editIsVerified && { backgroundColor: C.emeraldBg, borderColor: C.emeraldBorder }]}
                             >
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                                    <Ionicons name={editIsVerified ? "shield-checkmark" : "shield-outline"} size={20} color={editIsVerified ? "#16A34A" : "#64748B"} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Verified Merchant Badge</Text>
-                                        <Text style={{ fontSize: 11, color: '#64748B' }}>Grant official green verified checkmark across listings</Text>
-                                    </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.switchTileTitle}>Verified Merchant Badge</Text>
+                                    <Text style={S.switchTileSub}>Show official green checkmark on store and products</Text>
                                 </View>
-                                <Ionicons
-                                    name={editIsVerified ? "checkbox" : "square-outline"}
-                                    size={22}
-                                    color={editIsVerified ? "#16A34A" : "#94A3B8"}
-                                />
+                                <Ionicons name={editIsVerified ? "checkbox" : "square-outline"} size={22} color={editIsVerified ? C.emerald : C.subtle} />
                             </TouchableOpacity>
 
-                            {/* Recommended Toggle */}
                             <TouchableOpacity
                                 onPress={() => setEditIsRecommended(!editIsRecommended)}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    padding: 12,
-                                    backgroundColor: editIsRecommended ? '#FEF3C7' : '#F8FAFC',
-                                    borderRadius: 12,
-                                    borderWidth: 1,
-                                    borderColor: editIsRecommended ? GOLD : '#E2E8F0',
-                                    marginBottom: 16
-                                }}
+                                style={[S.switchTile, editIsRecommended && { backgroundColor: C.goldBg, borderColor: C.goldBorder }]}
                             >
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <Ionicons name={editIsRecommended ? "star" : "star-outline"} size={18} color={editIsRecommended ? GOLD : "#64748B"} />
-                                    <View>
-                                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Recommended Vendor</Text>
-                                        <Text style={{ fontSize: 11, color: '#64748B' }}>Feature this store prominently in customer directory</Text>
-                                    </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.switchTileTitle}>Feature on Homepage</Text>
+                                    <Text style={S.switchTileSub}>Display in Recommended Vendors slider</Text>
                                 </View>
-                                <Ionicons
-                                    name={editIsRecommended ? "checkbox" : "square-outline"}
-                                    size={22}
-                                    color={editIsRecommended ? GOLD : "#94A3B8"}
-                                />
+                                <Ionicons name={editIsRecommended ? "checkbox" : "square-outline"} size={22} color={editIsRecommended ? C.gold : C.subtle} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 onPress={handleSaveStoreProfile}
                                 disabled={savingStore}
-                                style={{
-                                    backgroundColor: NAVY,
-                                    padding: 14,
-                                    borderRadius: 14,
-                                    alignItems: 'center',
-                                    borderWidth: 1,
-                                    borderColor: GOLD
-                                }}
+                                style={S.saveModalBtn}
                             >
                                 {savingStore ? (
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
                                 ) : (
-                                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Save Store Changes</Text>
+                                    <Text style={S.saveModalBtnTxt}>Save Changes</Text>
                                 )}
                             </TouchableOpacity>
                         </ScrollView>
@@ -1041,44 +980,32 @@ export const AdminVendors = () => {
             </Modal>
 
             {/* Rejection Modal */}
-            <Modal
-                animationType="fade"
-                transparent={true}
-                visible={rejectionModalVisible}
-                onRequestClose={() => setRejectionModalVisible(false)}
-            >
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(14, 26, 46, 0.6)', padding: 20 }}>
-                    <View style={{ width: '100%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <Text style={{ fontSize: 16, fontWeight: '900', marginBottom: 6, color: NAVY }}>Reject Vendor Application</Text>
-                        <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>Provide a reason for rejection to notify the vendor.</Text>
-
+            <Modal visible={rejectionModalVisible} transparent animationType="fade" onRequestClose={() => setRejectionModalVisible(false)}>
+                <View style={S.dialogOverlay}>
+                    <View style={S.dialogBox}>
+                        <Text style={S.dialogTitle}>Reject Application</Text>
+                        <Text style={S.dialogSubtitle}>Provide a reason for the applicant:</Text>
                         <TextInput
-                            style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, height: 90, textAlignVertical: 'top', marginBottom: 16, backgroundColor: '#F8FAFC', fontSize: 13, color: NAVY }}
-                            placeholder="e.g. Identity documents not clear or expired..."
-                            placeholderTextColor="#94A3B8"
-                            multiline
                             value={rejectionReason}
                             onChangeText={setRejectionReason}
+                            placeholder="e.g. Incomplete business documents"
+                            placeholderTextColor={C.subtle}
+                            style={[S.modalInput, { marginTop: 10, height: 60, textAlignVertical: 'top' }]}
+                            multiline
                         />
-
-                        <View style={{ flexDirection: 'row', gap: 10 }}>
-                            <TouchableOpacity
-                                onPress={() => setRejectionModalVisible(false)}
-                                style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' }}
-                            >
-                                <Text style={{ color: '#64748B', fontWeight: '700' }}>Cancel</Text>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                            <TouchableOpacity onPress={() => setRejectionModalVisible(false)} style={S.dialogCancelBtn}>
+                                <Text style={S.dialogCancelTxt}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={confirmReject}
-                                style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#EF4444', alignItems: 'center' }}
-                            >
-                                <Text style={{ color: 'white', fontWeight: '800' }}>Confirm Rejection</Text>
+                            <TouchableOpacity onPress={confirmReject} style={[S.dialogConfirmBtn, { backgroundColor: C.rose }]}>
+                                <Text style={S.dialogConfirmTxt}>Confirm Reject</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
             </Modal>
 
+            {/* WhatsApp Integration Modal */}
             <WhatsAppActionModal
                 visible={whatsappVisible}
                 phone={whatsappPhone}
@@ -1089,3 +1016,600 @@ export const AdminVendors = () => {
         </View>
     );
 };
+
+// ─── Executive Stylesheet ──────────────────────────────────────────────────
+const S = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: C.canvas,
+    },
+    header: {
+        backgroundColor: C.cardBg,
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: C.border,
+    },
+    headerTopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: C.dark,
+        letterSpacing: -0.3,
+    },
+    headerSubtitle: {
+        fontSize: 11,
+        color: C.muted,
+        marginTop: 1,
+    },
+
+    // 4 KPI Summary Cards
+    kpiRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 10,
+    },
+    kpiCard: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: C.border,
+        paddingVertical: 6,
+        paddingHorizontal: 6,
+        alignItems: 'center',
+    },
+    kpiLbl: {
+        fontSize: 8.5,
+        fontWeight: '700',
+        color: C.muted,
+        textTransform: 'uppercase',
+    },
+    kpiVal: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: C.dark,
+        marginTop: 1,
+    },
+
+    // Search Bar
+    searchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 12.5,
+        color: C.dark,
+        marginLeft: 8,
+    },
+
+    // Filter Pills
+    filterScroll: {
+        gap: 6,
+        marginTop: 10,
+    },
+    filterPill: {
+        paddingHorizontal: 11,
+        paddingVertical: 5,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    filterPillActive: {
+        backgroundColor: C.dark,
+        borderColor: C.dark,
+    },
+    filterPillTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: C.muted,
+    },
+    filterPillTxtActive: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+    },
+
+    // List Content
+    listContent: {
+        padding: 12,
+        paddingBottom: 40,
+    },
+    storeCard: {
+        backgroundColor: C.cardBg,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    storeCardMainRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    cardLogoWrap: {
+        position: 'relative',
+        width: 44,
+        height: 44,
+        marginRight: 10,
+    },
+    cardLogoImg: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    cardVerifyDot: {
+        position: 'absolute',
+        top: -1,
+        right: -1,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: C.emerald,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF',
+    },
+    cardInfoCol: {
+        flex: 1,
+        minWidth: 0,
+    },
+    cardStoreTitle: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: C.dark,
+    },
+    microTag: {
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    microTagTxt: {
+        fontSize: 8.5,
+        fontWeight: '900',
+    },
+    cardTagline: {
+        fontSize: 10.5,
+        color: C.gold,
+        fontStyle: 'italic',
+        fontWeight: '600',
+        marginTop: 1,
+    },
+    cardCategory: {
+        fontSize: 10.5,
+        color: C.muted,
+        marginTop: 2,
+    },
+    statusPill: {
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 5,
+    },
+    statusPillTxt: {
+        fontSize: 8.5,
+        fontWeight: '900',
+    },
+
+    // Card Actions Dock
+    cardActionsDock: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: C.borderLight,
+    },
+    cardActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 5.5,
+        borderRadius: 7,
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    cardActionBtnTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: C.body,
+    },
+
+    // Detail View Styles
+    detailTopNav: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    backBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: C.cardBg,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    backBtnText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: C.dark,
+    },
+    editStoreTopBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: C.dark,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 8,
+    },
+    editStoreTopBtnText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+
+    // Store Hero Card
+    storeHeroCard: {
+        backgroundColor: C.cardBg,
+        borderRadius: 14,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: C.border,
+        marginBottom: 12,
+    },
+    heroBanner: {
+        height: 110,
+        backgroundColor: '#E2E8F0',
+        position: 'relative',
+    },
+    heroBannerImg: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    bannerBadges: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        flexDirection: 'row',
+        gap: 5,
+    },
+    pillBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    pillBadgeTxt: {
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    heroBody: {
+        padding: 14,
+        alignItems: 'center',
+    },
+    logoFrame: {
+        marginTop: -38,
+        marginBottom: 6,
+    },
+    logoImg: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 3,
+        borderColor: '#FFFFFF',
+    },
+    heroStoreName: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: C.dark,
+    },
+    heroTagline: {
+        fontSize: 11.5,
+        color: C.gold,
+        fontStyle: 'italic',
+        fontWeight: '600',
+        marginTop: 2,
+        textAlign: 'center',
+    },
+    heroCategory: {
+        fontSize: 11,
+        color: C.muted,
+        marginTop: 2,
+    },
+    heroTogglesRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 10,
+    },
+    heroToggleBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 7,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    heroToggleBtnTxt: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: C.body,
+    },
+
+    // Dock Card
+    dockCard: {
+        backgroundColor: C.cardBg,
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: C.border,
+        marginBottom: 10,
+    },
+    dockRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 8,
+    },
+    dockBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 7,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    dockBtnText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: C.dark,
+    },
+
+    // Sections
+    sectionCard: {
+        backgroundColor: C.cardBg,
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: C.border,
+        marginBottom: 10,
+    },
+    sectionHeading: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: C.dark,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+        marginBottom: 6,
+    },
+    sectionBodyText: {
+        fontSize: 12,
+        color: C.body,
+    },
+    infoItemRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 7,
+        borderBottomWidth: 1,
+        borderBottomColor: C.borderLight,
+    },
+    infoItemLbl: {
+        fontSize: 11,
+        color: C.muted,
+        fontWeight: '600',
+    },
+    infoItemVal: {
+        fontSize: 11.5,
+        color: C.dark,
+        fontWeight: '800',
+    },
+    mainBtn: {
+        paddingVertical: 10,
+        borderRadius: 9,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    mainBtnText: {
+        fontSize: 12,
+        fontWeight: '900',
+    },
+
+    // Modals
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalSheet: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 16,
+        maxHeight: '88%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: C.borderLight,
+    },
+    modalTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: C.dark,
+    },
+    fieldLabel: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: C.muted,
+        textTransform: 'uppercase',
+        marginBottom: 3,
+        marginTop: 6,
+    },
+    modalInput: {
+        borderWidth: 1,
+        borderColor: C.border,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        fontSize: 12,
+        color: C.dark,
+        backgroundColor: '#F8FAFC',
+    },
+    uploadBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 7,
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    uploadBtnTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: C.dark,
+    },
+    switchTile: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: C.border,
+        backgroundColor: '#F8FAFC',
+        marginTop: 8,
+    },
+    switchTileTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: C.dark,
+    },
+    switchTileSub: {
+        fontSize: 10,
+        color: C.muted,
+    },
+    saveModalBtn: {
+        backgroundColor: C.dark,
+        paddingVertical: 10,
+        borderRadius: 9,
+        alignItems: 'center',
+        marginTop: 14,
+    },
+    saveModalBtnTxt: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+
+    // Dialog
+    dialogOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+    },
+    dialogBox: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 16,
+        width: '100%',
+        maxWidth: 340,
+        borderWidth: 1,
+        borderColor: C.border,
+    },
+    dialogTitle: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: C.dark,
+    },
+    dialogSubtitle: {
+        fontSize: 11,
+        color: C.muted,
+        marginTop: 2,
+    },
+    dialogCancelBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: C.border,
+        alignItems: 'center',
+    },
+    dialogCancelTxt: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: C.body,
+    },
+    dialogConfirmBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    dialogConfirmTxt: {
+        fontSize: 11.5,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: '700',
+        color: C.muted,
+    },
+    emptyState: {
+        alignItems: 'center',
+        marginTop: 36,
+    },
+    emptyStateText: {
+        color: C.muted,
+        marginTop: 8,
+        fontWeight: '700',
+        fontSize: 12,
+    },
+});
