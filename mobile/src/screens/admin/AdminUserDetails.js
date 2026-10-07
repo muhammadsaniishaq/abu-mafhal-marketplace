@@ -41,6 +41,15 @@ const W = {
     textSubtle: '#94A3B8',
 };
 
+// ─── Amount Formatter ───────────────────────────────────────────────────────
+const fmtAmt = (val) => {
+    if (!val || isNaN(val)) return '₦0';
+    const num = Number(val);
+    if (num >= 1e6) return `₦${(num / 1e6).toFixed(1)}M`;
+    if (num >= 1e3) return `₦${(num / 1e3).toLocaleString('en-US', { maximumFractionDigits: 1 })}K`;
+    return `₦${num.toLocaleString('en-US')}`;
+};
+
 // ─── Tab Button Helper ───────────────────────────────────────────────────────
 const TabButton = ({ title, active, onPress, count, icon }) => (
     <TouchableOpacity
@@ -411,15 +420,15 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                         </TouchableOpacity>
                     </View>
 
-                    {/* Big Avatar & Identity Center */}
+                    {/* Avatar & Identity Center */}
                     <View style={styles.heroCentre}>
                         <View style={{ position: 'relative' }}>
                             <View style={[styles.heroAvatarRing, { borderColor: roleBorder }]}>
-                                <UserAvatar user={user} size={92} />
+                                <UserAvatar user={user} size={62} />
                             </View>
                             {user.is_verified && (
                                 <View style={styles.heroVerifyDot}>
-                                    <Ionicons name="checkmark-circle" size={26} color={W.sky} />
+                                    <Ionicons name="checkmark-circle" size={20} color={W.sky} />
                                 </View>
                             )}
                         </View>
@@ -922,26 +931,26 @@ const styles = StyleSheet.create({
     },
     heroHdr: {
         backgroundColor: W.cardBg,
-        paddingTop: 18,
-        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingHorizontal: 16,
         paddingBottom: 0,
         borderBottomWidth: 1,
         borderBottomColor: W.cardBorder,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
-            android: { elevation: 3 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6 },
+            android: { elevation: 2 }
         })
     },
     heroTopBar: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 16,
+        marginBottom: 10,
     },
     heroCircleBtn: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: W.cardBorder,
@@ -951,71 +960,71 @@ const styles = StyleSheet.create({
     heroRolePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 22,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 18,
         borderWidth: 1,
     },
     heroRolePillTxt: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '900',
-        letterSpacing: 0.5,
+        letterSpacing: 0.3,
     },
     heroCentre: {
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 12,
     },
     heroAvatarRing: {
-        borderRadius: 52,
-        borderWidth: 3,
-        padding: 4,
+        borderRadius: 36,
+        borderWidth: 2,
+        padding: 2,
     },
     heroVerifyDot: {
         position: 'absolute',
         top: -2,
         right: -2,
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
+        borderRadius: 12,
     },
     heroName: {
-        fontSize: 23,
+        fontSize: 18,
         fontWeight: '900',
         color: W.charcoal,
-        marginTop: 14,
-        letterSpacing: -0.4,
+        marginTop: 8,
+        letterSpacing: -0.3,
     },
     heroEmail: {
-        fontSize: 13,
+        fontSize: 12,
         color: W.textMuted,
-        marginTop: 3,
+        marginTop: 2,
         fontWeight: '500',
     },
     heroChipRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
-        marginTop: 12,
+        gap: 6,
+        marginTop: 8,
         justifyContent: 'center',
     },
     heroChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 11,
-        paddingVertical: 4.5,
-        borderRadius: 22,
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 16,
         borderWidth: 1,
     },
     heroChipTxt: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
     },
     heroStrip: {
         flexDirection: 'row',
         backgroundColor: '#FAF8F5',
-        marginHorizontal: -20,
-        paddingHorizontal: 20,
-        paddingVertical: 14,
+        marginHorizontal: -16,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         borderTopWidth: 1,
         borderTopColor: W.cardBorder,
     },
@@ -1023,58 +1032,58 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 9,
+        gap: 7,
     },
     heroStripIconBox: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         alignItems: 'center',
         justifyContent: 'center',
     },
     heroStripDiv: {
         width: 1,
         backgroundColor: W.cardBorder,
-        marginHorizontal: 4,
+        marginHorizontal: 3,
     },
     heroStripLbl: {
-        fontSize: 10,
+        fontSize: 9.5,
         color: W.textMuted,
         fontWeight: '800',
         textTransform: 'uppercase',
     },
     heroStripVal: {
-        fontSize: 15,
+        fontSize: 13.5,
         fontWeight: '900',
     },
     heroStripVal2: {
-        fontSize: 12.5,
+        fontSize: 11.5,
         fontWeight: '800',
         color: W.charcoal,
     },
     tabContainer: {
         flexDirection: 'row',
-        padding: 4,
+        padding: 3,
         backgroundColor: '#FFFFFF',
-        marginHorizontal: 16,
-        marginVertical: 14,
-        borderRadius: 16,
+        marginHorizontal: 14,
+        marginVertical: 10,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: W.cardBorder,
     },
     tabBtn: {
         flex: 1,
         flexDirection: 'row',
-        paddingVertical: 11,
+        paddingVertical: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 12,
+        borderRadius: 10,
     },
     tabBtnActive: {
         backgroundColor: W.canvas,
     },
     tabText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '700',
         color: W.textMuted,
     },
@@ -1083,16 +1092,16 @@ const styles = StyleSheet.create({
         fontWeight: '900',
     },
     scrollContent: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 14,
     },
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        padding: 18,
+        borderRadius: 16,
+        padding: 14,
         borderWidth: 1,
         borderColor: W.cardBorder,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5 },
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4 },
             android: { elevation: 2 }
         })
     },
@@ -1236,42 +1245,42 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 15,
-        borderRadius: 16,
+        paddingVertical: 11,
+        borderRadius: 12,
     },
     actionBtnText: {
         color: '#FFFFFF',
         fontWeight: '900',
-        fontSize: 14.5,
+        fontSize: 13.5,
     },
     balanceCard: {
         backgroundColor: '#FFFFFF',
-        padding: 24,
-        borderRadius: 22,
+        padding: 16,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: W.cardBorder,
         alignItems: 'center',
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 9 },
-            android: { elevation: 3 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6 },
+            android: { elevation: 2 }
         })
     },
     balanceLabel: {
         color: W.textMuted,
-        fontSize: 12.5,
+        fontSize: 11,
         fontWeight: '800',
         textTransform: 'uppercase',
-        marginBottom: 6,
+        marginBottom: 4,
     },
     balanceValue: {
         color: W.emerald,
-        fontSize: 38,
+        fontSize: 26,
         fontWeight: '900',
     },
     balanceActions: {
         flexDirection: 'row',
-        gap: 12,
-        marginTop: 22,
+        gap: 10,
+        marginTop: 14,
         width: '100%',
     },
     balanceBtn: {
@@ -1279,13 +1288,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 15,
-        borderRadius: 16,
+        paddingVertical: 11,
+        borderRadius: 12,
     },
     balanceBtnText: {
         color: '#FFFFFF',
         fontWeight: '900',
-        fontSize: 14,
+        fontSize: 13,
     },
     infoBox: {
         flexDirection: 'row',

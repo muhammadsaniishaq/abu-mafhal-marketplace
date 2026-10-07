@@ -509,7 +509,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 {/* Big Avatar */}
                 <View style={S.avContainer}>
                     <View style={[S.avRing, { borderColor: cfg.border }]}>
-                        <UserAvatar user={item} size={58} />
+                        <UserAvatar user={item} size={44} />
                     </View>
                     <View style={[
                         S.statusDot,
@@ -1403,49 +1403,49 @@ const S = StyleSheet.create({
         paddingHorizontal: 12,
     },
     headerTitle: {
-        fontSize: 21,
+        fontSize: 18,
         fontWeight: '900',
         color: W.charcoal,
-        letterSpacing: -0.4,
+        letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '600',
         color: W.textMuted,
-        marginTop: 2,
+        marginTop: 1,
     },
     headerActions: {
         flexDirection: 'row',
-        gap: 8,
+        gap: 6,
     },
     kpiScroll: {
-        gap: 10,
-        marginTop: 14,
-        paddingBottom: 4,
+        gap: 8,
+        marginTop: 10,
+        paddingBottom: 2,
     },
     kpiCard: {
-        borderRadius: 16,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        minWidth: 105,
+        borderRadius: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        minWidth: 88,
         borderWidth: 1,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4 },
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3 },
             android: { elevation: 1 }
         })
     },
     kpiCardTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginBottom: 3,
+        gap: 5,
+        marginBottom: 2,
     },
     kpiVal: {
-        fontSize: 16,
+        fontSize: 13.5,
         fontWeight: '900',
     },
     kpiLabel: {
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: '800',
         color: W.textMuted,
         textTransform: 'uppercase',
@@ -1453,8 +1453,8 @@ const S = StyleSheet.create({
     },
     searchContainer: {
         paddingHorizontal: 14,
-        marginTop: 12,
-        marginBottom: 6,
+        marginTop: 8,
+        marginBottom: 4,
     },
     searchBox: {
         flexDirection: 'row',
@@ -1462,17 +1462,17 @@ const S = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
         borderColor: W.cardBorder,
-        borderRadius: 16,
-        paddingHorizontal: 14,
-        paddingVertical: 11,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5 },
-            android: { elevation: 2 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.02, shadowRadius: 4 },
+            android: { elevation: 1 }
         })
     },
     searchInput: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
         color: W.charcoal,
     },
@@ -1483,26 +1483,26 @@ const S = StyleSheet.create({
     },
     filterScroll: {
         paddingHorizontal: 14,
-        paddingVertical: 8,
-        gap: 8,
+        paddingVertical: 6,
+        gap: 6,
     },
     pill: {
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: 22,
+        paddingHorizontal: 11,
+        paddingVertical: 5,
+        borderRadius: 16,
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
         borderColor: W.cardBorder,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
     },
     pillActive: {
         backgroundColor: W.charcoal,
         borderColor: W.charcoal,
     },
     pillText: {
-        fontSize: 12.5,
+        fontSize: 11.5,
         fontWeight: '700',
         color: W.textBody,
     },
@@ -1584,25 +1584,25 @@ const S = StyleSheet.create({
     },
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingVertical: 15,
-        paddingRight: 14,
+        borderRadius: 14,
+        paddingVertical: 9,
+        paddingRight: 10,
         paddingLeft: 0,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 7,
         borderWidth: 1,
         borderColor: W.cardBorder,
         overflow: 'hidden',
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7 },
-            android: { elevation: 2 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5 },
+            android: { elevation: 1 }
         })
     },
     cardAccentBar: {
-        width: 5,
+        width: 3.5,
         height: '100%',
-        marginRight: 12,
+        marginRight: 9,
     },
     cardBanned: {
         backgroundColor: W.crimsonBg,
@@ -1613,24 +1613,24 @@ const S = StyleSheet.create({
         backgroundColor: W.goldBg,
     },
     avContainer: {
-        width: 60,
-        height: 60,
-        marginRight: 12,
+        width: 46,
+        height: 46,
+        marginRight: 10,
         position: 'relative',
     },
     avRing: {
-        borderRadius: 30,
-        borderWidth: 2,
+        borderRadius: 23,
+        borderWidth: 1.5,
         padding: 1,
     },
     statusDot: {
         position: 'absolute',
         bottom: 0,
         right: 0,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        borderWidth: 2.5,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 2,
         borderColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1642,31 +1642,31 @@ const S = StyleSheet.create({
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 2,
+        marginBottom: 1,
     },
     userName: {
-        fontSize: 15.5,
+        fontSize: 14,
         fontWeight: '900',
         color: W.charcoal,
         letterSpacing: -0.2,
     },
     userEmail: {
-        fontSize: 11.5,
+        fontSize: 11,
         color: W.textMuted,
         fontWeight: '500',
-        marginBottom: 6,
+        marginBottom: 3,
     },
     tagRow: {
         flexDirection: 'row',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 6,
-        marginBottom: 5,
+        gap: 4,
+        marginBottom: 3,
     },
     chip: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 7,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
         borderWidth: 1,
         flexDirection: 'row',
         alignItems: 'center',
