@@ -493,7 +493,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
         }
     };
 
-    // ── User Card Component (Ultra-Sleek, Compact & Feature-Rich) ──────────
+    // ── User Card Component (Pristine, Clean & Structured) ───────────────
     const renderUserCard = ({ item }) => {
         const isSel = selIds.includes(item.id);
         const cfg = item.role_cfg;
@@ -517,33 +517,25 @@ export const AdminUsers = ({ navigation: propNav }) => {
                     isSel && S.cardSelected,
                 ]}
             >
-                {/* Accent glow bar */}
-                <View style={[S.cardAccentBar, { backgroundColor: cfg.color }]} />
-
                 {selMode && (
                     <Ionicons
                         name={isSel ? 'checkbox' : 'square-outline'}
                         size={18}
                         color={isSel ? W.gold : W.textSubtle}
-                        style={{ marginRight: 8, marginLeft: 2 }}
+                        style={{ marginRight: 8, marginLeft: 10 }}
                     />
                 )}
 
-                {/* Compact Avatar */}
-                <View style={S.avContainer}>
-                    <View style={[S.avRing, { borderColor: cfg.border }]}>
-                        <UserAvatar user={item} size={36} />
-                    </View>
+                {/* Avatar with Status Dot */}
+                <View style={[S.avContainer, { marginLeft: selMode ? 0 : 12 }]}>
+                    <UserAvatar user={item} size={40} />
                     <View style={[
                         S.statusDot,
                         item.is_banned ? { backgroundColor: W.crimson } :
                         item.is_restricted ? { backgroundColor: W.gold } :
                         item.is_online ? { backgroundColor: W.emerald } :
                         { backgroundColor: '#CBD5E1' }
-                    ]}>
-                        {item.is_banned && <Ionicons name="ban" size={6} color="#FFFFFF" />}
-                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={6} color="#FFFFFF" />}
-                    </View>
+                    ]} />
                 </View>
 
                 {/* Primary Information */}
@@ -555,62 +547,25 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         {item.is_verified && (
                             <Ionicons name="checkmark-circle" size={13} color={W.sky} style={{ marginLeft: 3 }} />
                         )}
-                        <View style={[S.chip, { backgroundColor: cfg.bg, borderColor: cfg.border, marginLeft: 4 }]}>
+                        <View style={[S.chip, { backgroundColor: cfg.bg, borderColor: cfg.border, marginLeft: 5 }]}>
                             <Text style={[S.chipTxt, { color: cfg.color }]}>{cfg.label}</Text>
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                         <Text style={S.userEmail} numberOfLines={1}>
-                            {item.phone || item.email || 'No contact'}
+                            {item.phone || item.email || 'No contact info'}
                         </Text>
                         <Text style={S.lastActiveText}>· {timeAgo(item.last_seen || item.created_at)}</Text>
                     </View>
                 </View>
 
-                {/* Right Interactive Quick Actions */}
-                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                {/* Right Balance & Chevron */}
+                <View style={{ alignItems: 'flex-end', justifyContent: 'center', paddingRight: 12 }}>
                     <Text style={[S.walletText, { color: bal > 0 ? W.emerald : W.textMuted }]}>
                         {fmtAmt(bal)}
                     </Text>
-
-                    {!selMode && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                            {/* Fast +1k credit button */}
-                            <TouchableOpacity
-                                onPress={() => quickCreditUser(item, 1000)}
-                                style={S.fastCreditBtn}
-                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                            >
-                                <Text style={S.fastCreditBtnText}>+1K</Text>
-                            </TouchableOpacity>
-
-                            {/* Direct WhatsApp button */}
-                            {item.phone ? (
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        setWhatsappPhone(item.phone);
-                                        setWhatsappUserId(item.id);
-                                        setWhatsappRecipientName(item.full_name || 'User');
-                                        setWhatsappVisible(true);
-                                    }}
-                                    style={S.quickActionMiniBtn}
-                                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                                >
-                                    <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
-                                </TouchableOpacity>
-                            ) : null}
-
-                            {/* More Options */}
-                            <TouchableOpacity
-                                onPress={() => openSheet(item)}
-                                style={S.quickActionMiniBtn}
-                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                            >
-                                <Ionicons name="ellipsis-vertical" size={13} color={W.charcoal} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                    <Ionicons name="chevron-forward" size={14} color={W.textSubtle} style={{ marginTop: 2 }} />
                 </View>
             </Pressable>
         );
@@ -1587,18 +1542,16 @@ const S = StyleSheet.create({
     },
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        paddingVertical: 9,
-        paddingRight: 10,
-        paddingLeft: 0,
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 7,
         borderWidth: 1,
         borderColor: W.cardBorder,
-        overflow: 'hidden',
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5 },
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3 },
             android: { elevation: 1 }
         })
     },
@@ -1616,27 +1569,23 @@ const S = StyleSheet.create({
         backgroundColor: W.goldBg,
     },
     avContainer: {
-        width: 46,
-        height: 46,
+        width: 42,
+        height: 42,
         marginRight: 10,
         position: 'relative',
     },
     avRing: {
-        borderRadius: 23,
-        borderWidth: 1.5,
-        padding: 1,
+        borderRadius: 21,
     },
     statusDot: {
         position: 'absolute',
         bottom: 0,
         right: 0,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
         borderWidth: 2,
         borderColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     infoContainer: {
         flex: 1,
