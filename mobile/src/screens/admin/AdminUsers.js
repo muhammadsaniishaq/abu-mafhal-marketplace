@@ -14,50 +14,50 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminUserDetails } from './AdminUserDetails';
 import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
 
-// ─── Theme Tokens (Pristine Luxury Light) ────────────────────────────────────
-const T = {
-    bgCanvas: '#F8FAFC',
-    cardBg: '#FFFFFF',
-    cardBorder: '#E2E8F0',
-    cardBorderHover: '#CBD5E1',
-    gold: '#D97706',
+// ─── Warm Luxury Palette (Neither Stark White Nor Dark) ─────────────────────
+const W = {
+    canvas: '#F5F2EB',          // Warm alabaster cream canvas
+    canvasAlt: '#EFEAE1',       // Warm section divider tone
+    cardBg: '#FFFFFF',          // Crisp warm porcelain card
+    cardBorder: '#E6E0D5',      // Warm champagne/stone border
+    cardBorderActive: '#D97706',
+    gold: '#B45309',            // Rich metallic bronze-gold
+    goldLight: '#D97706',
     goldBg: '#FEF3C7',
     goldBorder: '#FDE68A',
-    emerald: '#059669',
+    emerald: '#047857',
     emeraldBg: '#ECFDF5',
     emeraldBorder: '#A7F3D0',
-    crimson: '#DC2626',
-    crimsonBg: '#FEF2F2',
-    crimsonBorder: '#FECACA',
+    crimson: '#BE123C',
+    crimsonBg: '#FFF1F2',
+    crimsonBorder: '#FECDD3',
     sky: '#0284C7',
     skyBg: '#F0F9FF',
     skyBorder: '#BAE6FD',
-    purple: '#7C3AED',
+    purple: '#6D28D9',
     purpleBg: '#F5F3FF',
     purpleBorder: '#DDD6FE',
-    amber: '#D97706',
-    amberBg: '#FFFBEB',
-    textHeading: '#0F172A',
+    charcoal: '#0F172A',        // Deep luxury typography
     textBody: '#334155',
     textMuted: '#64748B',
     textSubtle: '#94A3B8',
 };
 
-// ─── Role Configuration ──────────────────────────────────────────────────────
+// ─── Roles Configuration ─────────────────────────────────────────────────────
 const ROLES = {
-    admin: { label: 'Admin', color: T.purple, icon: 'shield-checkmark', bg: T.purpleBg, border: T.purpleBorder },
-    vendor: { label: 'Vendor', color: '#EA580C', icon: 'storefront', bg: '#FFF7ED', border: '#FFEDD5' },
-    driver: { label: 'Driver', color: T.sky, icon: 'bicycle', bg: T.skyBg, border: T.skyBorder },
-    customer: { label: 'Customer', color: T.emerald, icon: 'person', bg: T.emeraldBg, border: T.emeraldBorder },
+    admin: { label: 'Administrator', color: W.purple, icon: 'shield-checkmark', bg: W.purpleBg, border: W.purpleBorder },
+    vendor: { label: 'Merchant Vendor', color: '#C2410C', icon: 'storefront', bg: '#FFF7ED', border: '#FFEDD5' },
+    driver: { label: 'Fleet Courier', color: W.sky, icon: 'bicycle', bg: W.skyBg, border: W.skyBorder },
+    customer: { label: 'Shopper Client', color: W.emerald, icon: 'person', bg: W.emeraldBg, border: W.emeraldBorder },
 };
 const getRoleCfg = (role) => ROLES[role] || ROLES.customer;
 
 // ─── Spending Tiers ──────────────────────────────────────────────────────────
 const TIERS = [
-    { min: 1000000, label: '💎 Diamond VIP', color: T.purple, bg: T.purpleBg, border: T.purpleBorder },
-    { min: 250000, label: '🥇 Gold Tier', color: T.gold, bg: T.goldBg, border: T.goldBorder },
-    { min: 50000, label: '🥈 Silver Tier', color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' },
-    { min: 0, label: '🥉 Bronze Tier', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+    { min: 1000000, label: '💎 Diamond VIP', color: W.purple, bg: W.purpleBg, border: W.purpleBorder },
+    { min: 250000, label: '🥇 Gold Elite', color: W.gold, bg: W.goldBg, border: W.goldBorder },
+    { min: 50000, label: '🥈 Silver Member', color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' },
+    { min: 0, label: '🥉 Starter', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
 ];
 const getTier = (spend = 0) => TIERS.find(t => spend >= t.min) || TIERS[3];
 
@@ -79,13 +79,13 @@ const timeAgo = (dateStr) => {
 };
 
 const PRESET_TAGS = [
-    { id: 'vip', label: '⭐ VIP Client', color: T.gold, bg: T.goldBg, border: T.goldBorder },
-    { id: 'wholesale', label: '📦 Wholesale', color: T.sky, bg: T.skyBg, border: T.skyBorder },
-    { id: 'loyal', label: '❤️ High Loyalty', color: '#E11D48', bg: '#FFF1F2', border: '#FECDD3' },
-    { id: 'risk', label: '⚠️ Suspicious', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
-    { id: 'fraud', label: '🚨 Fraud Alert', color: T.crimson, bg: T.crimsonBg, border: T.crimsonBorder },
-    { id: 'partner', label: '🤝 Strategic Partner', color: T.emerald, bg: T.emeraldBg, border: T.emeraldBorder },
-    { id: 'new', label: '🆕 Fresh Account', color: T.sky, bg: T.skyBg, border: T.skyBorder },
+    { id: 'vip', label: '⭐ VIP Client', color: W.gold, bg: W.goldBg, border: W.goldBorder },
+    { id: 'wholesale', label: '📦 Wholesale Buyer', color: W.sky, bg: W.skyBg, border: W.skyBorder },
+    { id: 'loyal', label: '❤️ High Loyalty', color: '#BE123C', bg: '#FFF1F2', border: '#FECDD3' },
+    { id: 'risk', label: '⚠️ Suspicious Activity', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+    { id: 'fraud', label: '🚨 Fraud Alert', color: W.crimson, bg: W.crimsonBg, border: W.crimsonBorder },
+    { id: 'partner', label: '🤝 Strategic Partner', color: W.emerald, bg: W.emeraldBg, border: W.emeraldBorder },
+    { id: 'priority', label: '⚡ Priority Support', color: W.purple, bg: W.purpleBg, border: W.purpleBorder },
 ];
 
 export const AdminUsers = ({ navigation: propNav }) => {
@@ -149,7 +149,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
     const [selMode, setSelMode] = React.useState(false);
     const [selIds, setSelIds] = React.useState([]);
 
-    const sheetY = React.useRef(new Animated.Value(700)).current;
+    const sheetY = React.useRef(new Animated.Value(750)).current;
 
     const openSheet = (user) => {
         setActUser(user);
@@ -158,7 +158,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
     };
 
     const closeSheet = (cb) => {
-        Animated.timing(sheetY, { toValue: 700, duration: 220, useNativeDriver: true, easing: Easing.in(Easing.ease) }).start(() => {
+        Animated.timing(sheetY, { toValue: 750, duration: 220, useNativeDriver: true, easing: Easing.in(Easing.ease) }).start(() => {
             setSheetVis(false);
             if (cb) cb();
         });
@@ -468,7 +468,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
         }
     };
 
-    // ── User Card Component (Light Theme, Smooth) ───────────────────────────
+    // ── User Card Component (Bigger, Bolder, Spacious) ──────────────────────
     const renderUserCard = ({ item }) => {
         const isSel = selIds.includes(item.id);
         const cfg = item.role_cfg;
@@ -489,37 +489,37 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 }}
                 style={({ pressed }) => [
                     S.card,
-                    pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                    pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] },
                     item.is_banned && S.cardBanned,
                     isSel && S.cardSelected,
                 ]}
             >
-                {/* Left accent color strip */}
+                {/* Accent glow bar */}
                 <View style={[S.cardAccentBar, { backgroundColor: cfg.color }]} />
 
                 {selMode && (
                     <Ionicons
                         name={isSel ? 'checkbox' : 'square-outline'}
-                        size={22}
-                        color={isSel ? T.gold : T.textSubtle}
-                        style={{ marginRight: 10, marginLeft: 6 }}
+                        size={24}
+                        color={isSel ? W.gold : W.textSubtle}
+                        style={{ marginRight: 12, marginLeft: 6 }}
                     />
                 )}
 
-                {/* Avatar with status indicator */}
+                {/* Big Avatar */}
                 <View style={S.avContainer}>
-                    <View style={[S.avRing, { borderColor: `${cfg.color}35` }]}>
-                        <UserAvatar user={item} size={48} />
+                    <View style={[S.avRing, { borderColor: cfg.border }]}>
+                        <UserAvatar user={item} size={58} />
                     </View>
                     <View style={[
                         S.statusDot,
-                        item.is_banned ? { backgroundColor: T.crimson } :
-                        item.is_restricted ? { backgroundColor: T.amber } :
-                        item.is_online ? { backgroundColor: T.emerald } :
+                        item.is_banned ? { backgroundColor: W.crimson } :
+                        item.is_restricted ? { backgroundColor: W.gold } :
+                        item.is_online ? { backgroundColor: W.emerald } :
                         { backgroundColor: '#CBD5E1' }
                     ]}>
-                        {item.is_banned && <Ionicons name="ban" size={8} color="#FFFFFF" />}
-                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={8} color="#FFFFFF" />}
+                        {item.is_banned && <Ionicons name="ban" size={9} color="#FFFFFF" />}
+                        {item.is_restricted && !item.is_banned && <Ionicons name="lock-closed" size={9} color="#FFFFFF" />}
                     </View>
                 </View>
 
@@ -530,7 +530,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                             {item.full_name || 'Anonymous User'}
                         </Text>
                         {item.is_verified && (
-                            <Ionicons name="checkmark-circle" size={15} color="#0284C7" style={{ marginLeft: 4 }} />
+                            <Ionicons name="checkmark-circle" size={17} color={W.sky} style={{ marginLeft: 5 }} />
                         )}
                     </View>
 
@@ -541,7 +541,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                     {/* Role & Tier Tags */}
                     <View style={S.tagRow}>
                         <View style={[S.chip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-                            <Ionicons name={cfg.icon} size={9} color={cfg.color} style={{ marginRight: 3 }} />
+                            <Ionicons name={cfg.icon} size={11} color={cfg.color} style={{ marginRight: 4 }} />
                             <Text style={[S.chipTxt, { color: cfg.color }]}>{cfg.label}</Text>
                         </View>
 
@@ -556,18 +556,18 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         ))}
 
                         {item.admin_note ? (
-                            <Ionicons name="document-text" size={13} color={T.gold} style={{ marginLeft: 2 }} />
+                            <Ionicons name="document-text" size={15} color={W.gold} style={{ marginLeft: 3 }} />
                         ) : null}
                     </View>
 
-                    {/* Financial & Time Strip */}
+                    {/* Big Financial & Time Strip */}
                     <View style={S.bottomStrip}>
                         <View style={[
                             S.walletPill,
-                            bal > 0 ? { backgroundColor: T.emeraldBg, borderColor: T.emeraldBorder } : { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }
+                            bal > 0 ? { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder } : { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }
                         ]}>
-                            <Ionicons name="wallet-outline" size={11} color={bal > 0 ? T.emerald : T.textMuted} />
-                            <Text style={[S.walletText, { color: bal > 0 ? T.emerald : T.textMuted }]}>
+                            <Ionicons name="wallet-outline" size={13} color={bal > 0 ? W.emerald : W.textMuted} />
+                            <Text style={[S.walletText, { color: bal > 0 ? W.emerald : W.textMuted }]}>
                                 {fmtAmt(bal)}
                             </Text>
                             {pend > 0 && <Text style={S.walletPending}>+{fmtAmt(pend)}</Text>}
@@ -581,15 +581,15 @@ export const AdminUsers = ({ navigation: propNav }) => {
                     {/* Driver details if role is driver */}
                     {item.role === 'driver' && item.driver_info && (
                         <View style={S.driverStrip}>
-                            <Ionicons name="bicycle" size={11} color={T.sky} />
+                            <Ionicons name="bicycle" size={13} color={W.sky} />
                             <Text style={S.driverStripText} numberOfLines={1}>
                                 {item.driver_info.vehicle_type || 'Vehicle'} · {item.driver_info.plate_number || 'No Plate'}
                             </Text>
                             <View style={[
                                 S.driverStatusBadge,
-                                { backgroundColor: item.driver_info.status === 'active' ? T.emeraldBg : '#F1F5F9' }
+                                { backgroundColor: item.driver_info.status === 'active' ? W.emeraldBg : '#F1F5F9' }
                             ]}>
-                                <Text style={{ fontSize: 8, fontWeight: '800', color: item.driver_info.status === 'active' ? T.emerald : T.textMuted }}>
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: item.driver_info.status === 'active' ? W.emerald : W.textMuted }}>
                                     {(item.driver_info.status || 'OFFLINE').toUpperCase()}
                                 </Text>
                             </View>
@@ -603,9 +603,9 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         <TouchableOpacity
                             onPress={() => openSheet(item)}
                             style={S.quickActionBtn}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                         >
-                            <Ionicons name="ellipsis-vertical" size={16} color={T.textMuted} />
+                            <Ionicons name="ellipsis-vertical" size={18} color={W.charcoal} />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -615,10 +615,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
 
     return (
         <View style={S.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <StatusBar barStyle="dark-content" backgroundColor={W.canvas} />
 
-            {/* ── CRISP LUXURY LIGHT HEADER ───────────────────────────────── */}
-            <View style={[S.header, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
+            {/* ── WARM LUXURY HEADER ───────────────────────────────────────── */}
+            <View style={[S.header, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
                 <View style={S.headerTopRow}>
                     <TouchableOpacity
                         onPress={() => {
@@ -631,7 +631,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         }}
                         style={S.headerIconBtn}
                     >
-                        <Ionicons name={selMode ? 'close' : 'arrow-back'} size={20} color={T.textHeading} />
+                        <Ionicons name={selMode ? 'close' : 'arrow-back'} size={22} color={W.charcoal} />
                     </TouchableOpacity>
 
                     <View style={S.headerTitleBox}>
@@ -647,10 +647,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         <View style={S.headerActions}>
                             <TouchableOpacity
                                 onPress={() => setBcastVis(true)}
-                                style={S.headerIconBtn}
+                                style={[S.headerIconBtn, { backgroundColor: W.goldBg, borderColor: W.goldBorder }]}
                                 title="Broadcast"
                             >
-                                <Ionicons name="megaphone" size={17} color={T.gold} />
+                                <Ionicons name="megaphone" size={19} color={W.gold} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -660,58 +660,58 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                 }}
                                 style={S.headerIconBtn}
                             >
-                                <Ionicons name="share-outline" size={17} color={T.textBody} />
+                                <Ionicons name="share-outline" size={19} color={W.charcoal} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 onPress={() => setSelMode(true)}
                                 style={S.headerIconBtn}
                             >
-                                <Ionicons name="checkbox-outline" size={17} color={T.textBody} />
+                                <Ionicons name="checkbox-outline" size={19} color={W.charcoal} />
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={S.headerActions}>
                             <TouchableOpacity
                                 onPress={() => handleBulk('verify')}
-                                style={[S.headerIconBtn, { backgroundColor: T.emeraldBg, borderColor: T.emeraldBorder }]}
+                                style={[S.headerIconBtn, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}
                             >
-                                <Ionicons name="checkmark-done" size={17} color={T.emerald} />
+                                <Ionicons name="checkmark-done" size={19} color={W.emerald} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => handleBulk('ban')}
-                                style={[S.headerIconBtn, { backgroundColor: T.crimsonBg, borderColor: T.crimsonBorder }]}
+                                style={[S.headerIconBtn, { backgroundColor: W.crimsonBg, borderColor: W.crimsonBorder }]}
                             >
-                                <Ionicons name="ban" size={17} color={T.crimson} />
+                                <Ionicons name="ban" size={19} color={W.crimson} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => handleBulk('unban')}
-                                style={[S.headerIconBtn, { backgroundColor: T.skyBg, borderColor: T.skyBorder }]}
+                                style={[S.headerIconBtn, { backgroundColor: W.skyBg, borderColor: W.skyBorder }]}
                             >
-                                <Ionicons name="shield-checkmark" size={17} color={T.sky} />
+                                <Ionicons name="shield-checkmark" size={19} color={W.sky} />
                             </TouchableOpacity>
                         </View>
                     )}
                 </View>
 
-                {/* ── KPI METRICS STRIP (LIGHT) ────────────────────────────── */}
+                {/* ── BIGGER KPI METRICS CARDS ─────────────────────────────── */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={S.kpiScroll}
                 >
                     {[
-                        { label: 'Total Users', val: stats.total, icon: 'people', color: T.textHeading, bg: '#F1F5F9', border: '#E2E8F0' },
-                        { label: 'Vendors', val: stats.vendors, icon: 'storefront', color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5' },
-                        { label: 'Drivers', val: stats.drivers, icon: 'bicycle', color: T.sky, bg: T.skyBg, border: T.skyBorder },
-                        { label: 'Customers', val: stats.customers, icon: 'person', color: T.emerald, bg: T.emeraldBg, border: T.emeraldBorder },
-                        { label: 'Total Wallet', val: fmtAmt(stats.totalBal), icon: 'wallet', color: T.gold, bg: T.goldBg, border: T.goldBorder },
-                        { label: 'Verified', val: stats.verified, icon: 'checkmark-circle', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' },
-                        { label: 'Suspended', val: stats.banned, icon: 'ban', color: T.crimson, bg: T.crimsonBg, border: T.crimsonBorder },
+                        { label: 'Total Users', val: stats.total, icon: 'people', color: W.charcoal, bg: '#FFFFFF', border: W.cardBorder },
+                        { label: 'Vendors', val: stats.vendors, icon: 'storefront', color: '#C2410C', bg: '#FFF7ED', border: '#FFEDD5' },
+                        { label: 'Drivers', val: stats.drivers, icon: 'bicycle', color: W.sky, bg: W.skyBg, border: W.skyBorder },
+                        { label: 'Customers', val: stats.customers, icon: 'person', color: W.emerald, bg: W.emeraldBg, border: W.emeraldBorder },
+                        { label: 'Total Float', val: fmtAmt(stats.totalBal), icon: 'wallet', color: W.gold, bg: W.goldBg, border: W.goldBorder },
+                        { label: 'Verified', val: stats.verified, icon: 'checkmark-circle', color: W.sky, bg: W.skyBg, border: W.skyBorder },
+                        { label: 'Suspended', val: stats.banned, icon: 'ban', color: W.crimson, bg: W.crimsonBg, border: W.crimsonBorder },
                     ].map((k, i) => (
                         <View key={i} style={[S.kpiCard, { backgroundColor: k.bg, borderColor: k.border }]}>
                             <View style={S.kpiCardTop}>
-                                <Ionicons name={k.icon} size={12} color={k.color} />
+                                <Ionicons name={k.icon} size={15} color={k.color} />
                                 <Text style={[S.kpiVal, { color: k.color }]}>{k.val}</Text>
                             </View>
                             <Text style={S.kpiLabel}>{k.label}</Text>
@@ -720,26 +720,26 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 </ScrollView>
             </View>
 
-            {/* ── SEARCH & FILTER CONTROLS ─────────────────────────────────── */}
+            {/* ── BIG SEARCH & FILTER CONTROLS ─────────────────────────────── */}
             <View style={S.searchContainer}>
                 <View style={S.searchBox}>
-                    <Ionicons name="search" size={16} color={T.gold} style={{ marginRight: 8 }} />
+                    <Ionicons name="search" size={19} color={W.gold} style={{ marginRight: 10 }} />
                     <TextInput
                         placeholder="Search name, email, phone, role…"
-                        placeholderTextColor={T.textSubtle}
+                        placeholderTextColor={W.textSubtle}
                         value={search}
                         onChangeText={setSearch}
                         style={S.searchInput}
                     />
                     {search.length > 0 && (
                         <TouchableOpacity onPress={() => setSearch('')}>
-                            <Ionicons name="close-circle" size={18} color={T.textSubtle} />
+                            <Ionicons name="close-circle" size={20} color={W.textSubtle} />
                         </TouchableOpacity>
                     )}
                 </View>
             </View>
 
-            {/* ── HORIZONTAL ROLE PILLS ────────────────────────────────────── */}
+            {/* ── BIGGER FILTER PILLS ──────────────────────────────────────── */}
             <View style={S.filterBar}>
                 <ScrollView
                     horizontal
@@ -787,7 +787,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 <View style={S.sortTotal}>
                     <View style={S.indicatorDot} />
                     <Text style={S.sortTotalText}>
-                        {sorted.length} <Text style={{ color: T.textMuted }}>users</Text>
+                        {sorted.length} <Text style={{ color: W.textMuted }}>users found</Text>
                     </Text>
                 </View>
 
@@ -806,7 +806,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                 onPress={() => setSortBy(s.key)}
                                 style={[S.sortChip, active && S.sortChipActive]}
                             >
-                                <Ionicons name={s.icon} size={11} color={active ? T.gold : T.textMuted} />
+                                <Ionicons name={s.icon} size={13} color={active ? W.gold : W.textMuted} />
                                 <Text style={[S.sortChipText, active && S.sortChipTextActive]}>{s.label}</Text>
                             </TouchableOpacity>
                         );
@@ -817,8 +817,8 @@ export const AdminUsers = ({ navigation: propNav }) => {
             {/* ── USER LIST ────────────────────────────────────────────────── */}
             {loading ? (
                 <View style={S.loadingContainer}>
-                    <ActivityIndicator size="large" color={T.gold} />
-                    <Text style={S.loadingText}>Synchronizing user ledger…</Text>
+                    <ActivityIndicator size="large" color={W.gold} />
+                    <Text style={S.loadingText}>Synchronizing user accounts…</Text>
                 </View>
             ) : (
                 <FlatList
@@ -833,13 +833,13 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                 setRefreshing(true);
                                 loadData();
                             }}
-                            tintColor={T.gold}
-                            colors={[T.gold]}
+                            tintColor={W.gold}
+                            colors={[W.gold]}
                         />
                     }
                     ListEmptyComponent={
                         <View style={S.emptyContainer}>
-                            <Ionicons name="people-outline" size={54} color="#CBD5E1" />
+                            <Ionicons name="people-outline" size={60} color="#CBD5E1" />
                             <Text style={S.emptyTitle}>No matching accounts</Text>
                             <Text style={S.emptySubtitle}>Try adjusting your search query or role filter.</Text>
                         </View>
@@ -847,7 +847,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 />
             )}
 
-            {/* ── BOTTOM ACTION SHEET (CLEAN LUXURY LIGHT) ─────────────────── */}
+            {/* ── BOTTOM ACTION SHEET (WARM LUXURY, SPACIOUS) ──────────────── */}
             <Modal
                 visible={sheetVis}
                 transparent
@@ -866,18 +866,18 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         <>
                             {/* User Header in Sheet */}
                             <View style={S.sheetUserHeader}>
-                                <UserAvatar user={actUser} size={48} />
-                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                <UserAvatar user={actUser} size={54} />
+                                <View style={{ flex: 1, marginLeft: 14 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Text style={S.sheetUserName} numberOfLines={1}>
                                             {actUser.full_name || 'Anonymous User'}
                                         </Text>
                                         {actUser.is_verified && (
-                                            <Ionicons name="checkmark-circle" size={15} color="#0284C7" style={{ marginLeft: 4 }} />
+                                            <Ionicons name="checkmark-circle" size={17} color={W.sky} style={{ marginLeft: 5 }} />
                                         )}
                                     </View>
                                     <Text style={S.sheetUserEmail} numberOfLines={1}>{actUser.email || actUser.phone}</Text>
-                                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 5 }}>
                                         <View style={[S.chip, { backgroundColor: actUser.role_cfg.bg, borderColor: actUser.role_cfg.border }]}>
                                             <Text style={[S.chipTxt, { color: actUser.role_cfg.color }]}>{actUser.role_cfg.label}</Text>
                                         </View>
@@ -888,20 +888,20 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                 </View>
 
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={{ fontSize: 9, color: T.textMuted, textTransform: 'uppercase', fontWeight: '700' }}>Balance</Text>
-                                    <Text style={{ fontSize: 17, fontWeight: '900', color: T.emerald }}>{fmtAmt(actUser.wallet?.balance || 0)}</Text>
+                                    <Text style={{ fontSize: 10, color: W.textMuted, textTransform: 'uppercase', fontWeight: '800' }}>Balance</Text>
+                                    <Text style={{ fontSize: 19, fontWeight: '900', color: W.emerald }}>{fmtAmt(actUser.wallet?.balance || 0)}</Text>
                                 </View>
                             </View>
 
                             {/* Internal Note snippet */}
                             {actUser.admin_note ? (
                                 <View style={S.sheetNoteCard}>
-                                    <Ionicons name="document-text" size={14} color={T.gold} />
+                                    <Ionicons name="document-text" size={16} color={W.gold} />
                                     <Text style={S.sheetNoteText} numberOfLines={2}>{actUser.admin_note}</Text>
                                 </View>
                             ) : null}
 
-                            {/* Quick Action Grid */}
+                            {/* Quick Action Grid (Bigger Touch Targets) */}
                             <Text style={S.sheetSectionTitle}>Management Controls</Text>
                             <ScrollView
                                 horizontal
@@ -922,7 +922,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                         style={S.sheetActionItem}
                                     >
                                         <View style={[S.sheetActionIcon, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
-                                            <Ionicons name="logo-whatsapp" size={20} color="#16A34A" />
+                                            <Ionicons name="logo-whatsapp" size={24} color="#16A34A" />
                                         </View>
                                         <Text style={[S.sheetActionLabel, { color: '#16A34A' }]}>WhatsApp</Text>
                                     </TouchableOpacity>
@@ -936,10 +936,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                         }}
                                         style={S.sheetActionItem}
                                     >
-                                        <View style={[S.sheetActionIcon, { backgroundColor: T.skyBg, borderColor: T.skyBorder }]}>
-                                            <Ionicons name="call" size={20} color={T.sky} />
+                                        <View style={[S.sheetActionIcon, { backgroundColor: W.skyBg, borderColor: W.skyBorder }]}>
+                                            <Ionicons name="call" size={24} color={W.sky} />
                                         </View>
-                                        <Text style={[S.sheetActionLabel, { color: T.sky }]}>Direct Call</Text>
+                                        <Text style={[S.sheetActionLabel, { color: W.sky }]}>Direct Call</Text>
                                     </TouchableOpacity>
                                 ) : null}
 
@@ -950,10 +950,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: T.goldBg, borderColor: T.goldBorder }]}>
-                                        <Ionicons name="paper-plane" size={20} color={T.gold} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: W.goldBg, borderColor: W.goldBorder }]}>
+                                        <Ionicons name="paper-plane" size={24} color={W.gold} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: T.gold }]}>Direct Alert</Text>
+                                    <Text style={[S.sheetActionLabel, { color: W.gold }]}>Direct Alert</Text>
                                 </TouchableOpacity>
 
                                 {/* Full Profile */}
@@ -966,10 +966,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: T.purpleBg, borderColor: T.purpleBorder }]}>
-                                        <Ionicons name="person" size={20} color={T.purple} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: W.purpleBg, borderColor: W.purpleBorder }]}>
+                                        <Ionicons name="person" size={24} color={W.purple} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: T.purple }]}>Full Profile</Text>
+                                    <Text style={[S.sheetActionLabel, { color: W.purple }]}>Full Profile</Text>
                                 </TouchableOpacity>
 
                                 {/* Wallet Adjustment */}
@@ -979,10 +979,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: T.emeraldBg, borderColor: T.emeraldBorder }]}>
-                                        <Ionicons name="wallet" size={20} color={T.emerald} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}>
+                                        <Ionicons name="wallet" size={24} color={W.emerald} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: T.emerald }]}>Wallet Fund</Text>
+                                    <Text style={[S.sheetActionLabel, { color: W.emerald }]}>Wallet Fund</Text>
                                 </TouchableOpacity>
 
                                 {/* Change Role */}
@@ -993,9 +993,9 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     style={S.sheetActionItem}
                                 >
                                     <View style={[S.sheetActionIcon, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
-                                        <Ionicons name="swap-horizontal" size={20} color="#EA580C" />
+                                        <Ionicons name="swap-horizontal" size={24} color="#C2410C" />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: '#EA580C' }]}>Switch Role</Text>
+                                    <Text style={[S.sheetActionLabel, { color: '#C2410C' }]}>Switch Role</Text>
                                 </TouchableOpacity>
 
                                 {/* Verify Toggle */}
@@ -1005,10 +1005,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: actUser.is_verified ? '#F1F5F9' : T.emeraldBg, borderColor: actUser.is_verified ? '#E2E8F0' : T.emeraldBorder }]}>
-                                        <Ionicons name={actUser.is_verified ? 'close-circle' : 'checkmark-circle'} size={20} color={actUser.is_verified ? T.textMuted : T.emerald} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: actUser.is_verified ? '#F1F5F9' : W.emeraldBg, borderColor: actUser.is_verified ? W.cardBorder : W.emeraldBorder }]}>
+                                        <Ionicons name={actUser.is_verified ? 'close-circle' : 'checkmark-circle'} size={24} color={actUser.is_verified ? W.textMuted : W.emerald} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: actUser.is_verified ? T.textMuted : T.emerald }]}>
+                                    <Text style={[S.sheetActionLabel, { color: actUser.is_verified ? W.textMuted : W.emerald }]}>
                                         {actUser.is_verified ? 'Revoke KYC' : 'Verify KYC'}
                                     </Text>
                                 </TouchableOpacity>
@@ -1020,10 +1020,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: T.crimsonBg, borderColor: T.crimsonBorder }]}>
-                                        <Ionicons name={actUser.is_banned ? 'shield-checkmark' : 'ban'} size={20} color={T.crimson} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: W.crimsonBg, borderColor: W.crimsonBorder }]}>
+                                        <Ionicons name={actUser.is_banned ? 'shield-checkmark' : 'ban'} size={24} color={W.crimson} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: T.crimson }]}>
+                                    <Text style={[S.sheetActionLabel, { color: W.crimson }]}>
                                         {actUser.is_banned ? 'Restore User' : 'Suspend User'}
                                     </Text>
                                 </TouchableOpacity>
@@ -1036,10 +1036,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                         }}
                                         style={S.sheetActionItem}
                                     >
-                                        <View style={[S.sheetActionIcon, { backgroundColor: T.skyBg, borderColor: T.skyBorder }]}>
-                                            <Ionicons name="bicycle" size={20} color={T.sky} />
+                                        <View style={[S.sheetActionIcon, { backgroundColor: W.skyBg, borderColor: W.skyBorder }]}>
+                                            <Ionicons name="bicycle" size={24} color={W.sky} />
                                         </View>
-                                        <Text style={[S.sheetActionLabel, { color: T.sky }]}>Make Driver</Text>
+                                        <Text style={[S.sheetActionLabel, { color: W.sky }]}>Make Driver</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -1050,10 +1050,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: T.goldBg, borderColor: T.goldBorder }]}>
-                                        <Ionicons name="pricetags" size={20} color={T.gold} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: W.goldBg, borderColor: W.goldBorder }]}>
+                                        <Ionicons name="pricetags" size={24} color={W.gold} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: T.gold }]}>Set Tags</Text>
+                                    <Text style={[S.sheetActionLabel, { color: W.gold }]}>Set Tags</Text>
                                 </TouchableOpacity>
 
                                 {/* Admin Note */}
@@ -1066,10 +1066,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     }}
                                     style={S.sheetActionItem}
                                 >
-                                    <View style={[S.sheetActionIcon, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
-                                        <Ionicons name="create" size={20} color={T.textHeading} />
+                                    <View style={[S.sheetActionIcon, { backgroundColor: '#F1F5F9', borderColor: W.cardBorder }]}>
+                                        <Ionicons name="create" size={24} color={W.charcoal} />
                                     </View>
-                                    <Text style={[S.sheetActionLabel, { color: T.textHeading }]}>Edit Note</Text>
+                                    <Text style={[S.sheetActionLabel, { color: W.charcoal }]}>Edit Note</Text>
                                 </TouchableOpacity>
                             </ScrollView>
                         </>
@@ -1094,7 +1094,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                     style={[S.roleSelectItem, isCurrent && { borderColor: roleCfg.color, backgroundColor: roleCfg.bg }]}
                                 >
                                     <View style={[S.roleSelectIcon, { backgroundColor: roleCfg.bg, borderColor: roleCfg.border }]}>
-                                        <Ionicons name={roleCfg.icon} size={18} color={roleCfg.color} />
+                                        <Ionicons name={roleCfg.icon} size={20} color={roleCfg.color} />
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={[S.roleSelectLabel, { color: roleCfg.color }]}>{roleCfg.label}</Text>
@@ -1105,7 +1105,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                              'Standard buyer & marketplace shopper'}
                                         </Text>
                                     </View>
-                                    {isCurrent && <Ionicons name="checkmark-circle" size={20} color={roleCfg.color} />}
+                                    {isCurrent && <Ionicons name="checkmark-circle" size={22} color={roleCfg.color} />}
                                 </TouchableOpacity>
                             );
                         })}
@@ -1117,33 +1117,48 @@ export const AdminUsers = ({ navigation: propNav }) => {
                 </View>
             </Modal>
 
-            {/* ── WALLET CREDIT/DEBIT MODAL ────────────────────────────────── */}
+            {/* ── WALLET CREDIT/DEBIT MODAL WITH QUICK-AMOUNT BUTTONS ──────── */}
             <Modal visible={walVis} transparent animationType="fade" onRequestClose={() => setWalVis(false)}>
                 <View style={S.dialogContainer}>
                     <View style={S.dialogBox}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                            <Ionicons name="wallet" size={22} color={T.gold} style={{ marginRight: 8 }} />
+                            <Ionicons name="wallet" size={24} color={W.gold} style={{ marginRight: 8 }} />
                             <Text style={S.dialogTitle}>Adjust Wallet Funds</Text>
                         </View>
 
                         <Text style={S.dialogSubtitle}>
-                            Account: <Text style={{ color: T.textHeading, fontWeight: '800' }}>{actUser?.full_name}</Text>
-                            {'\n'}Current Balance: <Text style={{ color: T.emerald, fontWeight: '800' }}>{fmtAmt(actUser?.wallet?.balance || 0)}</Text>
+                            Account: <Text style={{ color: W.charcoal, fontWeight: '800' }}>{actUser?.full_name}</Text>
+                            {'\n'}Current Balance: <Text style={{ color: W.emerald, fontWeight: '800' }}>{fmtAmt(actUser?.wallet?.balance || 0)}</Text>
                         </Text>
+
+                        {/* Quick-Pick Amount Buttons */}
+                        <View style={S.quickPicksRow}>
+                            {['1000', '5000', '10000', '50000'].map(val => (
+                                <TouchableOpacity
+                                    key={val}
+                                    onPress={() => setWalAmt(val)}
+                                    style={[S.quickPickBtn, walAmt === val && S.quickPickBtnActive]}
+                                >
+                                    <Text style={[S.quickPickTxt, walAmt === val && S.quickPickTxtActive]}>
+                                        +{fmtAmt(val)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
 
                         <TextInput
                             style={S.dialogInput}
                             placeholder="Amount in Naira (e.g. 5000)"
-                            placeholderTextColor={T.textSubtle}
+                            placeholderTextColor={W.textSubtle}
                             value={walAmt}
                             onChangeText={setWalAmt}
                             keyboardType="numeric"
                         />
 
                         <TextInput
-                            style={[S.dialogInput, { marginTop: 8 }]}
-                            placeholder="Reason (e.g. Promotional bonus, refund)"
-                            placeholderTextColor={T.textSubtle}
+                            style={[S.dialogInput, { marginTop: 10 }]}
+                            placeholder="Reason (e.g. Loyalty bonus, manual refund)"
+                            placeholderTextColor={W.textSubtle}
                             value={walReason}
                             onChangeText={setWalReason}
                         />
@@ -1158,16 +1173,16 @@ export const AdminUsers = ({ navigation: propNav }) => {
 
                             <TouchableOpacity
                                 onPress={() => adjustWallet('debit')}
-                                style={[S.dialogActionBtn, { backgroundColor: T.crimsonBg, borderColor: T.crimsonBorder }]}
+                                style={[S.dialogActionBtn, { backgroundColor: W.crimsonBg, borderColor: W.crimsonBorder }]}
                             >
-                                <Text style={[S.dialogActionBtnText, { color: T.crimson }]}>Debit</Text>
+                                <Text style={[S.dialogActionBtnText, { color: W.crimson }]}>Debit</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 onPress={() => adjustWallet('credit')}
-                                style={[S.dialogActionBtn, { backgroundColor: T.emeraldBg, borderColor: T.emeraldBorder }]}
+                                style={[S.dialogActionBtn, { backgroundColor: W.emeraldBg, borderColor: W.emeraldBorder }]}
                             >
-                                <Text style={[S.dialogActionBtnText, { color: T.emerald }]}>Credit</Text>
+                                <Text style={[S.dialogActionBtnText, { color: W.emerald }]}>Credit</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1183,16 +1198,16 @@ export const AdminUsers = ({ navigation: propNav }) => {
 
                         <TextInput
                             style={S.dialogInput}
-                            placeholder="Message Title (e.g. KYC Verified! 🎉)"
-                            placeholderTextColor={T.textSubtle}
+                            placeholder="Message Title (e.g. Account Update 🎉)"
+                            placeholderTextColor={W.textSubtle}
                             value={directTitle}
                             onChangeText={setDirectTitle}
                         />
 
                         <TextInput
-                            style={[S.dialogInput, { height: 90, textAlignVertical: 'top', marginTop: 10 }]}
+                            style={[S.dialogInput, { height: 100, textAlignVertical: 'top', marginTop: 10 }]}
                             placeholder="Detailed notification message…"
-                            placeholderTextColor={T.textSubtle}
+                            placeholderTextColor={W.textSubtle}
                             value={directBody}
                             onChangeText={setDirectBody}
                             multiline
@@ -1204,7 +1219,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={sendDirectMessage}
-                                style={[S.dialogPrimaryBtn, { backgroundColor: T.gold }]}
+                                style={[S.dialogPrimaryBtn, { backgroundColor: W.charcoal }]}
                             >
                                 <Text style={[S.dialogPrimaryBtnText, { color: '#FFFFFF' }]}>Send Alert</Text>
                             </TouchableOpacity>
@@ -1230,10 +1245,10 @@ export const AdminUsers = ({ navigation: propNav }) => {
                                         onPress={() => toggleTag(actUser, t.id)}
                                         style={[
                                             S.tagPill,
-                                            { borderColor: active ? t.color : '#E2E8F0', backgroundColor: active ? t.bg : '#FFFFFF' }
+                                            { borderColor: active ? t.color : W.cardBorder, backgroundColor: active ? t.bg : '#FFFFFF' }
                                         ]}
                                     >
-                                        <Text style={[S.tagPillText, { color: active ? t.color : T.textMuted }]}>
+                                        <Text style={[S.tagPillText, { color: active ? t.color : W.textMuted }]}>
                                             {t.label}
                                         </Text>
                                     </TouchableOpacity>
@@ -1243,7 +1258,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
 
                         <TouchableOpacity
                             onPress={() => setTagVis(false)}
-                            style={[S.dialogPrimaryBtn, { marginTop: 18, backgroundColor: T.gold }]}
+                            style={[S.dialogPrimaryBtn, { marginTop: 18, backgroundColor: W.charcoal }]}
                         >
                             <Text style={[S.dialogPrimaryBtnText, { color: '#FFFFFF' }]}>Save Tags</Text>
                         </TouchableOpacity>
@@ -1255,13 +1270,13 @@ export const AdminUsers = ({ navigation: propNav }) => {
             <Modal visible={noteVis} transparent animationType="fade" onRequestClose={() => setNoteVis(false)}>
                 <View style={S.dialogContainer}>
                     <View style={S.dialogBox}>
-                        <Text style={S.dialogTitle}>Internal Admin Memo</Text>
+                        <Text style={S.dialogTitle}>Internal Staff Memo</Text>
                         <Text style={S.dialogSubtitle}>Private notes visible only to marketplace administrators</Text>
 
                         <TextInput
                             style={[S.dialogInput, { height: 120, textAlignVertical: 'top' }]}
                             placeholder="Add administrative observations, compliance notes, or records…"
-                            placeholderTextColor={T.textSubtle}
+                            placeholderTextColor={W.textSubtle}
                             value={noteText}
                             onChangeText={setNoteText}
                             multiline
@@ -1271,7 +1286,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                             <TouchableOpacity onPress={() => setNoteVis(false)} style={S.dialogSecondaryBtn}>
                                 <Text style={S.dialogSecondaryBtnText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={saveNote} style={[S.dialogPrimaryBtn, { backgroundColor: T.gold }]}>
+                            <TouchableOpacity onPress={saveNote} style={[S.dialogPrimaryBtn, { backgroundColor: W.charcoal }]}>
                                 <Text style={[S.dialogPrimaryBtnText, { color: '#FFFFFF' }]}>Save Memo</Text>
                             </TouchableOpacity>
                         </View>
@@ -1285,17 +1300,17 @@ export const AdminUsers = ({ navigation: propNav }) => {
                     <View style={S.actionSheet}>
                         <View style={S.dragHandle} />
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                            <Ionicons name="megaphone" size={20} color={T.gold} style={{ marginRight: 8 }} />
+                            <Ionicons name="megaphone" size={22} color={W.gold} style={{ marginRight: 8 }} />
                             <Text style={S.dialogTitle}>Broadcast Notification</Text>
                         </View>
                         <Text style={S.dialogSubtitle}>
-                            Will dispatch to <Text style={{ color: T.gold, fontWeight: '800' }}>{filtered.length}</Text> filtered users.
+                            Will dispatch to <Text style={{ color: W.gold, fontWeight: '800' }}>{filtered.length}</Text> filtered users.
                         </Text>
 
                         <TextInput
                             style={S.dialogInput}
-                            placeholder="Broadcast Title (e.g. Weekend Flash Sale! 🎉)"
-                            placeholderTextColor={T.textSubtle}
+                            placeholder="Broadcast Title (e.g. Flash Promo! 🎉)"
+                            placeholderTextColor={W.textSubtle}
                             value={bTitle}
                             onChangeText={setBTitle}
                         />
@@ -1303,7 +1318,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                         <TextInput
                             style={[S.dialogInput, { height: 110, textAlignVertical: 'top', marginTop: 10 }]}
                             placeholder="Broadcast Message Content…"
-                            placeholderTextColor={T.textSubtle}
+                            placeholderTextColor={W.textSubtle}
                             value={bMsg}
                             onChangeText={setBMsg}
                             multiline
@@ -1317,7 +1332,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
                             <TouchableOpacity
                                 onPress={sendBroadcast}
                                 disabled={bcastSending}
-                                style={[S.dialogPrimaryBtn, { backgroundColor: T.gold }]}
+                                style={[S.dialogPrimaryBtn, { backgroundColor: W.charcoal }]}
                             >
                                 {bcastSending ? (
                                     <ActivityIndicator color="#FFFFFF" size="small" />
@@ -1351,21 +1366,21 @@ export const AdminUsers = ({ navigation: propNav }) => {
     );
 };
 
-// ─── Pristine Light Styling Sheet ────────────────────────────────────────────
+// ─── Warm Luxury Styling Sheet ───────────────────────────────────────────────
 const S = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: W.canvas,
     },
     header: {
         paddingHorizontal: 16,
         paddingBottom: 14,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: W.cardBg,
         borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
+        borderBottomColor: W.cardBorder,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6 },
-            android: { elevation: 2 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
+            android: { elevation: 3 }
         })
     },
     headerTopRow: {
@@ -1374,12 +1389,12 @@ const S = StyleSheet.create({
         justifyContent: 'space-between',
     },
     headerIconBtn: {
-        width: 38,
-        height: 38,
-        borderRadius: 12,
+        width: 42,
+        height: 42,
+        borderRadius: 14,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -1388,15 +1403,15 @@ const S = StyleSheet.create({
         paddingHorizontal: 12,
     },
     headerTitle: {
-        fontSize: 19,
+        fontSize: 21,
         fontWeight: '900',
-        color: '#0F172A',
-        letterSpacing: -0.3,
+        color: W.charcoal,
+        letterSpacing: -0.4,
     },
     headerSubtitle: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '600',
-        color: '#64748B',
+        color: W.textMuted,
         marginTop: 2,
     },
     headerActions: {
@@ -1404,62 +1419,67 @@ const S = StyleSheet.create({
         gap: 8,
     },
     kpiScroll: {
-        gap: 8,
+        gap: 10,
         marginTop: 14,
-        paddingBottom: 2,
+        paddingBottom: 4,
     },
     kpiCard: {
-        borderRadius: 14,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        minWidth: 92,
+        borderRadius: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        minWidth: 105,
         borderWidth: 1,
+        ...Platform.select({
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4 },
+            android: { elevation: 1 }
+        })
     },
     kpiCardTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        marginBottom: 2,
+        gap: 6,
+        marginBottom: 3,
     },
     kpiVal: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '900',
     },
     kpiLabel: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: '#64748B',
+        fontSize: 10,
+        fontWeight: '800',
+        color: W.textMuted,
         textTransform: 'uppercase',
+        letterSpacing: 0.3,
     },
     searchContainer: {
         paddingHorizontal: 14,
-        marginTop: 10,
-        marginBottom: 4,
+        marginTop: 12,
+        marginBottom: 6,
     },
     searchBox: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 14,
-        paddingHorizontal: 12,
-        paddingVertical: 9,
+        borderColor: W.cardBorder,
+        borderRadius: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 11,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.02, shadowRadius: 3 },
-            android: { elevation: 1 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5 },
+            android: { elevation: 2 }
         })
     },
     searchInput: {
         flex: 1,
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
-        color: '#0F172A',
+        color: W.charcoal,
     },
     filterBar: {
-        backgroundColor: '#F8FAFC',
+        backgroundColor: W.canvas,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: W.canvasAlt,
     },
     filterScroll: {
         paddingHorizontal: 14,
@@ -1467,24 +1487,24 @@ const S = StyleSheet.create({
         gap: 8,
     },
     pill: {
-        paddingHorizontal: 13,
-        paddingVertical: 6,
-        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 22,
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
     },
     pillActive: {
-        backgroundColor: '#0F172A',
-        borderColor: '#0F172A',
+        backgroundColor: W.charcoal,
+        borderColor: W.charcoal,
     },
     pillText: {
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: '700',
-        color: '#64748B',
+        color: W.textBody,
     },
     pillTextActive: {
         color: '#FFFFFF',
@@ -1494,15 +1514,15 @@ const S = StyleSheet.create({
         backgroundColor: '#F1F5F9',
         borderRadius: 10,
         paddingHorizontal: 6,
-        paddingVertical: 1,
+        paddingVertical: 1.5,
     },
     pillBadgeActive: {
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
     },
     pillBadgeText: {
-        fontSize: 9,
+        fontSize: 9.5,
         fontWeight: '800',
-        color: '#64748B',
+        color: W.textMuted,
     },
     pillBadgeTextActive: {
         color: '#FFFFFF',
@@ -1517,18 +1537,18 @@ const S = StyleSheet.create({
     sortTotal: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
+        gap: 6,
     },
     indicatorDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#D97706',
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+        backgroundColor: W.gold,
     },
     sortTotalText: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '800',
-        color: '#0F172A',
+        color: W.charcoal,
     },
     sortOptions: {
         gap: 6,
@@ -1536,70 +1556,70 @@ const S = StyleSheet.create({
     sortChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 9,
-        paddingVertical: 4,
-        borderRadius: 8,
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
     },
     sortChipActive: {
-        borderColor: '#D97706',
-        backgroundColor: '#FEF3C7',
+        borderColor: W.gold,
+        backgroundColor: W.goldBg,
     },
     sortChipText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '700',
-        color: '#64748B',
+        color: W.textMuted,
     },
     sortChipTextActive: {
-        color: '#92400E',
-        fontWeight: '800',
+        color: W.gold,
+        fontWeight: '900',
     },
     listContent: {
         paddingHorizontal: 14,
-        paddingTop: 6,
+        paddingTop: 8,
         paddingBottom: 40,
     },
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingRight: 12,
+        borderRadius: 20,
+        paddingVertical: 15,
+        paddingRight: 14,
         paddingLeft: 0,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         overflow: 'hidden',
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5 },
-            android: { elevation: 1 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7 },
+            android: { elevation: 2 }
         })
     },
     cardAccentBar: {
-        width: 4,
+        width: 5,
         height: '100%',
-        marginRight: 10,
+        marginRight: 12,
     },
     cardBanned: {
-        backgroundColor: '#FEF2F2',
-        borderColor: '#FECACA',
+        backgroundColor: W.crimsonBg,
+        borderColor: W.crimsonBorder,
     },
     cardSelected: {
-        borderColor: '#D97706',
-        backgroundColor: '#FFFBEB',
+        borderColor: W.gold,
+        backgroundColor: W.goldBg,
     },
     avContainer: {
-        width: 50,
-        height: 50,
-        marginRight: 11,
+        width: 60,
+        height: 60,
+        marginRight: 12,
         position: 'relative',
     },
     avRing: {
-        borderRadius: 25,
+        borderRadius: 30,
         borderWidth: 2,
         padding: 1,
     },
@@ -1607,10 +1627,10 @@ const S = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         right: 0,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        borderWidth: 2,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        borderWidth: 2.5,
         borderColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1622,98 +1642,98 @@ const S = StyleSheet.create({
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 1,
+        marginBottom: 2,
     },
     userName: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontSize: 15.5,
+        fontWeight: '900',
+        color: W.charcoal,
         letterSpacing: -0.2,
     },
     userEmail: {
-        fontSize: 11,
-        color: '#64748B',
+        fontSize: 11.5,
+        color: W.textMuted,
         fontWeight: '500',
-        marginBottom: 5,
+        marginBottom: 6,
     },
     tagRow: {
         flexDirection: 'row',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 5,
-        marginBottom: 4,
+        gap: 6,
+        marginBottom: 5,
     },
     chip: {
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 7,
         borderWidth: 1,
         flexDirection: 'row',
         alignItems: 'center',
     },
     chipTxt: {
-        fontSize: 9,
+        fontSize: 9.5,
         fontWeight: '800',
     },
     bottomStrip: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginTop: 3,
+        marginTop: 4,
     },
     walletPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 2.5,
-        borderRadius: 8,
+        gap: 5,
+        paddingHorizontal: 9,
+        paddingVertical: 3,
+        borderRadius: 9,
         borderWidth: 1,
     },
     walletText: {
-        fontSize: 10.5,
-        fontWeight: '800',
+        fontSize: 11.5,
+        fontWeight: '900',
     },
     walletPending: {
-        fontSize: 9.5,
-        fontWeight: '600',
-        color: '#D97706',
+        fontSize: 10,
+        fontWeight: '700',
+        color: W.gold,
     },
     lastActiveText: {
-        fontSize: 9.5,
-        color: '#94A3B8',
+        fontSize: 10.5,
+        color: W.textSubtle,
         fontWeight: '600',
     },
     driverStrip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        marginTop: 5,
-        paddingTop: 5,
+        gap: 6,
+        marginTop: 6,
+        paddingTop: 6,
         borderTopWidth: 1,
         borderTopColor: '#F0F9FF',
     },
     driverStripText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '700',
-        color: '#0284C7',
+        color: W.sky,
         flex: 1,
     },
     driverStatusBadge: {
-        paddingHorizontal: 5,
-        paddingVertical: 1.5,
-        borderRadius: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5,
     },
     cardActions: {
-        paddingLeft: 6,
+        paddingLeft: 8,
     },
     quickActionBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -1724,9 +1744,9 @@ const S = StyleSheet.create({
         gap: 12,
     },
     loadingText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
-        color: '#64748B',
+        color: W.textMuted,
     },
     emptyContainer: {
         alignItems: 'center',
@@ -1735,13 +1755,13 @@ const S = StyleSheet.create({
         gap: 8,
     },
     emptyTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontSize: 17,
+        fontWeight: '900',
+        color: W.charcoal,
     },
     emptySubtitle: {
-        fontSize: 12,
-        color: '#64748B',
+        fontSize: 13,
+        color: W.textMuted,
     },
     modalOverlay: {
         ...StyleSheet.absoluteFillObject,
@@ -1753,87 +1773,87 @@ const S = StyleSheet.create({
         left: 0,
         right: 0,
         backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        padding: 20,
-        paddingBottom: 36,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        padding: 22,
+        paddingBottom: 38,
         borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
+        borderTopColor: W.cardBorder,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 10 },
-            android: { elevation: 10 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.1, shadowRadius: 14 },
+            android: { elevation: 12 }
         })
     },
     dragHandle: {
-        width: 38,
-        height: 4,
+        width: 44,
+        height: 5,
         backgroundColor: '#CBD5E1',
-        borderRadius: 2,
+        borderRadius: 2.5,
         alignSelf: 'center',
-        marginBottom: 16,
+        marginBottom: 18,
     },
     sheetUserHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingBottom: 14,
+        paddingBottom: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
-        marginBottom: 12,
+        marginBottom: 14,
     },
     sheetUserName: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '900',
-        color: '#0F172A',
+        color: W.charcoal,
     },
     sheetUserEmail: {
-        fontSize: 11,
-        color: '#64748B',
+        fontSize: 12,
+        color: W.textMuted,
     },
     sheetNoteCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        backgroundColor: '#FFFBEB',
+        gap: 9,
+        backgroundColor: W.goldBg,
         borderWidth: 1,
-        borderColor: '#FDE68A',
-        padding: 10,
-        borderRadius: 12,
-        marginBottom: 12,
+        borderColor: W.goldBorder,
+        padding: 12,
+        borderRadius: 14,
+        marginBottom: 14,
     },
     sheetNoteText: {
-        fontSize: 11,
+        fontSize: 12,
         color: '#92400E',
         flex: 1,
         fontWeight: '600',
     },
     sheetSectionTitle: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '800',
-        color: '#64748B',
+        color: W.textMuted,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
-        marginBottom: 10,
+        marginBottom: 12,
     },
     sheetActionsScroll: {
-        gap: 12,
-        paddingVertical: 4,
+        gap: 14,
+        paddingVertical: 6,
     },
     sheetActionItem: {
         alignItems: 'center',
-        width: 74,
+        width: 80,
     },
     sheetActionIcon: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
+        width: 58,
+        height: 58,
+        borderRadius: 29,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 6,
+        marginBottom: 7,
         borderWidth: 1,
     },
     sheetActionLabel: {
-        fontSize: 10,
-        fontWeight: '700',
+        fontSize: 11,
+        fontWeight: '800',
         textAlign: 'center',
     },
     dialogContainer: {
@@ -1844,107 +1864,134 @@ const S = StyleSheet.create({
     },
     dialogBox: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 24,
-        padding: 22,
+        borderRadius: 26,
+        padding: 24,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16 },
-            android: { elevation: 6 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20 },
+            android: { elevation: 8 }
         })
     },
     dialogTitle: {
-        fontSize: 17,
+        fontSize: 19,
         fontWeight: '900',
-        color: '#0F172A',
+        color: W.charcoal,
         letterSpacing: -0.3,
     },
     dialogSubtitle: {
-        fontSize: 12,
-        color: '#64748B',
+        fontSize: 12.5,
+        color: W.textMuted,
         marginTop: 4,
         marginBottom: 14,
-        lineHeight: 18,
+        lineHeight: 19,
+    },
+    quickPicksRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    quickPickBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: W.cardBorder,
+        alignItems: 'center',
+    },
+    quickPickBtnActive: {
+        backgroundColor: W.goldBg,
+        borderColor: W.gold,
+    },
+    quickPickTxt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: W.textBody,
+    },
+    quickPickTxtActive: {
+        color: W.gold,
     },
     dialogInput: {
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         borderRadius: 14,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        color: '#0F172A',
-        fontSize: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 13,
+        color: W.charcoal,
+        fontSize: 15,
+        fontWeight: '600',
     },
     dialogButtonRow: {
         flexDirection: 'row',
         gap: 10,
-        marginTop: 14,
+        marginTop: 16,
     },
     dialogSecondaryBtn: {
         flex: 1,
-        paddingVertical: 13,
-        borderRadius: 12,
+        paddingVertical: 14,
+        borderRadius: 14,
         backgroundColor: '#F1F5F9',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         alignItems: 'center',
         justifyContent: 'center',
     },
     dialogSecondaryBtnText: {
         color: '#475569',
-        fontWeight: '700',
-        fontSize: 13,
+        fontWeight: '800',
+        fontSize: 14,
     },
     dialogActionBtn: {
         flex: 1,
-        paddingVertical: 13,
-        borderRadius: 12,
+        paddingVertical: 14,
+        borderRadius: 14,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
     },
     dialogActionBtnText: {
-        fontWeight: '800',
-        fontSize: 13,
+        fontWeight: '900',
+        fontSize: 14,
     },
     dialogPrimaryBtn: {
         flex: 2,
-        paddingVertical: 13,
-        borderRadius: 12,
+        paddingVertical: 14,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
     },
     dialogPrimaryBtnText: {
         fontWeight: '900',
-        fontSize: 13,
+        fontSize: 14,
     },
     roleSelectItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 12,
-        borderRadius: 14,
+        padding: 13,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: W.cardBorder,
         backgroundColor: '#FFFFFF',
-        marginBottom: 8,
+        marginBottom: 9,
     },
     roleSelectIcon: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
+        marginRight: 14,
     },
     roleSelectLabel: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '900',
     },
     roleSelectDesc: {
-        fontSize: 10,
-        color: '#64748B',
+        fontSize: 11,
+        color: W.textMuted,
         marginTop: 2,
     },
     dialogCancelBtn: {
@@ -1953,9 +2000,9 @@ const S = StyleSheet.create({
         paddingVertical: 12,
     },
     dialogCancelText: {
-        color: '#64748B',
-        fontWeight: '700',
-        fontSize: 13,
+        color: W.textMuted,
+        fontWeight: '800',
+        fontSize: 14,
     },
     tagsContainer: {
         flexDirection: 'row',
@@ -1964,13 +2011,13 @@ const S = StyleSheet.create({
         marginTop: 10,
     },
     tagPill: {
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 16,
+        paddingHorizontal: 15,
+        paddingVertical: 9,
+        borderRadius: 18,
         borderWidth: 1.5,
     },
     tagPillText: {
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: '800',
     },
 });

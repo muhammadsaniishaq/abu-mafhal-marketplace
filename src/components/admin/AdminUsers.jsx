@@ -10,18 +10,18 @@ import {
 } from 'lucide-react';
 
 const ROLES = {
-  admin: { label: 'Admin', color: 'text-purple-700 bg-purple-50 border-purple-200' },
-  vendor: { label: 'Vendor', color: 'text-orange-700 bg-orange-50 border-orange-200' },
-  driver: { label: 'Driver', color: 'text-sky-700 bg-sky-50 border-sky-200' },
-  buyer: { label: 'Customer', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  customer: { label: 'Customer', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+  admin: { label: 'Administrator', color: 'text-purple-800 bg-purple-50 border-purple-200' },
+  vendor: { label: 'Merchant Vendor', color: 'text-orange-800 bg-orange-50 border-orange-200' },
+  driver: { label: 'Fleet Courier', color: 'text-sky-800 bg-sky-50 border-sky-200' },
+  buyer: { label: 'Shopper Client', color: 'text-emerald-800 bg-emerald-50 border-emerald-200' },
+  customer: { label: 'Shopper Client', color: 'text-emerald-800 bg-emerald-50 border-emerald-200' }
 };
 
 const TIERS = [
-  { min: 1000000, label: 'Diamond VIP', color: 'text-purple-700 bg-purple-50 border-purple-200' },
-  { min: 250000, label: 'Gold Tier', color: 'text-amber-800 bg-amber-50 border-amber-200' },
-  { min: 50000, label: 'Silver Tier', color: 'text-slate-700 bg-slate-100 border-slate-200' },
-  { min: 0, label: 'Bronze Tier', color: 'text-amber-900 bg-amber-50 border-amber-200' }
+  { min: 1000000, label: 'Diamond VIP', color: 'text-purple-800 bg-purple-50 border-purple-200' },
+  { min: 250000, label: 'Gold Elite', color: 'text-amber-800 bg-amber-50 border-amber-200' },
+  { min: 50000, label: 'Silver Member', color: 'text-slate-800 bg-slate-100 border-slate-200' },
+  { min: 0, label: 'Starter', color: 'text-amber-900 bg-amber-50 border-amber-200' }
 ];
 
 const getTier = (spend = 0) => TIERS.find(t => spend >= t.min) || TIERS[3];
@@ -343,19 +343,19 @@ const AdminUsers = () => {
   const suspendedCount = useMemo(() => users.filter(u => u.suspended || u.is_banned).length, [users]);
 
   return (
-    <div className="space-y-6 text-slate-800 animate-fadeIn">
-      {/* ── PRISTINE LUXURY LIGHT HEADER ── */}
-      <div className="relative overflow-hidden bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-sm">
+    <div className="space-y-6 text-slate-800 animate-fadeIn p-2 sm:p-4 rounded-3xl bg-[#F5F2EB]/60">
+      {/* ── WARM LUXURY HEADER (SPACIOUS & BOLD) ── */}
+      <div className="relative overflow-hidden bg-white p-7 sm:p-9 rounded-3xl border border-[#E6E0D5] shadow-sm">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-black tracking-widest uppercase mb-2">
-              <Users className="w-3.5 h-3.5 text-amber-600" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-black tracking-widest uppercase mb-3">
+              <Users className="w-4 h-4 text-amber-700" />
               <span>User Directory & Permissions</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               Platform User Management
             </h1>
-            <p className="text-sm text-slate-500 mt-1 max-w-2xl font-medium">
+            <p className="text-sm sm:text-base text-slate-500 mt-1 max-w-2xl font-medium">
               Monitor active shoppers, accredited store vendors, logistics drivers, and privileged system administrators.
             </p>
           </div>
@@ -363,24 +363,24 @@ const AdminUsers = () => {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={exportCSV}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 text-xs sm:text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
               title="Export as CSV"
             >
-              <Download className="w-4 h-4 text-amber-600" />
+              <Download className="w-4 h-4 text-amber-700" />
               <span>Export CSV</span>
             </button>
 
             <button
               onClick={fetchUsers}
-              className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 transition-all hover:scale-[1.05]"
+              className="p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 border border-[#E6E0D5] text-slate-700 transition-all hover:scale-[1.05]"
               title="Refresh ledger"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-600' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-700' : ''}`} />
             </button>
 
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <UserPlus className="w-4 h-4 text-amber-400" />
               <span>Create User</span>
@@ -401,67 +401,67 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* ── KPI METRICS CARDS (LIGHT THEME) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── BIGGER KPI METRICS CARDS (WARM LUXURY PALETTE) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Total Users */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="bg-white p-6 rounded-3xl border border-[#E6E0D5] shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider">Total Accounts</span>
-            <Users className="w-4 h-4 text-slate-700" />
+            <span className="text-xs font-black uppercase tracking-wider">Total Accounts</span>
+            <Users className="w-5 h-5 text-slate-800" />
           </div>
-          <h3 className="text-2xl font-black text-slate-900">{users.length}</h3>
-          <p className="text-xs text-slate-500 mt-1">{customersCount} Customers · {adminsCount} Admins</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{users.length}</h3>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">{customersCount} Customers · {adminsCount} Admins</p>
         </div>
 
         {/* Vendors */}
-        <div className="bg-white p-5 rounded-2xl border border-orange-100 shadow-sm relative overflow-hidden bg-gradient-to-br from-orange-50/30 to-white">
-          <div className="flex items-center justify-between text-orange-700 mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider">Active Vendors</span>
-            <Star className="w-4 h-4 text-orange-600" />
+        <div className="bg-white p-6 rounded-3xl border border-orange-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-orange-50/40 to-white">
+          <div className="flex items-center justify-between text-orange-800 mb-2">
+            <span className="text-xs font-black uppercase tracking-wider">Active Vendors</span>
+            <Star className="w-5 h-5 text-orange-600" />
           </div>
-          <h3 className="text-2xl font-black text-slate-900">{vendorsCount}</h3>
-          <p className="text-xs text-slate-500 mt-1">Accredited Store Merchants</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{vendorsCount}</h3>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Accredited Store Merchants</p>
         </div>
 
         {/* Logistics Drivers */}
-        <div className="bg-white p-5 rounded-2xl border border-sky-100 shadow-sm relative overflow-hidden bg-gradient-to-br from-sky-50/30 to-white">
-          <div className="flex items-center justify-between text-sky-700 mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider">Fleet Drivers</span>
-            <ShieldCheck className="w-4 h-4 text-sky-600" />
+        <div className="bg-white p-6 rounded-3xl border border-sky-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-sky-50/40 to-white">
+          <div className="flex items-center justify-between text-sky-800 mb-2">
+            <span className="text-xs font-black uppercase tracking-wider">Fleet Drivers</span>
+            <ShieldCheck className="w-5 h-5 text-sky-600" />
           </div>
-          <h3 className="text-2xl font-black text-slate-900">{driversCount}</h3>
-          <p className="text-xs text-slate-500 mt-1">Fulfillment Couriers</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{driversCount}</h3>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Fulfillment Couriers</p>
         </div>
 
         {/* Total Wallet Liquidity */}
-        <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm relative overflow-hidden bg-gradient-to-br from-emerald-50/30 to-white">
-          <div className="flex items-center justify-between text-emerald-700 mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider">Platform Liquidity</span>
-            <Wallet className="w-4 h-4 text-emerald-600" />
+        <div className="bg-white p-6 rounded-3xl border border-emerald-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-emerald-50/40 to-white">
+          <div className="flex items-center justify-between text-emerald-800 mb-2">
+            <span className="text-xs font-black uppercase tracking-wider">Platform Liquidity</span>
+            <Wallet className="w-5 h-5 text-emerald-600" />
           </div>
-          <h3 className="text-2xl font-black text-emerald-700">{formatNaira(totalBalance)}</h3>
-          <p className="text-xs text-slate-500 mt-1">{verifiedCount} KYC Verified Accounts</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-emerald-700">{formatNaira(totalBalance)}</h3>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">{verifiedCount} KYC Verified Accounts</p>
         </div>
       </div>
 
-      {/* ── SEARCH & FILTER BAR ── */}
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+      {/* ── BIGGER SEARCH & FILTER BAR ── */}
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-[#E6E0D5] shadow-sm">
         <div className="relative w-full lg:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-5 h-5 text-amber-700 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search name, email, phone, role…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-slate-400 transition-all text-slate-900 placeholder-slate-400 font-medium"
+            className="w-full pl-11 pr-4 py-3 bg-[#F5F2EB]/60 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 transition-all text-slate-900 placeholder-slate-400 font-medium"
           />
           {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700">✕</button>
+            <button onClick={() => setSearchTerm('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700">✕</button>
           )}
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+        <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
           {[
             { id: 'all', label: `All (${users.length})` },
             { id: 'customer', label: `Customers (${customersCount})` },
@@ -477,10 +477,10 @@ const AdminUsers = () => {
               <button
                 key={p.id}
                 onClick={() => setFilter(p.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border ${
+                className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap border ${
                   active
                     ? 'bg-slate-900 text-white border-slate-900 font-black shadow-sm'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                    : 'bg-[#F5F2EB]/80 text-slate-700 border-[#E6E0D5] hover:bg-stone-100 hover:text-slate-900'
                 }`}
               >
                 {p.label}
@@ -490,36 +490,36 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      {/* ── USER TABLE ── */}
+      {/* ── USER TABLE (SPACIOUS & BOLD) ── */}
       {loading ? (
-        <div className="p-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 shadow-sm text-center">
-          <div className="w-10 h-10 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mb-4" />
+        <div className="p-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-[#E6E0D5] shadow-sm text-center">
+          <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mb-4" />
           <p className="text-sm font-bold text-slate-600">Synchronizing user accounts…</p>
         </div>
       ) : filteredUsers.length === 0 ? (
-        <div className="p-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 shadow-sm text-center">
-          <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
+        <div className="p-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-[#E6E0D5] shadow-sm text-center">
+          <div className="w-16 h-16 rounded-2xl bg-stone-100 text-slate-400 flex items-center justify-center mb-4">
             <Users className="w-8 h-8" />
           </div>
           <h3 className="text-lg font-black text-slate-900">No accounts found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mt-1">Try clearing your search query or switching the active category filter.</p>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-sm mt-1">Try clearing your search query or switching the active category filter.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-[#E6E0D5] shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <th className="py-4 px-5">User Profile</th>
+                <tr className="border-b border-stone-200 bg-[#FAF8F5] text-[11.5px] font-black uppercase tracking-wider text-slate-600">
+                  <th className="py-4 px-6">User Profile</th>
                   <th className="py-4 px-4">Contact Phone</th>
                   <th className="py-4 px-4">Permission Role</th>
                   <th className="py-4 px-4">Wallet Balance</th>
                   <th className="py-4 px-4 text-center">KYC & Status</th>
                   <th className="py-4 px-4">Registered</th>
-                  <th className="py-4 px-5 text-right">Actions</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-stone-100 text-sm">
                 {filteredUsers.map((user) => {
                   const isSuspended = user.suspended === true || user.is_banned === true;
                   const roleConfig = ROLES[user.role] || ROLES.customer;
@@ -527,29 +527,29 @@ const AdminUsers = () => {
                   const bal = user.wallet?.balance || 0;
 
                   return (
-                    <tr key={user.id} className="hover:bg-slate-50/70 transition-colors group">
-                      {/* User Profile */}
-                      <td className="py-4 px-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-sm text-slate-800 shadow-sm flex-shrink-0">
+                    <tr key={user.id} className="hover:bg-stone-50/80 transition-colors group">
+                      {/* Big User Profile */}
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-2xl bg-[#F5F2EB] border border-[#E6E0D5] flex items-center justify-center font-black text-base text-slate-800 shadow-sm flex-shrink-0">
                             {initial}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="font-bold text-slate-900 group-hover:text-amber-700 transition-colors truncate">
+                              <p className="font-bold text-slate-900 group-hover:text-amber-800 transition-colors truncate text-sm sm:text-base">
                                 {user.full_name || 'Anonymous User'}
                               </p>
                               {user.is_verified && (
-                                <CheckCircle className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" title="KYC Verified" />
+                                <CheckCircle className="w-4 h-4 text-sky-600 flex-shrink-0" title="KYC Verified" />
                               )}
                             </div>
-                            <p className="text-xs text-slate-400 truncate">{user.email || 'No email'}</p>
+                            <p className="text-xs text-slate-500 truncate">{user.email || 'No email'}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Phone */}
-                      <td className="py-4 px-4 text-xs font-medium text-slate-700">
+                      <td className="py-4 px-4 text-xs sm:text-sm font-semibold text-slate-700">
                         {user.phone || 'Not provided'}
                       </td>
 
@@ -558,7 +558,7 @@ const AdminUsers = () => {
                         <select
                           value={user.role || 'customer'}
                           onChange={(e) => handleUpdateRole(user.id, e.target.value)}
-                          className={`text-xs font-black uppercase px-2.5 py-1 rounded-lg border cursor-pointer outline-none transition-all ${roleConfig.color}`}
+                          className={`text-xs font-black uppercase px-3 py-1.5 rounded-xl border cursor-pointer outline-none transition-all ${roleConfig.color}`}
                         >
                           <option value="customer">Customer</option>
                           <option value="vendor">Vendor</option>
@@ -569,20 +569,20 @@ const AdminUsers = () => {
 
                       {/* Wallet Balance */}
                       <td className="py-4 px-4">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-xs font-bold">
-                          <Wallet className="w-3 h-3 text-emerald-600" />
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-mono text-xs sm:text-sm font-black">
+                          <Wallet className="w-3.5 h-3.5 text-emerald-600" />
                           <span>{formatNaira(bal)}</span>
                         </div>
                       </td>
 
                       {/* Status */}
                       <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
                           isSuspended
                             ? 'bg-rose-50 text-rose-700 border-rose-200'
                             : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isSuspended ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                          <span className={`w-2 h-2 rounded-full ${isSuspended ? 'bg-rose-500' : 'bg-emerald-500'}`} />
                           {isSuspended ? 'Suspended' : 'Active'}
                         </span>
                       </td>
@@ -593,15 +593,15 @@ const AdminUsers = () => {
                       </td>
 
                       {/* Actions */}
-                      <td className="py-4 px-5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
                           {/* WhatsApp Launcher */}
                           {user.phone && (
                             <a
                               href={`https://wa.me/${user.phone.replace(/[^0-9]/g, '')}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
+                              className="p-2.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200"
                               title="Chat on WhatsApp"
                             >
                               <MessageCircle className="w-4 h-4" />
@@ -611,7 +611,7 @@ const AdminUsers = () => {
                           {/* Inspect Modal */}
                           <button
                             onClick={() => { setSelectedUser(user); setShowDetailModal(true); }}
-                            className="p-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                            className="p-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-stone-100 transition-all border border-transparent hover:border-stone-200"
                             title="Inspect Details"
                           >
                             <Eye className="w-4 h-4" />
@@ -620,7 +620,7 @@ const AdminUsers = () => {
                           {/* Adjust Wallet */}
                           <button
                             onClick={() => { setSelectedUser(user); setShowWalletModal(true); }}
-                            className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
+                            className="p-2.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200"
                             title="Credit / Debit Wallet"
                           >
                             <DollarSign className="w-4 h-4" />
@@ -629,10 +629,10 @@ const AdminUsers = () => {
                           {/* Toggle Suspend */}
                           <button
                             onClick={() => handleToggleSuspend(user)}
-                            className={`p-2 rounded-xl transition-all ${
+                            className={`p-2.5 rounded-xl transition-all border border-transparent ${
                               isSuspended
-                                ? 'text-emerald-600 hover:bg-emerald-50'
-                                : 'text-rose-500 hover:bg-rose-50'
+                                ? 'text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200'
+                                : 'text-rose-600 hover:bg-rose-50 hover:border-rose-200'
                             }`}
                             title={isSuspended ? 'Restore User' : 'Suspend Account'}
                           >
@@ -642,7 +642,7 @@ const AdminUsers = () => {
                           {/* Delete */}
                           <button
                             onClick={() => handleDeleteUser(user)}
-                            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                            className="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
                             title="Delete User"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -661,15 +661,15 @@ const AdminUsers = () => {
       {/* ── CREATE USER MODAL ── */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+          <div className="bg-white w-full max-w-md rounded-3xl p-7 sm:p-9 shadow-2xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-5">
               <div>
-                <h3 className="text-lg font-black text-slate-900">Create Platform Account</h3>
-                <p className="text-xs text-slate-500">Register a new client, store merchant, or admin.</p>
+                <h3 className="text-xl font-black text-slate-900">Create Platform Account</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Register a new client, store merchant, or admin.</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all"
               >
                 ✕
               </button>
@@ -686,7 +686,7 @@ const AdminUsers = () => {
                   placeholder="e.g. Aliko Dangote"
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900 font-medium"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
@@ -700,7 +700,7 @@ const AdminUsers = () => {
                   placeholder="user@marketplace.com"
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900 font-medium"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
@@ -714,7 +714,7 @@ const AdminUsers = () => {
                   placeholder="Minimum 6 characters"
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900 font-medium"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
@@ -727,7 +727,7 @@ const AdminUsers = () => {
                   placeholder="08012345678"
                   value={newUser.phone}
                   onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900 font-medium"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-medium"
                 />
               </div>
 
@@ -738,7 +738,7 @@ const AdminUsers = () => {
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900 font-bold"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900 font-bold"
                 >
                   <option value="customer">Customer (Shopper)</option>
                   <option value="vendor">Vendor (Merchant Store)</option>
@@ -747,18 +747,18 @@ const AdminUsers = () => {
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                  className="px-5 py-3 rounded-2xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all disabled:opacity-50"
+                  className="px-6 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all disabled:opacity-50"
                 >
                   {actionLoading ? 'Creating…' : 'Register Account'}
                 </button>
@@ -768,32 +768,50 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* ── WALLET CREDIT/DEBIT MODAL ── */}
+      {/* ── WALLET CREDIT/DEBIT MODAL WITH PRESET QUICK PICKS ── */}
       {showWalletModal && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+          <div className="bg-white w-full max-w-md rounded-3xl p-7 sm:p-9 shadow-2xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-5">
               <div className="flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-lg font-black text-slate-900">Adjust Wallet Balance</h3>
+                <Wallet className="w-5 h-5 text-emerald-700" />
+                <h3 className="text-xl font-black text-slate-900">Adjust Wallet Balance</h3>
               </div>
               <button
                 onClick={() => setShowWalletModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all"
               >
                 ✕
               </button>
             </div>
 
-            <div className="mb-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div className="mb-4 p-4 rounded-2xl bg-[#F5F2EB]/60 border border-[#E6E0D5]">
               <p className="text-xs text-slate-500">Target Account:</p>
-              <p className="text-sm font-bold text-slate-900">{selectedUser.full_name || selectedUser.email}</p>
+              <p className="text-base font-bold text-slate-900">{selectedUser.full_name || selectedUser.email}</p>
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-xs text-slate-500">Current Balance:</span>
-                <span className="text-base font-black text-emerald-700 font-mono">
+                <span className="text-lg font-black text-emerald-800 font-mono">
                   {formatNaira(selectedUser.wallet?.balance || 0)}
                 </span>
               </div>
+            </div>
+
+            {/* Quick Amount Presets */}
+            <div className="flex gap-2 mb-3">
+              {['1000', '5000', '10000', '50000'].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setWalletAmount(val)}
+                  className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                    walletAmount === val
+                      ? 'bg-amber-100 border-amber-400 text-amber-900'
+                      : 'bg-stone-50 border-stone-200 text-slate-700 hover:bg-stone-100'
+                  }`}
+                >
+                  +{formatNaira(val)}
+                </button>
+              ))}
             </div>
 
             <div className="space-y-4">
@@ -806,7 +824,7 @@ const AdminUsers = () => {
                   placeholder="e.g. 5000"
                   value={walletAmount}
                   onChange={(e) => setWalletAmount(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900 font-mono"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-base focus:outline-none focus:border-amber-600 text-slate-900 font-mono font-bold"
                 />
               </div>
 
@@ -819,29 +837,29 @@ const AdminUsers = () => {
                   placeholder="e.g. Loyalty bonus, manual refund"
                   value={walletReason}
                   onChange={(e) => setWalletReason(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 text-slate-900"
+                  className="w-full px-4 py-3 bg-[#F5F2EB]/50 border border-[#E6E0D5] rounded-2xl text-sm focus:outline-none focus:border-amber-600 text-slate-900"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
                 <button
                   type="button"
                   onClick={() => setShowWalletModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                  className="px-5 py-3 rounded-2xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAdjustWallet('debit')}
-                  className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-all"
+                  className="px-5 py-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-all"
                 >
                   Debit Funds
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAdjustWallet('credit')}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+                  className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
                 >
                   Credit Funds
                 </button>
@@ -854,98 +872,98 @@ const AdminUsers = () => {
       {/* ── USER DETAILS DRAWER / MODAL ── */}
       {showDetailModal && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-base text-slate-800 shadow-sm">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-7 sm:p-9 shadow-2xl border border-[#E6E0D5] relative">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-5">
+              <div className="flex items-center gap-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-[#F5F2EB] border border-[#E6E0D5] flex items-center justify-center font-black text-lg text-slate-800 shadow-sm">
                   {(selectedUser.full_name || selectedUser.email || 'U')[0].toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-900 leading-tight">
+                  <h3 className="text-xl font-black text-slate-900 leading-tight">
                     {selectedUser.full_name || 'Anonymous User'}
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono">ID: {selectedUser.id}</p>
+                  <p className="text-xs text-slate-500 font-mono">ID: {selectedUser.id}</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowDetailModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-900 hover:bg-stone-100 transition-all"
               >
                 ✕
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
+              <div className="grid grid-cols-2 gap-3.5 p-4 rounded-2xl bg-[#F5F2EB]/60 border border-[#E6E0D5] text-xs">
                 <div>
                   <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">System Role</span>
-                  <span className="font-bold capitalize text-slate-900">{selectedUser.role || 'customer'}</span>
+                  <span className="font-bold capitalize text-slate-900 text-sm">{selectedUser.role || 'customer'}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">Status</span>
-                  <span className={`inline-flex items-center gap-1 font-bold ${
-                    selectedUser.suspended || selectedUser.is_banned ? 'text-rose-600' : 'text-emerald-600'
+                  <span className={`inline-flex items-center gap-1 font-bold text-sm ${
+                    selectedUser.suspended || selectedUser.is_banned ? 'text-rose-600' : 'text-emerald-700'
                   }`}>
                     {selectedUser.suspended || selectedUser.is_banned ? 'Suspended' : 'Active'}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">Wallet Float</span>
-                  <span className="font-black text-emerald-700 text-sm font-mono">{formatNaira(selectedUser.wallet?.balance || 0)}</span>
+                  <span className="font-black text-emerald-800 text-sm sm:text-base font-mono">{formatNaira(selectedUser.wallet?.balance || 0)}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 font-bold uppercase tracking-wider block mb-1">KYC Verification</span>
-                  <span className={`font-bold ${selectedUser.is_verified ? 'text-sky-600' : 'text-slate-400'}`}>
+                  <span className={`font-bold text-sm ${selectedUser.is_verified ? 'text-sky-700' : 'text-slate-500'}`}>
                     {selectedUser.is_verified ? 'Verified Citizen' : 'Unverified'}
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white">
+              <div className="space-y-2.5 text-xs sm:text-sm">
+                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-stone-200 bg-white">
                   <span className="text-slate-500 font-semibold flex items-center gap-2">
-                    <Mail className="w-3.5 h-3.5 text-slate-400" /> Email Address:
+                    <Mail className="w-4 h-4 text-amber-700" /> Email:
                   </span>
                   <strong className="text-slate-800 font-mono">{selectedUser.email || 'N/A'}</strong>
                 </div>
 
-                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white">
+                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-stone-200 bg-white">
                   <span className="text-slate-500 font-semibold flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" /> Telephone:
+                    <Phone className="w-4 h-4 text-amber-700" /> Telephone:
                   </span>
                   <strong className="text-slate-800 font-mono">{selectedUser.phone || 'N/A'}</strong>
                 </div>
 
                 {selectedUser.phone && (
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex gap-2.5 pt-1">
                     <a
                       href={`https://wa.me/${selectedUser.phone.replace(/[^0-9]/g, '')}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                      className="flex-1 py-3 px-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 text-xs font-black flex items-center justify-center gap-2 transition-all"
                     >
-                      <MessageCircle className="w-4 h-4 text-emerald-600" />
+                      <MessageCircle className="w-4 h-4 text-emerald-700" />
                       <span>WhatsApp Chat</span>
                     </a>
                     <a
                       href={`tel:${selectedUser.phone}`}
-                      className="flex-1 py-2.5 px-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 hover:bg-sky-100 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                      className="flex-1 py-3 px-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100 text-xs font-black flex items-center justify-center gap-2 transition-all"
                     >
-                      <Phone className="w-4 h-4 text-sky-600" />
+                      <Phone className="w-4 h-4 text-sky-700" />
                       <span>Direct Phone Call</span>
                     </a>
                   </div>
                 )}
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="pt-4 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => handleToggleVerify(selectedUser)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                  className={`px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all ${
                     selectedUser.is_verified
-                      ? 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                      ? 'border-stone-200 text-slate-600 hover:bg-stone-50'
+                      : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'
                   }`}
                 >
                   {selectedUser.is_verified ? 'Revoke KYC' : 'Verify KYC'}
@@ -955,7 +973,7 @@ const AdminUsers = () => {
                   <button
                     type="button"
                     onClick={() => handleToggleSuspend(selectedUser)}
-                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
+                    className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
                       selectedUser.suspended || selectedUser.is_banned
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                         : 'bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100'
@@ -966,7 +984,7 @@ const AdminUsers = () => {
                   <button
                     type="button"
                     onClick={() => setShowDetailModal(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                    className="px-5 py-2.5 rounded-2xl border border-stone-200 text-xs font-bold text-slate-600 hover:bg-stone-50 transition-all"
                   >
                     Close
                   </button>
