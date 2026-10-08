@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { supabase } from '../lib/supabase';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { TemuAnnouncementBanner } from '../components/TemuAnnouncementBanner';
 
 const { width } = Dimensions.get('window');
 
@@ -495,6 +496,16 @@ export const LandingPage = ({
                 <Text style={styles.tickerText}>
                     LIVE ESCROW VAULT ACTIVE • ₦2.5B+ SECURED • 24H EXPRESS TRANSIT
                 </Text>
+            </View>
+
+            {/* ─── LIVE MODERN TEMU ANNOUNCEMENT BANNER ─── */}
+            <View style={{ paddingHorizontal: 12, paddingTop: 4, width: '100%', maxWidth: 1200, alignSelf: 'center' }}>
+                <TemuAnnouncementBanner
+                    settings={settings}
+                    onPressAction={() => {
+                        scrollViewRef.current?.scrollTo({ y: 430, animated: true });
+                    }}
+                />
             </View>
 
             {/* Floating Toast Notification */}

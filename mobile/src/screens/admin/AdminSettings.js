@@ -15,6 +15,7 @@ import { invalidateResendKeyCache } from '../../lib/notifications';
 import { geminiService, invalidateAiKeyCache } from '../../services/geminiService';
 import Constants from 'expo-constants';
 import { ForceUpdateModal } from '../../components/ForceUpdateModal';
+import { TemuAnnouncementBanner } from '../../components/TemuAnnouncementBanner';
 
 const { width: W } = Dimensions.get('window');
 const TAB_W = W / 7;
@@ -430,9 +431,12 @@ export const AdminSettings = ({ navigation }) => {
     // -- Phase-4 Advanced settings --
     const [adminName,          setAdminName]          = useState(settings?.admin_name || '');
     const [adminTitle,         setAdminTitle]         = useState(settings?.admin_title || 'Platform Administrator');
-    const [announcementText,   setAnnouncementText]   = useState(settings?.announcement_text || '');
-    const [announcementActive, setAnnouncementActive] = useState(settings?.announcement_active || false);
-    const [announcementColor,  setAnnouncementColor]  = useState(settings?.announcement_color || '#3B82F6');
+    const [announcementText,       setAnnouncementText]       = useState(settings?.announcement_text || '');
+    const [announcementActive,     setAnnouncementActive]     = useState(settings?.announcement_active || false);
+    const [announcementColor,      setAnnouncementColor]      = useState(settings?.announcement_color || '#3B82F6');
+    const [announcementBadge,      setAnnouncementBadge]      = useState(settings?.announcement_badge || 'TEMU DEAL');
+    const [announcementStyle,      setAnnouncementStyle]      = useState(settings?.announcement_style || 'temu');
+    const [announcementActionText, setAnnouncementActionText] = useState(settings?.announcement_action_text || 'Claim ➔');
     const [platformLocale,     setPlatformLocale]     = useState(settings?.platform_locale || 'en');
     const [seoTitle,           setSeoTitle]           = useState(settings?.seo_title || '');
     const [seoDescription,     setSeoDescription]     = useState(settings?.seo_description || '');
@@ -811,6 +815,7 @@ export const AdminSettings = ({ navigation }) => {
             // Phase-4
             admin_name: adminName, admin_title: adminTitle,
             announcement_text: announcementText, announcement_active: announcementActive, announcement_color: announcementColor,
+            announcement_badge: announcementBadge, announcement_style: announcementStyle, announcement_action_text: announcementActionText,
             platform_locale: platformLocale,
             seo_title: seoTitle, seo_description: seoDescription, seo_keywords: seoKeywords,
             enable_watermark: enableWatermark, watermark_text: watermarkText,
@@ -2734,6 +2739,19 @@ export const AdminSettings = ({ navigation }) => {
 
     const BANNER_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#0F172A'];
 
+    const BANNER_THEMES = [
+        { id: 'temu', name: 'Temu Flame', colors: ['#FF4500', '#FF7A00'], icon: 'flame' },
+        { id: 'obsidian', name: 'Obsidian Gold', colors: ['#0F172A', '#1E293B'], icon: 'diamond' },
+        { id: 'emerald', name: 'Emerald Trust', colors: ['#047857', '#10B981'], icon: 'shield-checkmark' },
+        { id: 'cyber', name: 'Cyber Purple', colors: ['#4F46E5', '#7C3AED'], icon: 'flash' },
+        { id: 'crimson', name: 'Crimson Heat', colors: ['#BE123C', '#E11D48'], icon: 'flame-outline' },
+        { id: 'sapphire', name: 'Sapphire Blue', colors: ['#1D4ED8', '#3B82F6'], icon: 'ribbon-outline' },
+    ];
+
+    const BADGE_PRESETS = [
+        'TEMU DEAL', 'FLASH SALE', 'FREE DELIVERY', 'LIMITED OFFER', 'BUYER PROTECTION', 'SPECIAL DEAL'
+    ];
+
     const renderAdvanced = () => (
         <View style={S.section}>
             {/* System Cache & Diagnostics */}
@@ -2771,23 +2789,116 @@ export const AdminSettings = ({ navigation }) => {
                 </Card>
             </Sect>
 
-            {/* Platform Announcement Banner */}
-            <Sect title="Announcement Banner" icon="megaphone">
+            {/* Platform Announcement Banner - Modern Temu E-Commerce Suite */}
+            <Sect title="Announcement Banner (Temu Modern E-Commerce)" icon="megaphone">
                 <Card>
-                    <Tog label="Show Banner to All Users" desc="Display a sitewide announcement at top of every page" icon="megaphone" value={announcementActive} onToggle={() => { setAnnouncementActive(p => !p); setUnsaved(true); }} color="#F59E0B" />
+                    <Tog label="Show Banner to All Users" desc="Display an auto-rotating high-converting announcement bar at top of app" icon="megaphone" value={announcementActive} onToggle={() => { setAnnouncementActive(p => !p); setUnsaved(true); }} color="#FF4500" />
                     {announcementActive && (
-                        <View style={{ marginTop: 12 }}>
-                            <Inp label="Banner Message" value={announcementText} onChange={v => { setAnnouncementText(v); setUnsaved(true); }} icon="text" placeholder="e.g. Free delivery this weekend!" multi hint="Keep it short and impactful" />
-                            <Text style={[S.iLabel, { color: T.muted, marginBottom: 10 }]}>BANNER ACCENT COLOR</Text>
-                            <View style={{ flexDirection: 'row', gap: 10 }}>
-                                {BANNER_COLORS.map(c => (
-                                    <TouchableOpacity key={c} onPress={() => { setAnnouncementColor(c); setUnsaved(true); }}
-                                        style={[S.swatch, { backgroundColor: c, width: 32, height: 32, borderWidth: announcementColor === c ? 3 : 0, borderColor: '#93C5FD' }]} />
+                        <View style={{ marginTop: 14 }}>
+                            {/* Theme / Gradient Preset Selector */}
+                            <Text style={[S.iLabel, { color: T.muted, marginBottom: 8 }]}>BANNER THEME & GRADIENT PRESET</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                                {BANNER_THEMES.map(theme => {
+                                    const isSelected = (announcementStyle || 'temu').toLowerCase() === theme.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={theme.id}
+                                            onPress={() => {
+                                                setAnnouncementStyle(theme.id);
+                                                setUnsaved(true);
+                                            }}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                backgroundColor: theme.colors[0],
+                                                paddingHorizontal: 10,
+                                                paddingVertical: 7,
+                                                borderRadius: 8,
+                                                borderWidth: 2,
+                                                borderColor: isSelected ? '#FFFFFF' : 'transparent',
+                                                shadowColor: '#000',
+                                                shadowOpacity: isSelected ? 0.25 : 0.05,
+                                                shadowRadius: 3,
+                                                elevation: isSelected ? 3 : 1
+                                            }}
+                                        >
+                                            <Ionicons name={theme.icon} size={12} color="#FFFFFF" />
+                                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                                                {theme.name}
+                                            </Text>
+                                            {isSelected && (
+                                                <Ionicons name="checkmark-circle" size={13} color="#FFFFFF" />
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+
+                            {/* Badge Label and Quick Presets */}
+                            <Inp
+                                label="Primary Badge Text"
+                                value={announcementBadge}
+                                onChange={v => { setAnnouncementBadge(v); setUnsaved(true); }}
+                                icon="pricetag"
+                                placeholder="e.g. TEMU DEAL"
+                                hint="Short pill badge displayed on the left"
+                            />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -6, marginBottom: 12 }}>
+                                {BADGE_PRESETS.map(badge => (
+                                    <TouchableOpacity
+                                        key={badge}
+                                        onPress={() => { setAnnouncementBadge(badge); setUnsaved(true); }}
+                                        style={{
+                                            backgroundColor: announcementBadge === badge ? '#0F172A' : T.surface,
+                                            paddingHorizontal: 9,
+                                            paddingVertical: 4,
+                                            borderRadius: 6,
+                                            borderWidth: 1,
+                                            borderColor: announcementBadge === badge ? '#0F172A' : T.border
+                                        }}
+                                    >
+                                        <Text style={{ color: announcementBadge === badge ? '#FFFFFF' : T.text, fontSize: 10, fontWeight: '800' }}>
+                                            {badge}
+                                        </Text>
+                                    </TouchableOpacity>
                                 ))}
                             </View>
-                            <View style={[S.bannerPreview, { backgroundColor: announcementColor }]}>
-                                <Ionicons name="megaphone" size={14} color="white" />
-                                <Text style={{ color: 'white', fontWeight: '700', fontSize: 12, flex: 1, marginLeft: 8 }}>{announcementText || 'Your announcement will appear here...'}</Text>
+
+                            {/* Banner Message */}
+                            <Inp
+                                label="Custom Banner Announcement Text"
+                                value={announcementText}
+                                onChange={v => { setAnnouncementText(v); setUnsaved(true); }}
+                                icon="text"
+                                placeholder="e.g. ⚡ Flash Deals: Up to 50% Off Limited Time Items!"
+                                multi
+                                hint="Will auto-rotate alongside Free Delivery and 90-Day Buyer Protection"
+                            />
+
+                            {/* Action Button CTA Text */}
+                            <Inp
+                                label="Action Button CTA Label"
+                                value={announcementActionText}
+                                onChange={v => { setAnnouncementActionText(v); setUnsaved(true); }}
+                                icon="arrow-forward-circle"
+                                placeholder="e.g. Claim ➔"
+                                hint="Button text on the right side of the banner"
+                            />
+
+                            {/* Live Temu Preview */}
+                            <Text style={[S.iLabel, { color: T.muted, marginTop: 4, marginBottom: 8 }]}>LIVE INTERACTIVE TEMU PREVIEW</Text>
+                            <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <TemuAnnouncementBanner
+                                    settings={{
+                                        announcement_active: true,
+                                        announcement_text: announcementText || '⚡ Flash Deals: Up to 50% Off Limited Time Items!',
+                                        announcement_badge: announcementBadge || 'TEMU DEAL',
+                                        announcement_style: announcementStyle || 'temu',
+                                        announcement_color: announcementColor,
+                                        announcement_action_text: announcementActionText || 'Claim ➔'
+                                    }}
+                                />
                             </View>
                         </View>
                     )}

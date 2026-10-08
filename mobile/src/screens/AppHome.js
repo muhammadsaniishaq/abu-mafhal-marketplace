@@ -10,6 +10,7 @@ import { Footer } from '../components/Footer';
 import { ServiceIcon } from '../components/ServiceIcon';
 import { supabase } from '../lib/supabase';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { TemuAnnouncementBanner } from '../components/TemuAnnouncementBanner';
 import { NewsletterCard } from '../components/NewsletterCard';
 import { HomeSkeleton } from '../components/SkeletonLoader';
 import { AutoScrollList } from '../components/AutoScrollList';
@@ -718,28 +719,17 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             }}>
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
-                {/* Sitewide Announcement Banner (Controlled from Admin Settings) */}
-                {Boolean(
-                    (typeof settings?.announcement_active === 'boolean' ? settings.announcement_active : Boolean(settings?.announcement_active?.value)) &&
-                    (typeof settings?.announcement_text === 'string' ? settings.announcement_text.trim().length > 0 : Boolean(settings?.announcement_text?.value))
-                ) && (
-                    <View style={{
-                        backgroundColor: (typeof settings?.announcement_color === 'string' ? settings.announcement_color : settings?.announcement_color?.value) || '#3B82F6',
-                        paddingVertical: 6,
-                        paddingHorizontal: 12,
-                        borderRadius: 8,
-                        marginBottom: 8,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6
-                    }}>
-                        <Ionicons name="megaphone" size={13} color="#FFFFFF" />
-                        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', textAlign: 'center', flex: 1 }} numberOfLines={1}>
-                            {typeof settings?.announcement_text === 'string' ? settings.announcement_text : String(settings?.announcement_text?.value || '')}
-                        </Text>
-                    </View>
-                )}
+                {/* Modern Temu E-Commerce Announcement Banner */}
+                <TemuAnnouncementBanner
+                    settings={settings}
+                    onPressAction={(action) => {
+                        if (action === 'flash_sales') {
+                            onGoToShop ? onGoToShop() : null;
+                        } else {
+                            onGoToShop ? onGoToShop() : null;
+                        }
+                    }}
+                />
 
                 {/* Top row: logo + actions (Strict First-Mobile Layout, 0% overflow) */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, minWidth: 0, width: '100%' }}>
