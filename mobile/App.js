@@ -68,6 +68,19 @@ import { clearFollowedStoresCache } from './src/services/vendorFollowerService';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ModernSplashScreen } from './src/components/ModernSplashScreen';
 import { ForceUpdateModal } from './src/components/ForceUpdateModal';
+import * as Font from 'expo-font';
+import {
+    Ionicons,
+    MaterialIcons,
+    FontAwesome5,
+    FontAwesome,
+    Feather,
+    MaterialCommunityIcons,
+    AntDesign,
+    Entypo,
+    SimpleLineIcons,
+    Octicons,
+} from '@expo/vector-icons';
 
 // Screens
 import { ProductComparison } from './src/screens/ProductComparison';
@@ -227,6 +240,36 @@ export default function App() {
     const [cartLines, setCartLines] = useState(getStoredCartSync);
     const [lastHeartbeat, setLastHeartbeat] = useState(0);
     const [showSplash, setShowSplash] = useState(true);
+    const [fontsLoaded, setFontsLoaded] = useState(false);
+
+    // Rigakafin matsalolin gumaka (icons): loda dukkan vector icon fonts tun a splash screen
+    useEffect(() => {
+        let isMounted = true;
+        async function preloadFonts() {
+            try {
+                await Font.loadAsync({
+                    ...Ionicons.font,
+                    ...MaterialIcons.font,
+                    ...FontAwesome5.font,
+                    ...FontAwesome.font,
+                    ...Feather.font,
+                    ...MaterialCommunityIcons.font,
+                    ...AntDesign.font,
+                    ...Entypo.font,
+                    ...SimpleLineIcons.font,
+                    ...Octicons.font,
+                });
+            } catch (err) {
+                console.log('Fonts preload note:', err);
+            } finally {
+                if (isMounted) {
+                    setFontsLoaded(true);
+                }
+            }
+        }
+        preloadFonts();
+        return () => { isMounted = false; };
+    }, []);
 
     const CART_STORAGE_KEY = '@abumafhal_cart_v1';
     const USER_STORAGE_KEY = '@abumafhal_user_v1';
@@ -918,7 +961,10 @@ export default function App() {
                     </NavigationContainer>
 
                     {showSplash && (
-                        <ModernSplashScreen onFinish={() => setShowSplash(false)} />
+                        <ModernSplashScreen 
+                            fontsLoaded={fontsLoaded}
+                            onFinish={() => setShowSplash(false)} 
+                        />
                     )}
 
                     <ForceUpdateModal />

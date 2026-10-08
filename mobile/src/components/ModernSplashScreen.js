@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 const { width, height } = Dimensions.get('window');
 const LOGO_IMG = require('../../assets/splash-icon.png');
 
-export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800 }) => {
+export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800, fontsLoaded = true }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.82)).current;
     const glowAnim = useRef(new Animated.Value(0.3)).current;
@@ -24,6 +24,9 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800 }) => {
     const progressAnim = useRef(new Animated.Value(0)).current;
 
     const [statusText, setStatusText] = useState('Initializing Escrow Engine...');
+    const [timeElapsed, setTimeElapsed] = useState(false);
+    const hasFinishedRef = useRef(false);
+    const glowLoopRef = useRef(null);
 
     useEffect(() => {
         // 1. Entrance animation sequence
@@ -68,6 +71,7 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800 }) => {
                 }),
             ])
         );
+        glowLoopRef.current = glowLoop;
         glowLoop.start();
 
         // 3. Dynamic status text simulation
@@ -79,8 +83,22 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800 }) => {
             setStatusText('Connecting to Marketplace...');
         }, 1300);
 
-        // 4. Smooth exit transition
-        const exitTimer = setTimeout(() => {
+        const minDurationTimer = setTimeout(() => {
+            setTimeElapsed(true);
+        }, minimumDuration);
+
+        return () => {
+            clearTimeout(statusTimer1);
+            clearTimeout(statusTimer2);
+            clearTimeout(minDurationTimer);
+            if (glowLoopRef.current) glowLoopRef.current.stop();
+        };
+    }, [minimumDuration]);
+
+    // 4. Smooth exit transition once BOTH minimum duration has passed AND fonts are loaded
+    useEffect(() => {
+        if (timeElapsed && fontsLoaded && !hasFinishedRef.current) {
+            hasFinishedRef.current = true;
             Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 0,
@@ -93,18 +111,11 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800 }) => {
                     useNativeDriver: true,
                 }),
             ]).start(() => {
-                glowLoop.stop();
+                if (glowLoopRef.current) glowLoopRef.current.stop();
                 if (onFinish) onFinish();
             });
-        }, minimumDuration);
-
-        return () => {
-            clearTimeout(statusTimer1);
-            clearTimeout(statusTimer2);
-            clearTimeout(exitTimer);
-            glowLoop.stop();
-        };
-    }, []);
+        }
+    }, [timeElapsed, fontsLoaded, onFinish]);
 
     const progressWidth = progressAnim.interpolate({
         inputRange: [0, 1],
@@ -175,7 +186,11 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800 }) => {
 
                     {/* Trust & Security Badge */}
                     <View style={styles.trustBadgeRow}>
-                        <Ionicons name="shield-checkmark" size={13} color="#10B981" />
+                        {fontsLoaded ? (
+                            <Ionicons name="shield-checkmark" size={13} color="#10B981" />
+                        ) : (
+                            <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '900', lineHeight: 13 }}>✓</Text>
+                        )}
                         <Text style={styles.trustBadgeText}>100% Escrow Protection • CBN Regulated Banking</Text>
                     </View>
 
