@@ -12,11 +12,11 @@ export const CountdownTimer = ({ targetDate }) => {
             timeLeft = {
                 days: Math.floor(difference / (1000 * 60 * 60 * 24)),
                 hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-                minutes: Math.floor((difference / 1000 / 60) % 60),
+                minutes: Math.floor((difference / (1000 * 60)) % 60),
                 seconds: Math.floor((difference / 1000) % 60),
             };
         } else {
-            timeLeft = { days: 2, hours: 14, minutes: 27, seconds: 36 };
+            timeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
         }
         return timeLeft;
     };

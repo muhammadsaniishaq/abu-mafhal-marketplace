@@ -842,11 +842,13 @@ export const LandingPage = ({
                                     <Ionicons name="flash" size={16} color="#EF4444" />
                                 </View>
                                 <View style={{ marginLeft: 8 }}>
-                                    <Text style={styles.flashSectionTitle}>Flash Deals</Text>
-                                    <Text style={styles.flashSectionSub}>Limited-time verified clearance sales</Text>
+                                    <Text style={styles.flashSectionTitle}>{settings?.active_flash_sale?.title || 'Flash Deals'}</Text>
+                                    <Text style={styles.flashSectionSub}>
+                                        {settings?.active_flash_sale?.discount_percent ? `Up to ${settings.active_flash_sale.discount_percent}% off limited-time deals` : 'Limited-time verified clearance sales'}
+                                    </Text>
                                 </View>
                             </View>
-                            <CountdownTimer />
+                            <CountdownTimer targetDate={settings?.active_flash_sale?.end_time} />
                         </View>
 
                         <ScrollView

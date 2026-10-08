@@ -679,9 +679,24 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     ].filter(p => p && p.id);
     const uniqueProducts = Array.from(new Map(allProductsPool.map(p => [p.id, p])).values());
 
+    const activeFlashCfg = settings?.active_flash_sale;
+    const flashDiscountPct = Number(activeFlashCfg?.discount_percent) || 0;
+    const hasLinkedFlashProds = activeFlashCfg?.is_active && Array.isArray(activeFlashCfg?.product_ids) && activeFlashCfg.product_ids.length > 0;
+
+    const baseFlashPool = (hasLinkedFlashProds
+        ? (() => {
+            const linked = uniqueProducts.filter(p => activeFlashCfg.product_ids.includes(p.id));
+            return linked.length > 0 ? linked.map(p => ({
+                ...p,
+                compare_at_price: p.compare_at_price || p.price,
+                price: flashDiscountPct > 0 ? Math.round(Number(p.price || 0) * (1 - flashDiscountPct / 100)) : p.price
+            })) : ((flashSale && flashSale.length > 0) ? flashSale : uniqueProducts.slice(0, 6));
+        })()
+        : ((flashSale && flashSale.length > 0) ? flashSale : uniqueProducts.slice(0, 6)));
+
     const finalFlashProducts = activeCategoryFilter === 'All'
-        ? ((flashSale && flashSale.length > 0) ? flashSale : uniqueProducts.slice(0, 6))
-        : uniqueProducts.filter(p => {
+        ? baseFlashPool
+        : baseFlashPool.filter(p => {
             const cat = String(p?.category || p?.subtitle || '').toLowerCase();
             const filter = String(activeCategoryFilter || '').toLowerCase();
             return cat.includes(filter) || filter.includes(cat);
@@ -1095,12 +1110,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Ionicons name="flash" size={22} color="#F59E0B" />
                             <View>
-                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0A192F' }}>Flash Sale</Text>
-                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Limited Time Offers</Text>
+                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0A192F' }}>
+                                    {settings?.active_flash_sale?.title || 'Flash Sale'}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>
+                                    {settings?.active_flash_sale?.discount_percent ? `Up to ${settings.active_flash_sale.discount_percent}% Off Limited Deals` : 'Limited Time Offers'}
+                                </Text>
                             </View>
                         </View>
-                        {/* 4 Red Countdown Boxes */}
-                        <CountdownTimer />
+                        {/* 4 Red Countdown Boxes with Live Expiry */}
+                        <CountdownTimer targetDate={settings?.active_flash_sale?.end_time} />
                     </View>
 
                     {/* Category Filter Pills: 100% Dynamic from Admin */}
