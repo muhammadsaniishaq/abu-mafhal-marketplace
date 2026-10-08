@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -17,10 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 
-// ─── Executive Design Tokens ─────────────────────────────────────────────────
+// ─── Compact Executive Tokens ────────────────────────────────────────────────
 const C = {
     canvas: '#F8FAFC',
     card: '#FFFFFF',
@@ -50,108 +49,7 @@ const C = {
     blueBorder: '#BFDBFE',
 };
 
-const STORAGE_KEY = '@abumafhal_admin_payouts_cache_v2';
-
-// ─── Seed Data for Instant Interactivity & Offline Resilience ────────────────
-const DEFAULT_SEED_PAYOUTS = [
-    {
-        id: 'po-1092',
-        role: 'Vendor',
-        table_source: 'vendor_payouts',
-        target_user_id: 'usr-kno-01',
-        amount: 85000,
-        bank_name: 'OPay Digital Services',
-        account_number: '8031234567',
-        account_name: 'Al-Mansur Gadgets Kano',
-        status: 'pending',
-        admin_note: '',
-        reference: 'WTH-2026-8819',
-        created_at: new Date(Date.now() - 1000 * 60 * 42).toISOString(),
-        profiles: {
-            full_name: 'Al-Mansur Tech Gadgets',
-            email: 'almansur.store@abumafhal.com',
-            phone: '08031234567'
-        }
-    },
-    {
-        id: 'po-1091',
-        role: 'Driver',
-        table_source: 'driver_payouts',
-        target_user_id: 'usr-drv-02',
-        amount: 24500,
-        bank_name: 'Moniepoint MFB',
-        account_number: '6245109823',
-        account_name: 'Kabiru Haruna Fleet',
-        status: 'pending',
-        admin_note: '',
-        reference: 'WTH-2026-8818',
-        created_at: new Date(Date.now() - 1000 * 60 * 135).toISOString(),
-        profiles: {
-            full_name: 'Kabiru Haruna (Fleet Courier)',
-            email: 'kabiru.courier@abumafhal.com',
-            phone: '08149876543'
-        }
-    },
-    {
-        id: 'po-1090',
-        role: 'Vendor',
-        table_source: 'vendor_payouts',
-        target_user_id: 'usr-vnd-03',
-        amount: 140000,
-        bank_name: 'Access Bank PLC',
-        account_number: '0129845721',
-        account_name: 'Aisha Luxury Modest Wear',
-        status: 'paid',
-        admin_note: 'Transferred via NIP Ref #9928198301 - Confirmed',
-        reference: 'WTH-2026-8817',
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
-        profiles: {
-            full_name: 'Aisha Luxury Modest Wear',
-            email: 'aisha.modest@abumafhal.com',
-            phone: '08023456789'
-        }
-    },
-    {
-        id: 'po-1089',
-        role: 'Driver',
-        table_source: 'driver_payouts',
-        target_user_id: 'usr-drv-04',
-        amount: 16200,
-        bank_name: 'Kuda Microfinance Bank',
-        account_number: '2019482710',
-        account_name: 'Usman Sani Dispatch',
-        status: 'paid',
-        admin_note: 'Weekly route earnings settlement #8816',
-        reference: 'WTH-2026-8816',
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
-        profiles: {
-            full_name: 'Usman Sani Express',
-            email: 'usman.express@abumafhal.com',
-            phone: '07034567890'
-        }
-    },
-    {
-        id: 'po-1088',
-        role: 'Vendor',
-        table_source: 'vendor_payouts',
-        target_user_id: 'usr-vnd-05',
-        amount: 32000,
-        bank_name: 'First Bank of Nigeria',
-        account_number: '3098124567',
-        account_name: 'Bello Organic Spices',
-        status: 'rejected',
-        admin_note: 'Incorrect account name provided. Refunded balance to merchant wallet.',
-        reference: 'WTH-2026-8815',
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 60).toISOString(),
-        profiles: {
-            full_name: 'Bello Organic Spices',
-            email: 'bello.spices@abumafhal.com',
-            phone: '08098765432'
-        }
-    }
-];
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Currency & Date Formatters ──────────────────────────────────────────────
 const formatNaira = (val) => {
     const num = Number(val || 0);
     return '₦' + num.toLocaleString('en-NG', { maximumFractionDigits: 0 });
@@ -173,98 +71,116 @@ const formatDate = (isoStr) => {
     }
 };
 
+// Extract bank credentials if stored inside transaction description string
+const parseBankFromDescription = (desc = '') => {
+    let bankName = 'Commercial Bank';
+    let accountNo = '';
+    let accountName = '';
+
+    if (!desc) return { bankName, accountNo, accountName };
+
+    // Common pattern: "Bank Withdrawal to Access Bank (0123456789 - Sani Bello)"
+    const match = desc.match(/(?:to\s+)?([A-Za-z0-9\s]+?)\s*\(([0-9]{10})\s*(?:-\s*([^)]+))?\)/i);
+    if (match) {
+        bankName = match[1]?.trim() || bankName;
+        accountNo = match[2]?.trim() || '';
+        accountName = match[3]?.trim() || '';
+    } else {
+        // Try looking for 10 consecutive digits
+        const numMatch = desc.match(/\b([0-9]{10})\b/);
+        if (numMatch) accountNo = numMatch[1];
+    }
+
+    return { bankName, accountNo, accountName };
+};
+
 export const AdminPayouts = ({ navigation, onBack }) => {
-    // Main Data State
+    // ── Live Data State (Strictly from Supabase) ──────────────────────────────
     const [withdrawals, setWithdrawals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Filters and Search
+    // ── Filters & Search ─────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('pending'); // 'pending', 'all', 'paid', 'rejected'
     const [roleFilter, setRoleFilter] = useState('all'); // 'all', 'Vendor', 'Driver'
     const [dateRange, setDateRange] = useState('all'); // 'all', 'today', 'week', 'month'
 
-    // Selected Modal State
+    // ── Interactive Detail / Action Modal ────────────────────────────────────
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [adminNote, setAdminNote] = useState('');
     const [copyFeedback, setCopyFeedback] = useState(null);
 
-    // Create Quick Simulation Modal
-    const [testModalVisible, setTestModalVisible] = useState(false);
-    const [testRole, setTestRole] = useState('Vendor');
-    const [testName, setTestName] = useState('');
-    const [testAmount, setTestAmount] = useState('');
-    const [testBank, setTestBank] = useState('OPay Digital');
-    const [testAccountNo, setTestAccountNo] = useState('');
-    const [testAccountName, setTestAccountName] = useState('');
-    const [testPhone, setTestPhone] = useState('');
-
     useEffect(() => {
-        fetchWithdrawalRequests();
+        fetchLivePayoutRequests();
     }, []);
 
-    // ── Fetch Withdrawal Requests ─────────────────────────────────────────────
-    const fetchWithdrawalRequests = async () => {
+    // ── Live Supabase Query (Zero Mockups) ───────────────────────────────────
+    const fetchLivePayoutRequests = async () => {
         try {
             setLoading(true);
 
-            // 1. Fetch cached storage first to guarantee instant UI rendering
-            let cachedList = [];
-            try {
-                const rawCached = await AsyncStorage.getItem(STORAGE_KEY);
-                if (rawCached) {
-                    cachedList = JSON.parse(rawCached);
-                }
-            } catch (e) {
-                console.warn('Cache read warning:', e);
-            }
-
-            // 2. Fetch live data from Supabase tables gracefully
+            // Query live tables in parallel
             const [vRes, dRes, txRes] = await Promise.allSettled([
                 supabase
                     .from('vendor_payouts')
-                    .select('*, profiles:vendor_id(full_name, email, phone)')
+                    .select('*, profiles:vendor_id(id, full_name, email, phone)')
                     .order('created_at', { ascending: false })
                     .limit(100),
                 supabase
                     .from('driver_payouts')
-                    .select('*, drivers:driver_id(name, phone, user_id, profiles(full_name, email, phone))')
+                    .select('*, drivers:driver_id(name, phone, user_id, profiles(id, full_name, email, phone))')
                     .order('created_at', { ascending: false })
                     .limit(100),
                 supabase
                     .from('transactions')
-                    .select('*, profiles:user_id(full_name, email, phone)')
-                    .eq('type', 'withdrawal')
+                    .select('*, profiles:user_id(id, full_name, email, phone, role)')
+                    .or('type.eq.withdrawal,type.eq.payout')
                     .order('created_at', { ascending: false })
-                    .limit(50)
+                    .limit(100)
             ]);
 
             const liveList = [];
 
-            // A. Process vendor_payouts
+            // 1. Process vendor_payouts records
             if (vRes.status === 'fulfilled' && Array.isArray(vRes.value?.data)) {
                 vRes.value.data.forEach(p => {
                     liveList.push({
-                        ...p,
+                        id: p.id,
                         role: 'Vendor',
                         table_source: 'vendor_payouts',
                         target_user_id: p.vendor_id || p.user_id,
-                        profiles: p.profiles || { full_name: 'Merchant Partner', email: 'merchant@abumafhal.com', phone: p.phone || '' }
+                        amount: Number(p.amount || 0),
+                        bank_name: p.bank_name || 'Commercial Bank',
+                        account_number: p.account_number || 'N/A',
+                        account_name: p.account_name || p.profiles?.full_name || 'Beneficiary',
+                        status: p.status === 'completed' || p.status === 'paid' ? 'paid' : p.status === 'rejected' ? 'rejected' : 'pending',
+                        admin_note: p.admin_note || '',
+                        reference: p.reference || `VP-${p.id.slice(0, 8)}`,
+                        created_at: p.created_at,
+                        profiles: p.profiles || { full_name: 'Merchant Partner', email: 'merchant@abumafhal.com', phone: '' }
                     });
                 });
             }
 
-            // B. Process driver_payouts
+            // 2. Process driver_payouts records
             if (dRes.status === 'fulfilled' && Array.isArray(dRes.value?.data)) {
                 dRes.value.data.forEach(p => {
                     liveList.push({
-                        ...p,
+                        id: p.id,
                         role: 'Driver',
                         table_source: 'driver_payouts',
                         target_user_id: p.drivers?.user_id || p.driver_id,
+                        amount: Number(p.amount || 0),
+                        bank_name: p.bank_name || 'Commercial Bank',
+                        account_number: p.account_number || 'N/A',
+                        account_name: p.account_name || p.drivers?.name || 'Courier',
+                        status: p.status === 'completed' || p.status === 'paid' ? 'paid' : p.status === 'rejected' ? 'rejected' : 'pending',
+                        admin_note: p.admin_note || '',
+                        reference: p.reference || `DP-${p.id.slice(0, 8)}`,
+                        created_at: p.created_at,
                         profiles: p.drivers?.profiles ? {
                             full_name: p.drivers.name || p.drivers.profiles.full_name || 'Fleet Driver',
                             email: p.drivers.profiles.email || 'courier@abumafhal.com',
@@ -274,66 +190,45 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                 });
             }
 
-            // C. Process transactions table withdrawals if any
+            // 3. Process transactions table withdrawals
             if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) {
                 txRes.value.data.forEach(t => {
-                    // Avoid duplicating if already represented
-                    if (!liveList.some(item => item.id === t.id || item.reference === t.reference)) {
+                    // Prevent duplicate if already fetched from vendor_payouts/driver_payouts
+                    const isDup = liveList.some(item => item.id === t.id || (t.reference && item.reference === t.reference));
+                    if (!isDup) {
+                        const parsedBank = parseBankFromDescription(t.description);
+                        const isDriver = t.profiles?.role === 'driver';
+
                         liveList.push({
                             id: t.id,
-                            role: 'Vendor',
+                            role: isDriver ? 'Driver' : 'Vendor',
                             table_source: 'transactions',
                             target_user_id: t.user_id,
                             amount: Number(t.amount || 0),
-                            bank_name: t.bank_name || 'Bank Transfer',
-                            account_number: t.account_number || t.reference || 'N/A',
-                            account_name: t.account_name || t.profiles?.full_name || 'Beneficiary',
-                            status: t.status === 'completed' ? 'paid' : t.status === 'rejected' ? 'rejected' : 'pending',
+                            bank_name: t.bank_name || parsedBank.bankName,
+                            account_number: t.account_number || parsedBank.accountNo || 'N/A',
+                            account_name: t.account_name || parsedBank.accountName || t.profiles?.full_name || 'Beneficiary',
+                            status: t.status === 'completed' || t.status === 'successful' || t.status === 'paid'
+                                ? 'paid'
+                                : t.status === 'rejected' || t.status === 'failed'
+                                    ? 'rejected'
+                                    : 'pending',
                             admin_note: t.description || '',
                             reference: t.reference || `TX-${t.id.slice(0, 8)}`,
                             created_at: t.created_at,
-                            profiles: t.profiles || { full_name: 'Platform Client', email: 'client@abumafhal.com' }
+                            profiles: t.profiles || { full_name: 'Platform Client', email: 'user@abumafhal.com', phone: '' }
                         });
                     }
                 });
             }
 
-            // 3. Merge live with cached and fallback seed
-            let combined = [...liveList];
+            // Sort chronologically (latest requests first)
+            liveList.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
-            // Overlay cached items to preserve recent processing
-            if (cachedList && cachedList.length > 0) {
-                cachedList.forEach(cachedItem => {
-                    const idx = combined.findIndex(c => c.id === cachedItem.id);
-                    if (idx !== -1) {
-                        combined[idx] = { ...combined[idx], ...cachedItem };
-                    } else {
-                        combined.push(cachedItem);
-                    }
-                });
-            }
-
-            // If empty (e.g. fresh database setup), load rich initial seeds
-            if (combined.length === 0) {
-                combined = [...DEFAULT_SEED_PAYOUTS];
-                await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(combined));
-            }
-
-            combined.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-
-            setWithdrawals(combined);
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(combined));
+            setWithdrawals(liveList);
         } catch (error) {
-            console.error('Error fetching payouts:', error);
-            // Fallback to cache or seeds silently so user experience never breaks
-            try {
-                const rawCached = await AsyncStorage.getItem(STORAGE_KEY);
-                if (rawCached) {
-                    setWithdrawals(JSON.parse(rawCached));
-                } else {
-                    setWithdrawals(DEFAULT_SEED_PAYOUTS);
-                }
-            } catch (_) {}
+            console.error('Error fetching live payouts:', error);
+            setWithdrawals([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -342,10 +237,10 @@ export const AdminPayouts = ({ navigation, onBack }) => {
 
     const handleRefresh = () => {
         setRefreshing(true);
-        fetchWithdrawalRequests();
+        fetchLivePayoutRequests();
     };
 
-    // ── Filter & Search Computation ───────────────────────────────────────────
+    // ── Computed Filtered Payouts ─────────────────────────────────────────────
     const filteredWithdrawals = useMemo(() => {
         let result = withdrawals;
 
@@ -375,7 +270,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
             result = result.filter(w => new Date(w.created_at) >= startDate);
         }
 
-        // Search Query
+        // Search Query Filter
         if (searchQuery.trim() !== '') {
             const q = searchQuery.toLowerCase();
             result = result.filter(w =>
@@ -393,7 +288,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
         return result;
     }, [withdrawals, statusFilter, roleFilter, dateRange, searchQuery]);
 
-    // ── Executive KPI Metrics ────────────────────────────────────────────────
+    // ── Computed KPI Metrics (Strictly Real Live Ledger) ──────────────────────
     const metrics = useMemo(() => {
         const pendingItems = withdrawals.filter(w => w.status === 'pending');
         const paidItems = withdrawals.filter(w => w.status === 'paid');
@@ -419,30 +314,30 @@ export const AdminPayouts = ({ navigation, onBack }) => {
         };
     }, [withdrawals]);
 
-    // ── Copy Helpers ─────────────────────────────────────────────────────────
+    // ── 1-Tap Copy Handlers ───────────────────────────────────────────────────
     const handleCopy = async (text, label) => {
-        if (!text) return;
+        if (!text || text === 'N/A') return;
         try {
             await Clipboard.setStringAsync(String(text));
             setCopyFeedback(label);
-            setTimeout(() => setCopyFeedback(null), 2200);
+            setTimeout(() => setCopyFeedback(null), 2000);
         } catch (e) {
-            console.warn('Copy error:', e);
+            console.warn('Copy notice:', e);
         }
     };
 
     const handleCopyFullTransferInfo = (req) => {
         if (!req) return;
         const fullInfo = `BANK: ${req.bank_name || 'N/A'}\nACCOUNT: ${req.account_number || 'N/A'}\nBENEFICIARY: ${req.account_name || req.profiles?.full_name || 'N/A'}\nAMOUNT: ₦${Number(req.amount || 0).toLocaleString()}\nREF: ${req.reference || req.id}`;
-        handleCopy(fullInfo, 'All Banking Info Copied!');
+        handleCopy(fullInfo, 'All Bank Details Copied!');
     };
 
-    // ── Direct Contact Handlers ──────────────────────────────────────────────
+    // ── Direct WhatsApp Notification ──────────────────────────────────────────
     const handleLaunchWhatsApp = (req) => {
         if (!req) return;
         const phone = req.profiles?.phone || req.phone || '';
         if (!phone) {
-            Alert.alert('No Phone Registered', 'This beneficiary has not linked a phone number.');
+            Alert.alert('No Phone Registered', 'This user has no phone number on record.');
             return;
         }
 
@@ -451,25 +346,25 @@ export const AdminPayouts = ({ navigation, onBack }) => {
         const name = req.profiles?.full_name || req.account_name || 'Partner';
         const amt = formatNaira(req.amount);
 
-        const msg = `Hello ${name},\nThis is Abu-Mafhal Marketplace Finance Desk regarding your payout request (${amt}).\n\nAccount: ${req.bank_name} - ${req.account_number}\nStatus: ${req.status === 'paid' ? 'Paid & Settled ✅' : 'Under Review ⏳'}\n\nPlease confirm receipt or contact us for assistance.`;
+        const msg = `Hello ${name},\nThis is Abu-Mafhal Marketplace Finance regarding your payout request (${amt}).\n\nAccount: ${req.bank_name} - ${req.account_number}\nStatus: ${req.status === 'paid' ? 'Paid & Settled ✅' : 'Under Review ⏳'}\n\nThank you for choosing Abu-Mafhal Marketplace!`;
 
         const url = `https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`;
         Linking.openURL(url).catch(() => {
-            Alert.alert('WhatsApp Error', 'Could not open WhatsApp on this device.');
+            Alert.alert('Error', 'Unable to open WhatsApp.');
         });
     };
 
     const handleCallPhone = (phone) => {
         if (!phone) {
-            Alert.alert('No Phone Registered', 'No phone number is available for this beneficiary.');
+            Alert.alert('No Phone', 'No contact phone number is available.');
             return;
         }
         Linking.openURL(`tel:${phone}`).catch(() => {
-            Alert.alert('Phone Call Failed', 'Could not launch dialer.');
+            Alert.alert('Error', 'Could not open phone dialer.');
         });
     };
 
-    // ── Process Payout (Approve or Reject & Refund) ──────────────────────────
+    // ── Live Processing (Approve or Reject with Wallet Refund) ────────────────
     const processRequest = async (status) => {
         if (!selectedRequest) return;
 
@@ -504,7 +399,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                         })
                                         .eq('id', selectedRequest.id);
                                 } catch (e) {
-                                    console.warn('Table update notice:', e);
+                                    console.warn('Payout table update warning:', e);
                                 }
                             } else if (selectedRequest.table_source === 'transactions') {
                                 try {
@@ -516,11 +411,11 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                         })
                                         .eq('id', selectedRequest.id);
                                 } catch (e) {
-                                    console.warn('Transactions update notice:', e);
+                                    console.warn('Transaction table update warning:', e);
                                 }
                             }
 
-                            // 2. If rejected, refund to user's wallet and profile
+                            // 2. If rejected, refund to user's wallet & profile balance
                             if (isRejection && selectedRequest.target_user_id) {
                                 try {
                                     // Update wallets table
@@ -555,7 +450,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                             .eq('id', selectedRequest.target_user_id);
                                     }
 
-                                    // Add refund transaction log
+                                    // Log refund credit transaction
                                     await supabase
                                         .from('transactions')
                                         .insert([{
@@ -571,8 +466,8 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                 }
                             }
 
-                            // 3. Update local state and persistent storage
-                            const updatedList = withdrawals.map(w => {
+                            // 3. Update local state
+                            setWithdrawals(prev => prev.map(w => {
                                 if (w.id === selectedRequest.id) {
                                     return {
                                         ...w,
@@ -582,18 +477,16 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                     };
                                 }
                                 return w;
-                            });
-
-                            setWithdrawals(updatedList);
-                            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+                            }));
 
                             Alert.alert(
                                 'Success',
-                                `Payout request marked as ${status.toUpperCase()}.${isRejection ? ' The amount has been credited back to their wallet.' : ''}`
+                                `Payout marked as ${status.toUpperCase()}.${isRejection ? ' Balance refunded to user wallet.' : ''}`
                             );
 
                             setSelectedRequest(null);
                             setAdminNote('');
+                            fetchLivePayoutRequests();
                         } catch (err) {
                             console.error('Processing error:', err);
                             Alert.alert('Processing Error', err.message || 'Could not update payout status.');
@@ -606,7 +499,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
         );
     };
 
-    // ── Generate & Export PDF Report ──────────────────────────────────────────
+    // ── Generate & Export Live PDF Report ─────────────────────────────────────
     const handleExport = async () => {
         try {
             setIsExporting(true);
@@ -619,45 +512,44 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                 <html>
                 <head>
                     <meta charset="utf-8" />
-                    <title>Payout Disbursement Ledger</title>
+                    <title>Live Payout Ledger</title>
                     <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 32px; color: #0F172A; background-color: #FFFFFF; }
-                        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #E2E8F0; padding-bottom: 20px; margin-bottom: 24px; }
-                        .brand { font-size: 24px; font-weight: 900; color: #0F172A; letter-spacing: -0.5px; }
+                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #0F172A; background-color: #FFFFFF; }
+                        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #E2E8F0; padding-bottom: 14px; margin-bottom: 18px; }
+                        .brand { font-size: 20px; font-weight: 900; color: #0F172A; }
                         .brand span { color: #D9A73A; }
-                        .sub { font-size: 13px; color: #64748B; margin-top: 4px; }
-                        .kpi-row { display: flex; gap: 16px; margin-bottom: 24px; }
-                        .kpi-card { flex: 1; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px; background-color: #F8FAFC; }
-                        .kpi-label { font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; }
-                        .kpi-val { font-size: 18px; font-weight: 900; color: #0F172A; margin-top: 4px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-                        th { background-color: #F1F5F9; color: #334155; font-weight: 800; text-align: left; padding: 10px 12px; border-bottom: 2px solid #CBD5E1; }
-                        td { padding: 10px 12px; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+                        .sub { font-size: 11px; color: #64748B; margin-top: 3px; }
+                        .kpi-row { display: flex; gap: 12px; margin-bottom: 18px; }
+                        .kpi-card { flex: 1; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px; background-color: #F8FAFC; }
+                        .kpi-label { font-size: 9px; font-weight: 700; color: #64748B; text-transform: uppercase; }
+                        .kpi-val { font-size: 15px; font-weight: 900; color: #0F172A; margin-top: 2px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+                        th { background-color: #F1F5F9; color: #334155; font-weight: 800; text-align: left; padding: 8px 10px; border-bottom: 2px solid #CBD5E1; }
+                        td { padding: 8px 10px; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
                         tr:nth-child(even) { background-color: #F8FAFC; }
-                        .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+                        .badge { display: inline-block; padding: 2px 6px; border-radius: 999px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
                         .badge-paid { background-color: #DCFCE7; color: #166534; }
                         .badge-pending { background-color: #FEF3C7; color: #92400E; }
                         .badge-rejected { background-color: #FEE2E2; color: #991B1B; }
-                        .role-tag { font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 4px; background-color: #E2E8F0; color: #475569; display: inline-block; margin-top: 2px; }
-                        .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #E2E8F0; font-size: 11px; color: #94A3B8; text-align: center; }
+                        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #E2E8F0; font-size: 10px; color: #94A3B8; text-align: center; }
                     </style>
                 </head>
                 <body>
                     <div class="header">
                         <div>
                             <div class="brand">ABU-MAFHAL <span>MARKETPLACE</span></div>
-                            <div class="sub">Official Payout Disbursement Ledger & Settlement Audit</div>
+                            <div class="sub">Live Disbursement & Settlement Audit</div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-size: 12px; font-weight: 700; color: #0F172A;">Generated: ${new Date().toLocaleString()}</div>
-                            <div class="sub">Filter: ${statusFilter.toUpperCase()} | Range: ${dateRange.toUpperCase()}</div>
+                            <div style="font-size: 11px; font-weight: 700; color: #0F172A;">Generated: ${new Date().toLocaleString()}</div>
+                            <div class="sub">Status: ${statusFilter.toUpperCase()} | Range: ${dateRange.toUpperCase()}</div>
                         </div>
                     </div>
 
                     <div class="kpi-row">
                         <div class="kpi-card">
                             <div class="kpi-label">Total Records</div>
-                            <div class="kpi-val">${filteredWithdrawals.length} Entries</div>
+                            <div class="kpi-val">${filteredWithdrawals.length}</div>
                         </div>
                         <div class="kpi-card">
                             <div class="kpi-label">Total Volume</div>
@@ -691,12 +583,11 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                     <td>
                                         <strong>${w.profiles?.full_name || w.account_name || 'N/A'}</strong><br/>
                                         <small style="color: #64748B;">${w.profiles?.email || ''}</small><br/>
-                                        <span class="role-tag">${w.role || 'Partner'}</span>
+                                        <span style="font-size: 9px; font-weight: 800; color: #475569;">${w.role || 'Partner'}</span>
                                     </td>
                                     <td>
                                         <strong>${w.bank_name || 'N/A'}</strong><br/>
-                                        <code>${w.account_number || 'N/A'}</code><br/>
-                                        <small style="color: #64748B;">${w.account_name || ''}</small>
+                                        <code>${w.account_number || 'N/A'}</code>
                                     </td>
                                     <td><code>${w.reference || w.id.slice(0, 8)}</code></td>
                                     <td style="font-weight: 900; color: #0F172A;">₦${Number(w.amount || 0).toLocaleString()}</td>
@@ -709,7 +600,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     </table>
 
                     <div class="footer">
-                        Abu-Mafhal Marketplace Financial Governance • Confidential Admin Ledger • Generated Automatically
+                        Abu-Mafhal Marketplace Live Financial Governance • Automated Ledger
                     </div>
                 </body>
                 </html>
@@ -718,7 +609,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
             const { uri } = await Print.printToFileAsync({ html: htmlContent });
 
             if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri, { dialogTitle: 'Export Payout Ledger PDF' });
+                await Sharing.shareAsync(uri, { dialogTitle: 'Export Live Payout Ledger' });
             } else {
                 Alert.alert('Report Ready', 'PDF report generated successfully on device.');
             }
@@ -730,53 +621,10 @@ export const AdminPayouts = ({ navigation, onBack }) => {
         }
     };
 
-    // ── Quick Simulation Generator (Allows testing disbursement anytime) ───────
-    const handleCreateTestRequest = async () => {
-        if (!testName.trim() || !testAmount.trim() || !testAccountNo.trim()) {
-            Alert.alert('Incomplete Form', 'Please provide merchant name, amount, and account number.');
-            return;
-        }
-
-        const newReq = {
-            id: `po-${Date.now().toString().slice(-4)}`,
-            role: testRole,
-            table_source: testRole === 'Driver' ? 'driver_payouts' : 'vendor_payouts',
-            target_user_id: `mock-usr-${Date.now()}`,
-            amount: Number(testAmount) || 15000,
-            bank_name: testBank,
-            account_number: testAccountNo.trim(),
-            account_name: testAccountName.trim() || testName.trim(),
-            status: 'pending',
-            admin_note: '',
-            reference: `WTH-LIVE-${Date.now().toString().slice(-6)}`,
-            created_at: new Date().toISOString(),
-            profiles: {
-                full_name: testName.trim(),
-                email: `${testName.toLowerCase().replace(/\s+/g, '')}@abumafhal.com`,
-                phone: testPhone.trim() || '08012345678'
-            }
-        };
-
-        const updated = [newReq, ...withdrawals];
-        setWithdrawals(updated);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-
-        // Reset form
-        setTestName('');
-        setTestAmount('');
-        setTestAccountNo('');
-        setTestAccountName('');
-        setTestPhone('');
-        setTestModalVisible(false);
-
-        Alert.alert('Request Created', `Test payout for ${formatNaira(newReq.amount)} has been added to Pending list.`);
-    };
-
-    // ── Render Individual Payout Card ─────────────────────────────────────────
+    // ── Render Compact Payout Item ────────────────────────────────────────────
     const renderPayoutItem = ({ item }) => {
         const isPending = item.status === 'pending';
         const isPaid = item.status === 'paid';
-        const isRejected = item.status === 'rejected';
 
         const statusBg = isPaid ? C.emeraldBg : isPending ? C.amberBg : C.roseBg;
         const statusText = isPaid ? C.emerald : isPending ? C.amber : C.rose;
@@ -787,15 +635,17 @@ export const AdminPayouts = ({ navigation, onBack }) => {
 
         return (
             <View style={S.card}>
-                {/* Top Row: Beneficiary Info & Amount */}
+                {/* Header Row: Beneficiary & Amount */}
                 <View style={S.cardHeader}>
                     <View style={S.beneficiaryRow}>
                         <View style={[S.avatarBox, { backgroundColor: isVendor ? '#FFFBEB' : '#EFF6FF', borderColor: isVendor ? '#FDE68A' : '#BFDBFE' }]}>
-                            <Ionicons name={isVendor ? 'storefront-outline' : 'bicycle-outline'} size={18} color={isVendor ? C.amber : C.blue} />
+                            <Ionicons name={isVendor ? 'storefront-outline' : 'bicycle-outline'} size={15} color={isVendor ? C.amber : C.blue} />
                         </View>
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <Text style={S.beneficiaryName} numberOfLines={1}>{item.profiles?.full_name || item.account_name || 'Partner'}</Text>
+                        <View style={{ flex: 1, marginRight: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                <Text style={S.beneficiaryName} numberOfLines={1}>
+                                    {item.profiles?.full_name || item.account_name || 'Partner'}
+                                </Text>
                                 <View style={[S.rolePill, { backgroundColor: isVendor ? '#FFF7ED' : '#EEF2FF', borderColor: isVendor ? '#FFEDD5' : '#C7D2FE' }]}>
                                     <Text style={[S.rolePillText, { color: isVendor ? '#C2410C' : C.indigo }]}>{item.role}</Text>
                                 </View>
@@ -809,53 +659,55 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     <View style={S.amountWrap}>
                         <Text style={S.amountValue}>{formatNaira(item.amount)}</Text>
                         <View style={[S.statusPill, { backgroundColor: statusBg, borderColor: statusBorder }]}>
-                            <Ionicons name={statusIcon} size={11} color={statusText} />
+                            <Ionicons name={statusIcon} size={10} color={statusText} />
                             <Text style={[S.statusPillText, { color: statusText }]}>{item.status.toUpperCase()}</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* Bank Settlement Strip */}
+                {/* Compact Bank Strip */}
                 <View style={S.bankStrip}>
                     <View style={S.bankInfoRow}>
-                        <Ionicons name="business-outline" size={15} color={C.muted} />
+                        <Ionicons name="business-outline" size={13} color={C.muted} />
                         <Text style={S.bankNameText} numberOfLines={1}>{item.bank_name || 'Commercial Bank'}</Text>
                     </View>
 
                     <View style={S.bankAccountRow}>
-                        <Text style={S.accountNumberText}>{item.account_number || 'No Account'}</Text>
-                        <TouchableOpacity
-                            onPress={() => handleCopy(item.account_number, `Account Copied: ${item.account_number}`)}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            style={S.copyIconButton}
-                        >
-                            <Ionicons name="copy-outline" size={14} color={C.blue} />
-                        </TouchableOpacity>
+                        <Text style={S.accountNumberText}>{item.account_number || 'N/A'}</Text>
+                        {item.account_number && item.account_number !== 'N/A' ? (
+                            <TouchableOpacity
+                                onPress={() => handleCopy(item.account_number, `Account Copied: ${item.account_number}`)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={S.copyIconButton}
+                            >
+                                <Ionicons name="copy-outline" size={12} color={C.blue} />
+                            </TouchableOpacity>
+                        ) : null}
                     </View>
                 </View>
 
-                {/* Account Holder Name Subtext */}
+                {/* Account Name */}
                 {item.account_name ? (
-                    <Text style={S.accountHolderText}>
-                        Beneficiary Name: <Text style={{ fontWeight: '700', color: C.slate }}>{item.account_name}</Text>
+                    <Text style={S.accountHolderText} numberOfLines={1}>
+                        Name: <Text style={{ fontWeight: '700', color: C.slate }}>{item.account_name}</Text>
                     </Text>
                 ) : null}
 
-                {/* Admin Note Preview (if resolved) */}
+                {/* Admin Note if already settled */}
                 {item.admin_note ? (
                     <View style={S.notePreviewBox}>
-                        <Ionicons name="document-text-outline" size={13} color={C.muted} />
-                        <Text style={S.notePreviewText} numberOfLines={2}>"{item.admin_note}"</Text>
+                        <Ionicons name="document-text-outline" size={11} color={C.muted} />
+                        <Text style={S.notePreviewText} numberOfLines={1}>"{item.admin_note}"</Text>
                     </View>
                 ) : null}
 
-                {/* Card Action Footer */}
+                {/* Action Buttons */}
                 <View style={S.cardFooter}>
                     <TouchableOpacity
                         onPress={() => handleCopyFullTransferInfo(item)}
                         style={S.copyAllBtn}
                     >
-                        <Ionicons name="copy-outline" size={13} color={C.muted} />
+                        <Ionicons name="copy-outline" size={12} color={C.muted} />
                         <Text style={S.copyAllBtnText}>Copy Bank Info</Text>
                     </TouchableOpacity>
 
@@ -864,7 +716,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                             onPress={() => handleLaunchWhatsApp(item)}
                             style={S.whatsappQuickBtn}
                         >
-                            <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
+                            <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
                         </TouchableOpacity>
                     ) : null}
 
@@ -876,7 +728,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                         style={[S.actionBtn, { backgroundColor: isPending ? C.navy : '#F1F5F9' }]}
                     >
                         <Text style={[S.actionBtnText, { color: isPending ? '#FFFFFF' : C.slate }]}>
-                            {isPending ? 'Review & Settle →' : 'View Audit Details'}
+                            {isPending ? 'Settle →' : 'View Audit'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -886,45 +738,36 @@ export const AdminPayouts = ({ navigation, onBack }) => {
 
     return (
         <View style={S.container}>
-            {/* ── Executive Header ────────────────────────────────────────────── */}
+            {/* ── Compact Executive Header ────────────────────────────────────── */}
             <View style={S.header}>
                 <View style={S.headerTopRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         {onBack ? (
                             <TouchableOpacity onPress={onBack} style={S.backButton}>
-                                <Ionicons name="arrow-back" size={18} color={C.navy} />
+                                <Ionicons name="arrow-back" size={16} color={C.navy} />
                             </TouchableOpacity>
                         ) : navigation?.canGoBack?.() ? (
                             <TouchableOpacity onPress={() => navigation.goBack()} style={S.backButton}>
-                                <Ionicons name="arrow-back" size={18} color={C.navy} />
+                                <Ionicons name="arrow-back" size={16} color={C.navy} />
                             </TouchableOpacity>
                         ) : null}
 
                         <View>
                             <Text style={S.headerTitle}>Payout Console</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                                 <View style={S.liveDot} />
-                                <Text style={S.headerSubtitle}>Vendor & Driver Settlements • Automated Ledger</Text>
+                                <Text style={S.headerSubtitle}>Live Supabase Ledger</Text>
                             </View>
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <TouchableOpacity
-                            onPress={() => setTestModalVisible(true)}
-                            style={S.testSimBtn}
-                            title="Simulate Withdrawal"
-                        >
-                            <Ionicons name="add" size={16} color={C.navy} />
-                            <Text style={S.testSimBtnText}>+ Mock</Text>
-                        </TouchableOpacity>
-
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
                             onPress={handleRefresh}
                             style={S.iconBtn}
                             disabled={refreshing}
                         >
-                            <Ionicons name="refresh" size={18} color={C.navy} />
+                            <Ionicons name="refresh" size={15} color={C.navy} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -936,7 +779,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                 <ActivityIndicator size="small" color="#FFFFFF" />
                             ) : (
                                 <>
-                                    <Ionicons name="document-text-outline" size={15} color="#FFFFFF" />
+                                    <Ionicons name="document-text-outline" size={13} color="#FFFFFF" />
                                     <Text style={S.exportBtnText}>PDF</Text>
                                 </>
                             )}
@@ -944,20 +787,20 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     </View>
                 </View>
 
-                {/* ── 4-Tile KPI Executive Summary Ribbon ──────────────────────── */}
+                {/* ── Compact 4-Tile KPI Summary Ribbon ────────────────────────── */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={S.kpiScroll}
                 >
-                    {/* Pending Review Tile */}
+                    {/* Pending Approval Tile */}
                     <TouchableOpacity
                         onPress={() => setStatusFilter('pending')}
                         style={[S.kpiCard, statusFilter === 'pending' && S.kpiCardActive]}
                     >
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.amberBg }]}>
-                                <Ionicons name="hourglass-outline" size={14} color={C.amber} />
+                                <Ionicons name="hourglass-outline" size={12} color={C.amber} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.amber, backgroundColor: '#FEF3C7' }]}>
                                 {metrics.pendingCount} QUEUED
@@ -974,7 +817,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     >
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.emeraldBg }]}>
-                                <Ionicons name="checkmark-done-circle-outline" size={14} color={C.emerald} />
+                                <Ionicons name="checkmark-done-circle-outline" size={12} color={C.emerald} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.emerald, backgroundColor: '#DCFCE7' }]}>
                                 {metrics.paidCount} SETTLED
@@ -991,7 +834,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     >
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.roseBg }]}>
-                                <Ionicons name="refresh-circle-outline" size={14} color={C.rose} />
+                                <Ionicons name="refresh-circle-outline" size={12} color={C.rose} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.rose, backgroundColor: '#FEE2E2' }]}>
                                 {metrics.rejectedCount} REFUNDED
@@ -1001,14 +844,14 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                         <Text style={S.kpiSub}>Wallet Reversals</Text>
                     </TouchableOpacity>
 
-                    {/* Settlement Efficiency Rate Tile */}
+                    {/* Settlement Efficiency Rate */}
                     <View style={S.kpiCard}>
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.indigoBg }]}>
-                                <Ionicons name="pie-chart-outline" size={14} color={C.indigo} />
+                                <Ionicons name="pie-chart-outline" size={12} color={C.indigo} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.indigo, backgroundColor: '#E0E7FF' }]}>
-                                EFFICIENCY
+                                RATE
                             </Text>
                         </View>
                         <Text style={S.kpiValue}>{metrics.resolutionRate}%</Text>
@@ -1017,21 +860,21 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                 </ScrollView>
             </View>
 
-            {/* ── Search Bar & Filter Controls ────────────────────────────────── */}
+            {/* ── Search & Filter Controls ────────────────────────────────────── */}
             <View style={S.filterSection}>
                 {/* Search Box */}
                 <View style={S.searchBox}>
-                    <Ionicons name="search" size={17} color={C.muted} />
+                    <Ionicons name="search" size={15} color={C.muted} />
                     <TextInput
                         style={S.searchInput}
-                        placeholder="Search merchant, account number, bank..."
+                        placeholder="Search beneficiary, account, bank..."
                         placeholderTextColor={C.subtle}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <Ionicons name="close-circle" size={17} color={C.muted} />
+                            <Ionicons name="close-circle" size={15} color={C.muted} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -1040,7 +883,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.tabRow}>
                     {[
                         { id: 'pending', label: 'Pending', count: metrics.pendingCount },
-                        { id: 'all', label: 'All Payouts', count: withdrawals.length },
+                        { id: 'all', label: 'All', count: withdrawals.length },
                         { id: 'paid', label: 'Paid', count: metrics.paidCount },
                         { id: 'rejected', label: 'Rejected', count: metrics.rejectedCount }
                     ].map(tab => {
@@ -1064,10 +907,9 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     })}
                 </ScrollView>
 
-                {/* Sub-Filters: Role & Date Range */}
+                {/* Sub-Filters: Roles & Date Range */}
                 <View style={S.subFilterRow}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                        {/* Role Pills */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
                         {['all', 'Vendor', 'Driver'].map(r => (
                             <TouchableOpacity
                                 key={r}
@@ -1075,19 +917,18 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                 style={[S.chipPill, roleFilter === r && S.chipPillActive]}
                             >
                                 <Text style={[S.chipPillText, roleFilter === r && S.chipPillTextActive]}>
-                                    {r === 'all' ? 'All Roles' : `${r}s Only`}
+                                    {r === 'all' ? 'All Roles' : `${r}s`}
                                 </Text>
                             </TouchableOpacity>
                         ))}
 
                         <View style={{ width: 1, backgroundColor: C.border, marginHorizontal: 2 }} />
 
-                        {/* Date Range Pills */}
                         {[
                             { id: 'all', label: 'All Time' },
                             { id: 'today', label: 'Today' },
-                            { id: 'week', label: 'Last 7 Days' },
-                            { id: 'month', label: 'Last 30 Days' }
+                            { id: 'week', label: '7 Days' },
+                            { id: 'month', label: '30 Days' }
                         ].map(d => (
                             <TouchableOpacity
                                 key={d.id}
@@ -1105,11 +946,11 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                 {/* Results Count Banner */}
                 <View style={S.resultCounterRow}>
                     <Text style={S.resultCounterText}>
-                        Showing <Text style={{ fontWeight: '800', color: C.navy }}>{filteredWithdrawals.length}</Text> of {withdrawals.length} payout records
+                        Showing <Text style={{ fontWeight: '800', color: C.navy }}>{filteredWithdrawals.length}</Text> of {withdrawals.length} live records
                     </Text>
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <Text style={S.clearSearchText}>Clear Search</Text>
+                            <Text style={S.clearSearchText}>Clear</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -1118,8 +959,8 @@ export const AdminPayouts = ({ navigation, onBack }) => {
             {/* ── Main List ───────────────────────────────────────────────────── */}
             {loading && !refreshing ? (
                 <View style={S.centerLoader}>
-                    <ActivityIndicator size="large" color={C.navy} />
-                    <Text style={S.loaderText}>Syncing payout ledger & float records...</Text>
+                    <ActivityIndicator size="small" color={C.navy} />
+                    <Text style={S.loaderText}>Querying live payout records...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -1133,34 +974,35 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     ListEmptyComponent={
                         <View style={S.emptyStateBox}>
                             <View style={S.emptyIconWrap}>
-                                <Ionicons name="wallet-outline" size={36} color={C.muted} />
+                                <Ionicons name="wallet-outline" size={30} color={C.muted} />
                             </View>
-                            <Text style={S.emptyTitle}>No Payout Records Found</Text>
+                            <Text style={S.emptyTitle}>No Live Payout Requests</Text>
                             <Text style={S.emptySubtitle}>
                                 {searchQuery
-                                    ? `No payout requests match "${searchQuery}".`
-                                    : `There are currently no ${statusFilter !== 'all' ? statusFilter : ''} withdrawal requests.`}
+                                    ? `No payout records match "${searchQuery}".`
+                                    : `There are currently no ${statusFilter !== 'all' ? statusFilter : ''} withdrawal requests from vendors or drivers in the live database.`}
                             </Text>
                             <TouchableOpacity
-                                onPress={() => setTestModalVisible(true)}
-                                style={S.createEmptyBtn}
+                                onPress={handleRefresh}
+                                style={S.refreshEmptyBtn}
                             >
-                                <Text style={S.createEmptyBtnText}>+ Simulate A Payout Request</Text>
+                                <Ionicons name="refresh" size={14} color="#FFFFFF" />
+                                <Text style={S.refreshEmptyBtnText}>Refresh Live Ledger</Text>
                             </TouchableOpacity>
                         </View>
                     }
                 />
             )}
 
-            {/* ── Copy Feedback Toast Banner ─────────────────────────────────── */}
+            {/* ── Copy Feedback Toast ─────────────────────────────────────────── */}
             {copyFeedback && (
                 <View style={S.copyToast}>
-                    <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                    <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
                     <Text style={S.copyToastText}>{copyFeedback}</Text>
                 </View>
             )}
 
-            {/* ── Executive Disbursement Drawer / Modal ───────────────────────── */}
+            {/* ── Compact Disbursement Review Drawer ──────────────────────────── */}
             <Modal
                 visible={!!selectedRequest}
                 animationType="slide"
@@ -1181,11 +1023,11 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                         onPress={() => setSelectedRequest(null)}
                                         style={S.modalCloseBtn}
                                     >
-                                        <Ionicons name="close" size={20} color={C.navy} />
+                                        <Ionicons name="close" size={18} color={C.navy} />
                                     </TouchableOpacity>
                                 </View>
 
-                                {/* Hero Amount Card */}
+                                {/* Compact Hero Amount Card */}
                                 <View style={S.heroAmountCard}>
                                     <Text style={S.heroAmountLabel}>SETTLEMENT AMOUNT</Text>
                                     <Text style={S.heroAmountValue}>{formatNaira(selectedRequest.amount)}</Text>
@@ -1208,50 +1050,50 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                 <View style={S.sectionBox}>
                                     <Text style={S.sectionTitle}>Beneficiary Account</Text>
                                     <View style={S.beneficiaryModalRow}>
-                                        <View style={[S.avatarBox, { backgroundColor: '#F1F5F9', width: 44, height: 44 }]}>
-                                            <Ionicons name={selectedRequest.role === 'Vendor' ? 'storefront' : 'bicycle'} size={20} color={C.navy} />
+                                        <View style={[S.avatarBox, { backgroundColor: '#F1F5F9', width: 36, height: 36 }]}>
+                                            <Ionicons name={selectedRequest.role === 'Vendor' ? 'storefront' : 'bicycle'} size={17} color={C.navy} />
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={S.beneficiaryModalName}>{selectedRequest.profiles?.full_name || selectedRequest.account_name || 'N/A'}</Text>
-                                            <Text style={S.beneficiaryModalEmail}>{selectedRequest.profiles?.email || 'No email'}</Text>
+                                            <Text style={S.beneficiaryModalEmail}>{selectedRequest.profiles?.email || 'No email registered'}</Text>
                                             {selectedRequest.profiles?.phone ? (
                                                 <Text style={S.beneficiaryModalPhone}>📞 {selectedRequest.profiles.phone}</Text>
                                             ) : null}
                                         </View>
                                     </View>
 
-                                    {/* Direct Phone & WhatsApp triggers */}
+                                    {/* Direct Phone & WhatsApp buttons */}
                                     {selectedRequest.profiles?.phone ? (
                                         <View style={S.contactTriggerRow}>
                                             <TouchableOpacity
                                                 onPress={() => handleLaunchWhatsApp(selectedRequest)}
                                                 style={S.whatsappTriggerBtn}
                                             >
-                                                <Ionicons name="logo-whatsapp" size={16} color="#16A34A" />
-                                                <Text style={S.whatsappTriggerText}>WhatsApp Notification</Text>
+                                                <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
+                                                <Text style={S.whatsappTriggerText}>WhatsApp Receipt</Text>
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
                                                 onPress={() => handleCallPhone(selectedRequest.profiles.phone)}
                                                 style={S.callTriggerBtn}
                                             >
-                                                <Ionicons name="call-outline" size={16} color={C.navy} />
+                                                <Ionicons name="call-outline" size={14} color={C.navy} />
                                                 <Text style={S.callTriggerText}>Call Phone</Text>
                                             </TouchableOpacity>
                                         </View>
                                     ) : null}
                                 </View>
 
-                                {/* Bank Account Information & 1-Tap Copy */}
+                                {/* Bank Settlement Coordinates */}
                                 <View style={S.sectionBox}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                        <Text style={S.sectionTitle}>Bank Transfer Coordinates</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <Text style={S.sectionTitle}>Bank Account Details</Text>
                                         <TouchableOpacity
                                             onPress={() => handleCopyFullTransferInfo(selectedRequest)}
                                             style={S.copyAllMiniBtn}
                                         >
-                                            <Ionicons name="copy-outline" size={12} color={C.blue} />
-                                            <Text style={S.copyAllMiniText}>Copy All Details</Text>
+                                            <Ionicons name="copy-outline" size={11} color={C.blue} />
+                                            <Text style={S.copyAllMiniText}>Copy All</Text>
                                         </TouchableOpacity>
                                     </View>
 
@@ -1262,15 +1104,17 @@ export const AdminPayouts = ({ navigation, onBack }) => {
 
                                     <View style={S.coordRow}>
                                         <Text style={S.coordLabel}>Account Number</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <Text style={S.coordValueMono}>{selectedRequest.account_number || 'N/A'}</Text>
-                                            <TouchableOpacity
-                                                onPress={() => handleCopy(selectedRequest.account_number, `Account Copied: ${selectedRequest.account_number}`)}
-                                                style={S.copyPill}
-                                            >
-                                                <Ionicons name="copy-outline" size={13} color={C.blue} />
-                                                <Text style={S.copyPillText}>Copy</Text>
-                                            </TouchableOpacity>
+                                            {selectedRequest.account_number && selectedRequest.account_number !== 'N/A' ? (
+                                                <TouchableOpacity
+                                                    onPress={() => handleCopy(selectedRequest.account_number, `Account Copied: ${selectedRequest.account_number}`)}
+                                                    style={S.copyPill}
+                                                >
+                                                    <Ionicons name="copy-outline" size={11} color={C.blue} />
+                                                    <Text style={S.copyPillText}>Copy</Text>
+                                                </TouchableOpacity>
+                                            ) : null}
                                         </View>
                                     </View>
 
@@ -1283,17 +1127,17 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                 {/* Resolution Actions */}
                                 {selectedRequest.status === 'pending' ? (
                                     <View style={S.resolutionBox}>
-                                        <Text style={S.sectionTitle}>Finance Admin Note & Settlement</Text>
-                                        <Text style={S.noteInstruction}>Add transaction reference, bank transfer ID, or reason for audit trail:</Text>
+                                        <Text style={S.sectionTitle}>Admin Note & Audit Log</Text>
+                                        <Text style={S.noteInstruction}>Transaction ref, bank transfer ID, or reason for audit:</Text>
 
                                         {/* Quick Note Chips */}
                                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.quickChipsRow}>
                                             {[
                                                 'Transfer Settled via OPay',
-                                                'Confirmed via Mobile Banking',
+                                                'Confirmed via Bank App',
                                                 'Duplicate Request',
                                                 'Incorrect Account Name',
-                                                'Vendor Requested Reversal'
+                                                'Vendor Requested Cancellation'
                                             ].map(chip => (
                                                 <TouchableOpacity
                                                     key={chip}
@@ -1307,7 +1151,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
 
                                         <TextInput
                                             style={S.noteInput}
-                                            placeholder="e.g. Bank NIP Ref #99201948 - Settled via Commercial Float"
+                                            placeholder="e.g. Settled via Bank Transfer Ref #99201948"
                                             placeholderTextColor={C.subtle}
                                             value={adminNote}
                                             onChangeText={setAdminNote}
@@ -1320,8 +1164,8 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                                 disabled={isProcessing}
                                                 style={[S.rejectBtn, isProcessing && { opacity: 0.6 }]}
                                             >
-                                                <Ionicons name="arrow-undo-outline" size={16} color={C.rose} />
-                                                <Text style={S.rejectBtnText}>Reject & Refund Wallet</Text>
+                                                <Ionicons name="arrow-undo-outline" size={14} color={C.rose} />
+                                                <Text style={S.rejectBtnText}>Reject & Refund</Text>
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
@@ -1333,7 +1177,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                                     <ActivityIndicator size="small" color="#FFFFFF" />
                                                 ) : (
                                                     <>
-                                                        <Ionicons name="checkmark-done" size={17} color="#FFFFFF" />
+                                                        <Ionicons name="checkmark-done" size={15} color="#FFFFFF" />
                                                         <Text style={S.approveBtnText}>Approve & Mark Paid</Text>
                                                     </>
                                                 )}
@@ -1341,7 +1185,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                         </View>
 
                                         <Text style={S.rejectionWarning}>
-                                            ⚠️ Rejecting a request automatically returns the full amount to the merchant's wallet balance.
+                                            ⚠️ Rejecting a request automatically refunds the balance back to the merchant's wallet.
                                         </Text>
                                     </View>
                                 ) : (
@@ -1351,7 +1195,7 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                                     }]}>
                                         <Ionicons
                                             name={selectedRequest.status === 'paid' ? 'checkmark-circle' : 'close-circle'}
-                                            size={32}
+                                            size={26}
                                             color={selectedRequest.status === 'paid' ? C.emerald : C.rose}
                                         />
                                         <Text style={[S.resolvedTitle, { color: selectedRequest.status === 'paid' ? C.emerald : C.rose }]}>
@@ -1367,113 +1211,11 @@ export const AdminPayouts = ({ navigation, onBack }) => {
                     </View>
                 </View>
             </Modal>
-
-            {/* ── Test Withdrawal Simulator Modal ─────────────────────────────── */}
-            <Modal
-                visible={testModalVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setTestModalVisible(false)}
-            >
-                <View style={S.modalBackdrop}>
-                    <View style={S.modalContent}>
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <View style={S.modalHeader}>
-                                <View>
-                                    <Text style={S.modalTitle}>Simulate Payout Request</Text>
-                                    <Text style={S.modalRef}>Add a test withdrawal to verify ledger mechanics</Text>
-                                </View>
-                                <TouchableOpacity onPress={() => setTestModalVisible(false)} style={S.modalCloseBtn}>
-                                    <Ionicons name="close" size={20} color={C.navy} />
-                                </TouchableOpacity>
-                            </View>
-
-                            <Text style={S.inputLabel}>Beneficiary Role</Text>
-                            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                                {['Vendor', 'Driver'].map(role => (
-                                    <TouchableOpacity
-                                        key={role}
-                                        onPress={() => setTestRole(role)}
-                                        style={[S.roleSelectBtn, testRole === role && S.roleSelectBtnActive]}
-                                    >
-                                        <Text style={[S.roleSelectText, testRole === role && S.roleSelectTextActive]}>{role}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            <Text style={S.inputLabel}>Merchant / Driver Full Name</Text>
-                            <TextInput
-                                style={S.simInput}
-                                placeholder="e.g. Sani Textiles Kano"
-                                placeholderTextColor={C.subtle}
-                                value={testName}
-                                onChangeText={setTestName}
-                            />
-
-                            <Text style={S.inputLabel}>Payout Amount (₦)</Text>
-                            <TextInput
-                                style={S.simInput}
-                                placeholder="e.g. 50000"
-                                placeholderTextColor={C.subtle}
-                                keyboardType="numeric"
-                                value={testAmount}
-                                onChangeText={setTestAmount}
-                            />
-
-                            <Text style={S.inputLabel}>Bank Name</Text>
-                            <TextInput
-                                style={S.simInput}
-                                placeholder="e.g. OPay Digital, Moniepoint, Access Bank"
-                                placeholderTextColor={C.subtle}
-                                value={testBank}
-                                onChangeText={setTestBank}
-                            />
-
-                            <Text style={S.inputLabel}>Account Number</Text>
-                            <TextInput
-                                style={S.simInput}
-                                placeholder="e.g. 8031234567"
-                                placeholderTextColor={C.subtle}
-                                keyboardType="numeric"
-                                value={testAccountNo}
-                                onChangeText={setTestAccountNo}
-                            />
-
-                            <Text style={S.inputLabel}>Account Holder Name</Text>
-                            <TextInput
-                                style={S.simInput}
-                                placeholder="e.g. Sani Umar Bello"
-                                placeholderTextColor={C.subtle}
-                                value={testAccountName}
-                                onChangeText={setTestAccountName}
-                            />
-
-                            <Text style={S.inputLabel}>WhatsApp / Contact Phone</Text>
-                            <TextInput
-                                style={S.simInput}
-                                placeholder="e.g. 08012345678"
-                                placeholderTextColor={C.subtle}
-                                keyboardType="phone-pad"
-                                value={testPhone}
-                                onChangeText={setTestPhone}
-                            />
-
-                            <TouchableOpacity
-                                onPress={handleCreateTestRequest}
-                                style={S.submitSimBtn}
-                            >
-                                <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
-                                <Text style={S.submitSimBtnText}>Add to Payout Ledger</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 };
 
-// ─── Executive Stylesheet ────────────────────────────────────────────────────
+// ─── Compact Modern Stylesheet ───────────────────────────────────────────────
 const S = StyleSheet.create({
     container: {
         flex: 1,
@@ -1481,9 +1223,9 @@ const S = StyleSheet.create({
     },
     header: {
         backgroundColor: C.card,
-        paddingTop: 16,
-        paddingBottom: 14,
-        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 10,
+        paddingHorizontal: 14,
         borderBottomWidth: 1,
         borderBottomColor: C.border
     },
@@ -1491,12 +1233,12 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16
+        marginBottom: 10
     },
     backButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+        width: 30,
+        height: 30,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
@@ -1504,152 +1246,135 @@ const S = StyleSheet.create({
         justifyContent: 'center'
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 17,
         fontWeight: '900',
         color: C.navy,
-        letterSpacing: -0.4
+        letterSpacing: -0.3
     },
     headerSubtitle: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
         color: C.muted
     },
     liveDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
         backgroundColor: C.emerald
     },
     iconBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+        width: 30,
+        height: 30,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
         alignItems: 'center',
         justifyContent: 'center'
     },
-    testSimBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        paddingHorizontal: 9,
-        paddingVertical: 7,
-        borderRadius: 9,
-        backgroundColor: C.goldBg,
-        borderWidth: 1,
-        borderColor: C.goldBorder
-    },
-    testSimBtnText: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: C.navy
-    },
     exportBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 10,
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
         backgroundColor: C.navy
     },
     exportBtnText: {
         color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '800',
-        letterSpacing: 0.3
+        fontSize: 11,
+        fontWeight: '800'
     },
     kpiScroll: {
-        gap: 10,
-        paddingRight: 8
+        gap: 8,
+        paddingRight: 6
     },
     kpiCard: {
-        width: 148,
+        width: 126,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
-        borderRadius: 14,
-        padding: 12
+        borderRadius: 10,
+        padding: 9
     },
     kpiCardActive: {
         borderColor: C.navy,
         backgroundColor: '#FFFFFF',
         shadowColor: C.navy,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        elevation: 2
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1
     },
     kpiHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 6
+        marginBottom: 4
     },
     kpiIconWrap: {
-        width: 26,
-        height: 26,
-        borderRadius: 7,
+        width: 22,
+        height: 22,
+        borderRadius: 6,
         alignItems: 'center',
         justifyContent: 'center'
     },
     kpiBadge: {
-        fontSize: 8.5,
+        fontSize: 7.5,
         fontWeight: '900',
-        paddingHorizontal: 5,
-        paddingVertical: 2,
-        borderRadius: 4
+        paddingHorizontal: 4,
+        paddingVertical: 1.5,
+        borderRadius: 3
     },
     kpiValue: {
-        fontSize: 16,
+        fontSize: 14.5,
         fontWeight: '900',
         color: C.navy,
         letterSpacing: -0.3
     },
     kpiSub: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '600',
         color: C.muted,
-        marginTop: 2
+        marginTop: 1
     },
     filterSection: {
         backgroundColor: C.card,
-        paddingHorizontal: 16,
-        paddingBottom: 10,
+        paddingHorizontal: 14,
+        paddingBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: C.border
     },
     searchBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         backgroundColor: C.canvas,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 9,
+        borderRadius: 9,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
         borderWidth: 1,
         borderColor: C.border,
-        marginBottom: 10
+        marginBottom: 8
     },
     searchInput: {
         flex: 1,
-        fontSize: 13,
+        fontSize: 12,
         color: C.navy,
         padding: 0
     },
     tabRow: {
-        gap: 8,
-        marginBottom: 8
+        gap: 6,
+        marginBottom: 6
     },
     tabPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 10,
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
@@ -1659,7 +1384,7 @@ const S = StyleSheet.create({
         borderColor: C.navy
     },
     tabPillText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '700',
         color: C.muted
     },
@@ -1669,15 +1394,15 @@ const S = StyleSheet.create({
     },
     tabCountBadge: {
         backgroundColor: C.border,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 5
     },
     tabCountBadgeActive: {
         backgroundColor: 'rgba(255,255,255,0.2)'
     },
     tabCountText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: C.slate
     },
@@ -1685,12 +1410,12 @@ const S = StyleSheet.create({
         color: '#FFFFFF'
     },
     subFilterRow: {
-        marginBottom: 8
+        marginBottom: 6
     },
     chipPill: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 7,
+        paddingHorizontal: 8,
+        paddingVertical: 3.5,
+        borderRadius: 6,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
@@ -1700,7 +1425,7 @@ const S = StyleSheet.create({
         borderColor: C.indigoBorder
     },
     chipPillText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
         color: C.muted
     },
@@ -1712,157 +1437,157 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 4
+        paddingTop: 2
     },
     resultCounterText: {
-        fontSize: 11,
+        fontSize: 10.5,
         color: C.muted
     },
     clearSearchText: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '700',
         color: C.blue
     },
     listContent: {
-        padding: 16,
-        paddingBottom: 100
+        padding: 12,
+        paddingBottom: 90
     },
     card: {
         backgroundColor: C.card,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
         borderWidth: 1,
         borderColor: C.border,
         shadowColor: C.navy,
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.03,
-        shadowRadius: 6,
+        shadowRadius: 4,
         elevation: 1
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 12
+        marginBottom: 8
     },
     beneficiaryRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
         flex: 1
     },
     avatarBox: {
-        width: 38,
-        height: 38,
-        borderRadius: 12,
+        width: 32,
+        height: 32,
+        borderRadius: 9,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1
     },
     beneficiaryName: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '800',
         color: C.navy
     },
     rolePill: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
         borderRadius: 4,
         borderWidth: 1
     },
     rolePillText: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '900',
         textTransform: 'uppercase'
     },
     beneficiaryMeta: {
-        fontSize: 11,
+        fontSize: 10,
         color: C.muted,
-        marginTop: 2
+        marginTop: 1
     },
     amountWrap: {
         alignItems: 'flex-end'
     },
     amountValue: {
-        fontSize: 17,
+        fontSize: 15,
         fontWeight: '900',
         color: C.navy,
-        letterSpacing: -0.4
+        letterSpacing: -0.3
     },
     statusPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 7,
-        paddingVertical: 2.5,
-        borderRadius: 6,
+        gap: 3,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5,
         borderWidth: 1,
-        marginTop: 4
+        marginTop: 3
     },
     statusPillText: {
-        fontSize: 9.5,
+        fontSize: 8.5,
         fontWeight: '900',
-        letterSpacing: 0.4
+        letterSpacing: 0.3
     },
     bankStrip: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: C.canvas,
-        paddingHorizontal: 12,
-        paddingVertical: 9,
-        borderRadius: 10,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 8,
         borderWidth: 1,
         borderColor: C.borderLight,
-        marginBottom: 8
+        marginBottom: 6
     },
     bankInfoRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
         flex: 1
     },
     bankNameText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '700',
         color: C.slate
     },
     bankAccountRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6
+        gap: 5
     },
     accountNumberText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800',
         color: C.navy,
         fontFamily: 'monospace'
     },
     copyIconButton: {
-        padding: 3,
+        padding: 2.5,
         backgroundColor: C.blueBg,
-        borderRadius: 5
+        borderRadius: 4
     },
     accountHolderText: {
-        fontSize: 11,
+        fontSize: 10,
         color: C.muted,
-        marginBottom: 8,
+        marginBottom: 6,
         paddingLeft: 2
     },
     notePreviewBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
         backgroundColor: '#F8FAFC',
-        padding: 8,
-        borderRadius: 8,
-        marginBottom: 10,
-        borderLeftWidth: 3,
+        padding: 6,
+        borderRadius: 6,
+        marginBottom: 8,
+        borderLeftWidth: 2.5,
         borderLeftColor: C.gold
     },
     notePreviewText: {
-        fontSize: 11,
+        fontSize: 10,
         color: C.muted,
         fontStyle: 'italic',
         flex: 1
@@ -1870,31 +1595,31 @@ const S = StyleSheet.create({
     cardFooter: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        paddingTop: 10,
+        gap: 6,
+        paddingTop: 8,
         borderTopWidth: 1,
         borderTopColor: C.borderLight
     },
     copyAllBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 9,
-        paddingVertical: 6,
-        borderRadius: 8,
+        gap: 3,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 7,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
     },
     copyAllBtnText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
         color: C.muted
     },
     whatsappQuickBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
+        width: 28,
+        height: 28,
+        borderRadius: 7,
         backgroundColor: '#DCFCE7',
         borderWidth: 1,
         borderColor: '#BBF7D0',
@@ -1903,128 +1628,131 @@ const S = StyleSheet.create({
     },
     actionBtn: {
         flex: 1,
-        paddingVertical: 8,
-        borderRadius: 8,
+        paddingVertical: 6,
+        borderRadius: 7,
         alignItems: 'center',
         justifyContent: 'center'
     },
     actionBtnText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800'
     },
     centerLoader: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 40
+        padding: 30
     },
     loaderText: {
-        marginTop: 12,
-        fontSize: 12,
+        marginTop: 8,
+        fontSize: 11,
         fontWeight: '600',
         color: C.muted
     },
     emptyStateBox: {
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 36,
+        padding: 28,
         backgroundColor: C.card,
-        borderRadius: 20,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: C.border,
-        marginTop: 20
+        marginTop: 14
     },
     emptyIconWrap: {
-        width: 60,
-        height: 60,
-        borderRadius: 20,
+        width: 48,
+        height: 48,
+        borderRadius: 14,
         backgroundColor: C.canvas,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 14
+        marginBottom: 10
     },
     emptyTitle: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '800',
         color: C.navy,
-        marginBottom: 4
+        marginBottom: 3
     },
     emptySubtitle: {
-        fontSize: 12,
+        fontSize: 11,
         color: C.muted,
         textAlign: 'center',
-        lineHeight: 18,
-        marginBottom: 16
+        lineHeight: 16,
+        marginBottom: 14
     },
-    createEmptyBtn: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 10,
+    refreshEmptyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
         backgroundColor: C.navy
     },
-    createEmptyBtnText: {
+    refreshEmptyBtnText: {
         color: '#FFFFFF',
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800'
     },
     copyToast: {
         position: 'absolute',
-        bottom: 24,
+        bottom: 20,
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         backgroundColor: C.navy,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
         borderRadius: 999,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.15,
-        shadowRadius: 10,
+        shadowRadius: 8,
         elevation: 6,
         zIndex: 999
     },
     copyToastText: {
         color: '#FFFFFF',
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '700'
     },
     modalBackdrop: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
         justifyContent: 'flex-end'
     },
     modalContent: {
         backgroundColor: C.card,
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        padding: 20,
-        paddingBottom: 36,
+        borderTopLeftRadius: 22,
+        borderTopRightRadius: 22,
+        padding: 16,
+        paddingBottom: 28,
         maxHeight: '90%'
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 16
+        marginBottom: 12
     },
     modalTitle: {
-        fontSize: 20,
+        fontSize: 17,
         fontWeight: '900',
         color: C.navy,
-        letterSpacing: -0.4
+        letterSpacing: -0.3
     },
     modalRef: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
         color: C.muted,
-        marginTop: 2
+        marginTop: 1
     },
     modalCloseBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 9,
+        width: 28,
+        height: 28,
+        borderRadius: 7,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
@@ -2033,75 +1761,75 @@ const S = StyleSheet.create({
     },
     heroAmountCard: {
         backgroundColor: C.navy,
-        borderRadius: 18,
-        padding: 20,
+        borderRadius: 14,
+        padding: 14,
         alignItems: 'center',
-        marginBottom: 16
+        marginBottom: 12
     },
     heroAmountLabel: {
         color: C.gold,
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: '800',
-        letterSpacing: 1,
-        marginBottom: 4
+        letterSpacing: 0.8,
+        marginBottom: 2
     },
     heroAmountValue: {
-        fontSize: 32,
+        fontSize: 24,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: -0.5
+        letterSpacing: -0.4
     },
     heroBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginTop: 10
+        gap: 6,
+        marginTop: 6
     },
     heroDateText: {
         color: C.subtle,
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600'
     },
     sectionBox: {
         backgroundColor: C.canvas,
-        borderRadius: 14,
-        padding: 14,
+        borderRadius: 10,
+        padding: 11,
         borderWidth: 1,
         borderColor: C.border,
-        marginBottom: 14
+        marginBottom: 10
     },
     sectionTitle: {
-        fontSize: 13,
+        fontSize: 11.5,
         fontWeight: '800',
         color: C.navy,
-        marginBottom: 10
+        marginBottom: 8
     },
     beneficiaryModalRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12
+        gap: 8
     },
     beneficiaryModalName: {
-        fontSize: 14,
+        fontSize: 12.5,
         fontWeight: '800',
         color: C.navy
     },
     beneficiaryModalEmail: {
-        fontSize: 11,
+        fontSize: 10,
         color: C.muted,
         marginTop: 1
     },
     beneficiaryModalPhone: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
         color: C.slate,
-        marginTop: 2
+        marginTop: 1
     },
     contactTriggerRow: {
         flexDirection: 'row',
-        gap: 8,
-        marginTop: 12,
-        paddingTop: 10,
+        gap: 6,
+        marginTop: 8,
+        paddingTop: 8,
         borderTopWidth: 1,
         borderTopColor: C.border
     },
@@ -2110,15 +1838,15 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 9,
-        borderRadius: 8,
+        gap: 5,
+        paddingVertical: 7,
+        borderRadius: 7,
         backgroundColor: '#DCFCE7',
         borderWidth: 1,
         borderColor: '#BBF7D0'
     },
     whatsappTriggerText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: '#166534'
     },
@@ -2126,32 +1854,32 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 9,
-        borderRadius: 8,
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 7,
         backgroundColor: C.card,
         borderWidth: 1,
         borderColor: C.border
     },
     callTriggerText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: C.navy
     },
     copyAllMiniBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
+        gap: 3,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 5,
         backgroundColor: C.blueBg,
         borderWidth: 1,
         borderColor: C.blueBorder
     },
     copyAllMiniText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: C.blue
     },
@@ -2159,22 +1887,22 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: C.borderLight
     },
     coordLabel: {
-        fontSize: 12,
+        fontSize: 11,
         color: C.muted,
         fontWeight: '500'
     },
     coordValue: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '700',
         color: C.navy
     },
     coordValueMono: {
-        fontSize: 13,
+        fontSize: 11.5,
         fontWeight: '800',
         color: C.navy,
         fontFamily: 'monospace'
@@ -2182,180 +1910,121 @@ const S = StyleSheet.create({
     copyPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
+        gap: 2.5,
         backgroundColor: C.blueBg,
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5,
         borderWidth: 1,
         borderColor: C.blueBorder
     },
     copyPillText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: C.blue
     },
     resolutionBox: {
         backgroundColor: C.card,
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: 12,
+        padding: 12,
         borderWidth: 1,
         borderColor: C.border
     },
     noteInstruction: {
-        fontSize: 11,
+        fontSize: 10,
         color: C.muted,
-        marginBottom: 8
+        marginBottom: 6
     },
     quickChipsRow: {
-        gap: 6,
-        marginBottom: 8
+        gap: 5,
+        marginBottom: 6
     },
     quickChip: {
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6
     },
     quickChipText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '700',
         color: C.muted
     },
     noteInput: {
         borderWidth: 1,
         borderColor: C.border,
-        borderRadius: 12,
-        padding: 12,
+        borderRadius: 9,
+        padding: 9,
         backgroundColor: C.canvas,
-        fontSize: 13,
+        fontSize: 11.5,
         color: C.navy,
-        minHeight: 64,
+        minHeight: 52,
         textAlignVertical: 'top',
-        marginBottom: 14
+        marginBottom: 10
     },
     actionButtonGroup: {
         flexDirection: 'row',
-        gap: 10
+        gap: 8
     },
     rejectBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 14,
-        borderRadius: 12,
+        gap: 5,
+        paddingVertical: 10,
+        borderRadius: 9,
         backgroundColor: C.roseBg,
         borderWidth: 1,
         borderColor: C.roseBorder
     },
     rejectBtnText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800',
         color: C.rose
     },
     approveBtn: {
-        flex: 1.3,
+        flex: 1.2,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 14,
-        borderRadius: 12,
-        backgroundColor: C.navy,
-        shadowColor: C.navy,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 3
+        gap: 5,
+        paddingVertical: 10,
+        borderRadius: 9,
+        backgroundColor: C.navy
     },
     approveBtnText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800',
         color: '#FFFFFF'
     },
     rejectionWarning: {
-        fontSize: 10,
+        fontSize: 9.5,
         color: C.muted,
         textAlign: 'center',
-        marginTop: 10,
-        lineHeight: 14
+        marginTop: 8,
+        lineHeight: 13
     },
     resolvedBox: {
-        borderRadius: 16,
-        padding: 20,
+        borderRadius: 12,
+        padding: 14,
         alignItems: 'center',
         borderWidth: 1,
-        marginTop: 6
+        marginTop: 4
     },
     resolvedTitle: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '900',
-        marginTop: 8,
-        letterSpacing: 0.5
+        marginTop: 6,
+        letterSpacing: 0.3
     },
     resolvedNote: {
-        fontSize: 12,
+        fontSize: 11,
         color: C.slate,
         fontStyle: 'italic',
         textAlign: 'center',
-        marginTop: 6
-    },
-    inputLabel: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: C.navy,
-        marginBottom: 6
-    },
-    simInput: {
-        backgroundColor: C.canvas,
-        borderWidth: 1,
-        borderColor: C.border,
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 9,
-        fontSize: 13,
-        color: C.navy,
-        marginBottom: 12
-    },
-    roleSelectBtn: {
-        flex: 1,
-        paddingVertical: 8,
-        borderRadius: 8,
-        alignItems: 'center',
-        backgroundColor: C.canvas,
-        borderWidth: 1,
-        borderColor: C.border
-    },
-    roleSelectBtnActive: {
-        backgroundColor: C.navy,
-        borderColor: C.navy
-    },
-    roleSelectText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: C.muted
-    },
-    roleSelectTextActive: {
-        color: '#FFFFFF',
-        fontWeight: '800'
-    },
-    submitSimBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        backgroundColor: C.navy,
-        paddingVertical: 14,
-        borderRadius: 12,
-        marginTop: 8
-    },
-    submitSimBtnText: {
-        color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: '800'
+        marginTop: 4
     }
 });
