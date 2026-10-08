@@ -241,12 +241,13 @@ const Tog = React.memo(({ label, desc, value, onToggle, color = '#3B82F6', icon 
                 <Text style={[S.togLabel, { color: T.text }]}>{label}</Text>
                 {desc && <Text style={[S.togDesc, { color: T.muted }]}>{desc}</Text>}
             </View>
-            <Switch
-                value={!!value}
-                onValueChange={onToggle}
-                trackColor={{ false: T.border, true: color }}
-                thumbColor="white"
-            />
+            <View pointerEvents="none">
+                <Switch
+                    value={!!value}
+                    trackColor={{ false: T.border, true: color }}
+                    thumbColor="white"
+                />
+            </View>
         </TouchableOpacity>
     );
 });
@@ -434,10 +435,10 @@ export const AdminSettings = ({ navigation }) => {
     const [announcementText,       setAnnouncementText]       = useState(settings?.announcement_text || '');
     const [announcementActive,     setAnnouncementActive]     = useState(settings?.announcement_active || false);
     const [announcementColor,      setAnnouncementColor]      = useState(settings?.announcement_color || '#3B82F6');
-    const [announcementBadge,      setAnnouncementBadge]      = useState(settings?.announcement_badge || 'TEMU DEAL');
-    const [announcementStyle,      setAnnouncementStyle]      = useState(settings?.announcement_style || 'temu');
+    const [announcementBadge,      setAnnouncementBadge]      = useState(settings?.announcement_badge || 'FLASH DEAL');
+    const [announcementStyle,      setAnnouncementStyle]      = useState(settings?.announcement_style || 'flame');
     const [announcementActionText, setAnnouncementActionText] = useState(settings?.announcement_action_text || 'Claim ➔');
-    const [announcementCouponCode, setAnnouncementCouponCode] = useState(settings?.announcement_coupon_code || 'TEMU30');
+    const [announcementCouponCode, setAnnouncementCouponCode] = useState(settings?.announcement_coupon_code || 'FLASH30');
     const [platformLocale,     setPlatformLocale]     = useState(settings?.platform_locale || 'en');
     const [seoTitle,           setSeoTitle]           = useState(settings?.seo_title || '');
     const [seoDescription,     setSeoDescription]     = useState(settings?.seo_description || '');
@@ -2741,7 +2742,7 @@ export const AdminSettings = ({ navigation }) => {
     const BANNER_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#0F172A'];
 
     const BANNER_THEMES = [
-        { id: 'temu', name: 'Temu Flame', colors: ['#FF4500', '#FF7A00'], icon: 'flame' },
+        { id: 'flame', name: 'Solar Flame', colors: ['#FF4500', '#FF7A00'], icon: 'flame' },
         { id: 'obsidian', name: 'Obsidian Gold', colors: ['#0F172A', '#1E293B'], icon: 'diamond' },
         { id: 'emerald', name: 'Emerald Trust', colors: ['#047857', '#10B981'], icon: 'shield-checkmark' },
         { id: 'cyber', name: 'Cyber Purple', colors: ['#4F46E5', '#7C3AED'], icon: 'flash' },
@@ -2750,7 +2751,7 @@ export const AdminSettings = ({ navigation }) => {
     ];
 
     const BADGE_PRESETS = [
-        'TEMU DEAL', 'FLASH SALE', 'FREE DELIVERY', 'LIMITED OFFER', 'BUYER PROTECTION', 'SPECIAL DEAL'
+        'FLASH DEAL', 'SPECIAL OFFER', 'FREE DELIVERY', 'LIMITED DEAL', 'BUYER PROTECTION', 'HOT PROMO'
     ];
 
     const renderAdvanced = () => (
@@ -2790,17 +2791,35 @@ export const AdminSettings = ({ navigation }) => {
                 </Card>
             </Sect>
 
-            {/* Platform Announcement Banner - Modern Temu E-Commerce Suite */}
-            <Sect title="Announcement Banner (Temu Modern E-Commerce)" icon="megaphone">
+            {/* Platform Announcement Banner - Modern Smart Suite */}
+            <Sect title="Top Announcement Bar (Smart Rotating Alerts)" icon="megaphone">
                 <Card>
-                    <Tog label="Show Banner to All Users" desc="Display an auto-rotating high-converting announcement bar at top of app" icon="megaphone" value={announcementActive} onToggle={() => { setAnnouncementActive(p => !p); setUnsaved(true); }} color="#FF4500" />
+                    <Tog
+                        label="Show Top Announcement Bar"
+                        desc="Display an auto-rotating high-converting announcement bar at top of app"
+                        icon="megaphone"
+                        value={announcementActive}
+                        onToggle={() => {
+                            const nextState = !announcementActive;
+                            setAnnouncementActive(nextState);
+                            setUnsaved(true);
+                            // Also save live to Supabase for immediate feedback
+                            supabase.from('app_settings').upsert({
+                                key: 'announcement_active',
+                                value: { value: nextState },
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'key' }).then(() => {});
+                        }}
+                        color="#FF4500"
+                    />
                     {announcementActive && (
                         <View style={{ marginTop: 14 }}>
                             {/* Theme / Gradient Preset Selector */}
                             <Text style={[S.iLabel, { color: T.muted, marginBottom: 8 }]}>BANNER THEME & GRADIENT PRESET</Text>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                                 {BANNER_THEMES.map(theme => {
-                                    const isSelected = (announcementStyle || 'temu').toLowerCase() === theme.id;
+                                    const currentStyle = (announcementStyle || 'flame').toLowerCase();
+                                    const isSelected = currentStyle === theme.id || (theme.id === 'flame' && currentStyle === 'temu');
                                     return (
                                         <TouchableOpacity
                                             key={theme.id}
@@ -2842,7 +2861,7 @@ export const AdminSettings = ({ navigation }) => {
                                 value={announcementBadge}
                                 onChange={v => { setAnnouncementBadge(v); setUnsaved(true); }}
                                 icon="pricetag"
-                                placeholder="e.g. TEMU DEAL"
+                                placeholder="e.g. FLASH DEAL"
                                 hint="Short pill badge displayed on the left"
                             />
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -6, marginBottom: 12 }}>
@@ -2874,7 +2893,7 @@ export const AdminSettings = ({ navigation }) => {
                                 icon="text"
                                 placeholder="e.g. ⚡ Flash Deals: Up to 50% Off Limited Time Items!"
                                 multi
-                                hint="Will auto-rotate alongside Free Delivery and 90-Day Buyer Protection"
+                                hint="Will auto-rotate alongside Free Delivery and Escrow Buyer Protection"
                             />
 
                             {/* Action Button CTA Text */}
@@ -2893,22 +2912,22 @@ export const AdminSettings = ({ navigation }) => {
                                 value={announcementCouponCode}
                                 onChange={v => { setAnnouncementCouponCode(v.toUpperCase()); setUnsaved(true); }}
                                 icon="pricetag-outline"
-                                placeholder="e.g. TEMU30"
+                                placeholder="e.g. FLASH30"
                                 hint="Customers who click 'Claim' will copy and auto-apply this code at checkout"
                             />
 
-                            {/* Live Temu Preview */}
-                            <Text style={[S.iLabel, { color: T.muted, marginTop: 4, marginBottom: 8 }]}>LIVE INTERACTIVE TEMU PREVIEW</Text>
+                            {/* Live Interactive Preview */}
+                            <Text style={[S.iLabel, { color: T.muted, marginTop: 4, marginBottom: 8 }]}>LIVE INTERACTIVE PREVIEW</Text>
                             <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
                                 <TemuAnnouncementBanner
                                     settings={{
                                         announcement_active: true,
                                         announcement_text: announcementText || '⚡ Flash Deals: Up to 50% Off Limited Time Items!',
-                                        announcement_badge: announcementBadge || 'TEMU DEAL',
-                                        announcement_style: announcementStyle || 'temu',
+                                        announcement_badge: announcementBadge || 'FLASH DEAL',
+                                        announcement_style: announcementStyle || 'flame',
                                         announcement_color: announcementColor,
                                         announcement_action_text: announcementActionText || 'Claim ➔',
-                                        announcement_coupon_code: announcementCouponCode || 'TEMU30'
+                                        announcement_coupon_code: announcementCouponCode || 'FLASH30'
                                     }}
                                 />
                             </View>

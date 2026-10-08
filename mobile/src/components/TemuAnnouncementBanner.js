@@ -15,14 +15,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Vibrant Modern Temu / Top E-Commerce Gradients
+// Vibrant Modern E-Commerce Gradients (No external branding)
 const GRADIENTS = {
-    temu: ['#FF4500', '#FF7A00'],        // Iconic Temu Vibrant Flame
-    obsidian: ['#0F172A', '#1E293B'],    // Executive Obsidian & Gold
-    emerald: ['#047857', '#10B981'],     // Trust & Free Delivery Green
-    cyber: ['#4F46E5', '#7C3AED'],       // High-Tech Cyber Purple
-    crimson: ['#BE123C', '#E11D48'],     // Hot Sale Crimson
-    sapphire: ['#1D4ED8', '#3B82F6']     // Classic Cobalt Blue
+    flame: ['#FF4500', '#FF7A00'],        // Solar Flame
+    temu: ['#FF4500', '#FF7A00'],         // Compatibility alias
+    obsidian: ['#0F172A', '#1E293B'],     // Executive Obsidian Gold
+    emerald: ['#047857', '#10B981'],      // Trust & Free Delivery Green
+    cyber: ['#4F46E5', '#7C3AED'],        // High-Tech Cyber Purple
+    crimson: ['#BE123C', '#E11D48'],      // Hot Sale Crimson
+    sapphire: ['#1D4ED8', '#3B82F6']      // Classic Cobalt Blue
 };
 
 export const TemuAnnouncementBanner = ({
@@ -51,7 +52,7 @@ export const TemuAnnouncementBanner = ({
     const promoCode = (
         typeof settings?.announcement_coupon_code === 'string'
             ? settings.announcement_coupon_code
-            : (settings?.announcement_coupon_code?.value || 'TEMU30')
+            : (settings?.announcement_coupon_code?.value || 'FLASH30')
     ).trim().toUpperCase();
 
     // Free delivery minimum from settings
@@ -61,49 +62,75 @@ export const TemuAnnouncementBanner = ({
             : (settings?.free_shipping_min || settings?.free_shipping_threshold || 5000)
     ) || 5000;
 
-    // Messages pool: Main admin message + Temu high-converting value propositions
-    const customText = typeof settings?.announcement_text === 'string'
-        ? settings.announcement_text.trim()
-        : (settings?.announcement_text?.value || '');
+    // Dynamically build messages: If admin created custom announcement items in announcements_list, use them!
+    const customList = Array.isArray(settings?.announcements_list)
+        ? settings.announcements_list.filter(item => item && (item.is_active === undefined || item.is_active === true))
+        : [];
 
-    const badgeLabel = typeof settings?.announcement_badge === 'string'
-        ? settings.announcement_badge.trim()
-        : (settings?.announcement_badge?.value || 'TEMU DEAL');
+    let messages = [];
 
-    const actionText = typeof settings?.announcement_action_text === 'string'
-        ? settings.announcement_action_text.trim()
-        : (settings?.announcement_action_text?.value || 'Claim ➔');
+    if (customList.length > 0) {
+        messages = customList.map((item, idx) => ({
+            id: item.id || `ann_${idx}`,
+            badge: item.badge || 'FLASH DEAL',
+            icon: item.icon || (item.badge?.includes('DELIVERY') ? 'car-outline' : (item.badge?.includes('PROTECTION') ? 'shield-checkmark' : 'flash')),
+            text: item.title || item.text || '⚡ Special Promo Offer',
+            actionLabel: item.action_label || 'Claim ➔',
+            actionType: item.action_type || 'claim_coupon',
+            gradient: item.gradient || 'flame',
+            couponCode: item.coupon_code || promoCode
+        }));
+    } else {
+        // Fallback to active single announcement + standard platform perks
+        const customText = typeof settings?.announcement_text === 'string'
+            ? settings.announcement_text.trim()
+            : (settings?.announcement_text?.value || '');
 
-    const messages = [
-        {
-            id: 'promo',
-            badge: badgeLabel || 'TEMU DEAL',
-            icon: 'flash',
-            text: customText || `⚡ Flash Deals: Up to 50% Off Limited Time Items with Code ${promoCode}!`,
-            actionLabel: actionText || 'Claim ➔',
-            actionType: 'claim_coupon'
-        },
-        {
-            id: 'shipping',
-            badge: 'FREE DELIVERY',
-            icon: 'car-outline',
-            text: `🚚 Free Express Delivery on orders over ₦${freeDeliveryMin.toLocaleString()} across Nigeria`,
-            actionLabel: 'Details ➔',
-            actionType: 'open_perks'
-        },
-        {
-            id: 'guarantee',
-            badge: 'BUYER PROTECTION',
-            icon: 'shield-checkmark',
-            text: '🛡️ 100% Escrow Protection Vault & Verified Merchant Deliveries',
-            actionLabel: 'Shop ➔',
-            actionType: 'shop'
-        }
-    ];
+        const badgeLabel = typeof settings?.announcement_badge === 'string'
+            ? settings.announcement_badge.trim()
+            : (settings?.announcement_badge?.value || 'FLASH DEAL');
+
+        const actionText = typeof settings?.announcement_action_text === 'string'
+            ? settings.announcement_action_text.trim()
+            : (settings?.announcement_action_text?.value || 'Claim ➔');
+
+        messages = [
+            {
+                id: 'promo',
+                badge: badgeLabel || 'FLASH DEAL',
+                icon: 'flash',
+                text: customText || `⚡ Flash Deals: Up to 50% Off Limited Time Items with Code ${promoCode}!`,
+                actionLabel: actionText || 'Claim ➔',
+                actionType: 'claim_coupon',
+                gradient: typeof settings?.announcement_style === 'string' ? settings.announcement_style : (settings?.announcement_style?.value || 'flame'),
+                couponCode: promoCode
+            },
+            {
+                id: 'shipping',
+                badge: 'FREE DELIVERY',
+                icon: 'car-outline',
+                text: `🚚 Free Express Delivery on orders over ₦${freeDeliveryMin.toLocaleString()} across Nigeria`,
+                actionLabel: 'Details ➔',
+                actionType: 'open_perks',
+                gradient: 'emerald',
+                couponCode: promoCode
+            },
+            {
+                id: 'guarantee',
+                badge: 'BUYER PROTECTION',
+                icon: 'shield-checkmark',
+                text: '🛡️ 100% Escrow Protection Vault & Verified Merchant Deliveries',
+                actionLabel: 'Shop ➔',
+                actionType: 'shop',
+                gradient: 'obsidian',
+                couponCode: promoCode
+            }
+        ];
+    }
 
     // Auto-cycle through messages every 4.5 seconds
     useEffect(() => {
-        if (!isActive || isDismissed) return;
+        if (!isActive || isDismissed || messages.length <= 1) return;
 
         const interval = setInterval(() => {
             Animated.sequence([
@@ -144,28 +171,29 @@ export const TemuAnnouncementBanner = ({
 
     const handleCopyAndApplyCoupon = async (codeToCopy = promoCode) => {
         try {
-            Clipboard.setString(codeToCopy);
-            await AsyncStorage.setItem('@abumafhal_applied_coupon', codeToCopy);
+            const finalCode = (codeToCopy || promoCode).trim().toUpperCase();
+            Clipboard.setString(finalCode);
+            await AsyncStorage.setItem('@abumafhal_applied_coupon', finalCode);
             setCopiedCoupon(true);
             if (Platform.OS !== 'web') {
                 Vibration.vibrate([0, 40, 30, 40]);
             }
-            showFloatingToast(`🎉 Voucher ${codeToCopy} copied & applied to checkout!`);
+            showFloatingToast(`🎉 Voucher ${finalCode} copied & applied to checkout!`);
             setTimeout(() => setCopiedCoupon(false), 3500);
         } catch (_) {}
     };
 
-    const handleActionClick = (actionType) => {
-        if (actionType === 'claim_coupon') {
-            handleCopyAndApplyCoupon(promoCode);
+    const handleActionClick = (msg) => {
+        if (msg.actionType === 'claim_coupon') {
+            handleCopyAndApplyCoupon(msg.couponCode || promoCode);
             if (onPressAction) {
                 onPressAction('flash_sales');
             }
-        } else if (actionType === 'open_perks') {
+        } else if (msg.actionType === 'open_perks') {
             setShowPerksModal(true);
         } else {
             if (onPressAction) {
-                onPressAction(actionType);
+                onPressAction(msg.actionType || 'shop');
             } else {
                 setShowPerksModal(true);
             }
@@ -176,19 +204,22 @@ export const TemuAnnouncementBanner = ({
         return null;
     }
 
-    const currentMsg = messages[currentIdx] || messages[0];
+    const currentMsg = messages[currentIdx] || messages[0] || {
+        badge: 'FLASH DEAL',
+        icon: 'flash',
+        text: '⚡ Special Promo Offer',
+        actionLabel: 'Claim ➔',
+        gradient: 'flame'
+    };
 
     // Determine Gradient Palette
-    const rawStyle = typeof settings?.announcement_style === 'string'
-        ? settings.announcement_style
-        : (settings?.announcement_style?.value || 'temu');
-    const styleKey = (rawStyle || 'temu').toLowerCase();
-    let gradientColors = GRADIENTS[styleKey] || GRADIENTS.temu;
+    const gradientKey = (currentMsg.gradient || settings?.announcement_style || 'flame').toLowerCase();
+    let gradientColors = GRADIENTS[gradientKey] || GRADIENTS.flame;
 
     const rawColor = typeof settings?.announcement_color === 'string'
         ? settings.announcement_color
         : settings?.announcement_color?.value;
-    if (rawColor && typeof rawColor === 'string' && rawColor.startsWith('#') && rawColor.length === 7 && styleKey === 'custom') {
+    if (rawColor && typeof rawColor === 'string' && rawColor.startsWith('#') && rawColor.length === 7 && gradientKey === 'custom') {
         gradientColors = [rawColor, rawColor];
     }
 
@@ -208,7 +239,7 @@ export const TemuAnnouncementBanner = ({
                 >
                     {/* Badge Pill */}
                     <View style={S.badgePill}>
-                        <Ionicons name={currentMsg.icon} size={11} color="#FFFFFF" />
+                        <Ionicons name={currentMsg.icon || 'flash'} size={11} color="#FFFFFF" />
                         <Text style={S.badgeText}>{currentMsg.badge}</Text>
                     </View>
 
@@ -238,7 +269,7 @@ export const TemuAnnouncementBanner = ({
                 {/* Action CTA Pill Button */}
                 <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={() => handleActionClick(currentMsg.actionType)}
+                    onPress={() => handleActionClick(currentMsg)}
                     style={S.actionBtn}
                 >
                     <Text style={S.actionBtnText}>{currentMsg.actionLabel}</Text>
@@ -278,7 +309,7 @@ export const TemuAnnouncementBanner = ({
                 </Animated.View>
             ) : null}
 
-            {/* ─── LIVE TEMU PERKS & VOUCHERS MODAL ─── */}
+            {/* ─── LIVE PLATFORM PERKS & VOUCHERS MODAL ─── */}
             <Modal
                 visible={showPerksModal}
                 transparent={true}
@@ -299,8 +330,8 @@ export const TemuAnnouncementBanner = ({
                                     <Ionicons name="gift" size={16} color="#FF7A00" />
                                 </View>
                                 <View>
-                                    <Text style={S.modalHeaderTitle}>Exclusive Platform Perks</Text>
-                                    <Text style={S.modalHeaderSub}>Live vouchers, free delivery & protection</Text>
+                                    <Text style={S.modalHeaderTitle}>Abu Mafhal Platform Perks</Text>
+                                    <Text style={S.modalHeaderSub}>Live vouchers, free delivery & buyer protection</Text>
                                 </View>
                             </View>
                             <TouchableOpacity
