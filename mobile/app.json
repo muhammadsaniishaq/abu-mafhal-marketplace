@@ -2,7 +2,7 @@
   "expo": {
     "name": "Abu Mafhal",
     "slug": "abu-mafhal",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.abumafhal.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "splash": {
         "image": "./assets/splash-icon.png",
         "resizeMode": "contain",
