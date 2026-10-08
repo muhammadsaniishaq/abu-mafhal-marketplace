@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -21,12 +21,14 @@ import { supabase } from '../../lib/supabase';
 import { geminiService } from '../../services/geminiService';
 import { Toast } from '../../components/Toast';
 
-// ─── Compact Executive Tokens ────────────────────────────────────────────────
+// ─── Balanced Executive Design Tokens ─────────────────────────────────────────
+// Calibrated for optimal visual harmony: never too small, never bulky
 const C = {
     canvas: '#F8FAFC',
     card: '#FFFFFF',
     navy: '#0F172A',
-    slate: '#1E293B',
+    navySoft: '#1E293B',
+    slate: '#334155',
     muted: '#64748B',
     subtle: '#94A3B8',
     border: '#E2E8F0',
@@ -49,9 +51,47 @@ const C = {
     blue: '#2563EB',
     blueBg: '#EFF6FF',
     blueBorder: '#BFDBFE',
+    purple: '#7C3AED',
+    purpleBg: '#F5F3FF',
+    purpleBorder: '#DDD6FE'
 };
 
-// ─── Search Modal for Live Products ──────────────────────────────────────────
+// Preset Luxury Gradients & Background Themes for Quick Creative Polish
+const BANNER_THEMES = [
+    { id: 'midnight', name: 'Midnight Onyx', bg: '#0F172A', border: '#334155', accent: '#D9A73A' },
+    { id: 'sunset', name: 'Sunset Crimson', bg: '#881337', border: '#BE123C', accent: '#FACC15' },
+    { id: 'cyber', name: 'Cyber Indigo', bg: '#312E81', border: '#4338CA', accent: '#38BDF8' },
+    { id: 'emerald', name: 'Emerald Boost', bg: '#064E3B', border: '#047857', accent: '#34D399' },
+    { id: 'royal', name: 'Royal Sapphire', bg: '#1E3A8A', border: '#1D4ED8', accent: '#F59E0B' }
+];
+
+// AI Campaign Tones
+const AI_CAMPAIGN_TONES = [
+    { id: 'urgency', label: 'Flash Deal (FOMO)', icon: 'flash' },
+    { id: 'luxury', label: 'Luxury & Premium', icon: 'diamond' },
+    { id: 'weekend', label: 'Weekend Special', icon: 'calendar' },
+    { id: 'clearance', label: 'Mega Discount', icon: 'pricetag' }
+];
+
+// Helper: Calculate Remaining Countdown Time string
+const formatRemainingTime = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+        const target = new Date(dateStr).getTime();
+        const now = Date.now();
+        const diff = target - now;
+        if (diff <= 0) return 'Expired';
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        if (days > 0) return `${days}d ${hours}h left`;
+        return `${hours}h ${mins}m left`;
+    } catch {
+        return null;
+    }
+};
+
+// ─── Product Linker Modal ─────────────────────────────────────────────────────
 const ProductSearchModal = ({ visible, onClose, onSearch, results, onSelect, loading }) => {
     const [query, setQuery] = useState('');
 
@@ -65,43 +105,43 @@ const ProductSearchModal = ({ visible, onClose, onSearch, results, onSelect, loa
         <View style={S.modalOverlay}>
             <View style={S.modalCard}>
                 <View style={S.modalHeader}>
-                    <View>
-                        <Text style={S.modalTitle}>Link Store Product</Text>
-                        <Text style={S.modalSub}>Select a live product to connect to this promo banner</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={S.modalTitle}>Link Catalog Product</Text>
+                        <Text style={S.modalSub}>Select a store item to connect to this promo campaign</Text>
                     </View>
-                    <TouchableOpacity onPress={onClose} style={S.iconButton}>
+                    <TouchableOpacity onPress={onClose} style={S.modalCloseBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Ionicons name="close" size={18} color={C.navy} />
                     </TouchableOpacity>
                 </View>
 
                 <View style={S.searchBar}>
-                    <Ionicons name="search" size={16} color={C.muted} />
+                    <Ionicons name="search" size={17} color={C.muted} />
                     <TextInput
                         placeholder="Search product by name or keyword..."
                         placeholderTextColor={C.subtle}
                         value={query}
                         onChangeText={(t) => { setQuery(t); onSearch(t); }}
-                        style={S.searchInput}
+                        style={S.modalSearchInput}
                         autoFocus
                     />
                     {query.length > 0 && (
                         <TouchableOpacity onPress={() => { setQuery(''); onSearch(''); }}>
-                            <Ionicons name="close-circle" size={16} color={C.muted} />
+                            <Ionicons name="close-circle" size={17} color={C.muted} />
                         </TouchableOpacity>
                     )}
                 </View>
 
-                <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 16 }}>
+                <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
                     {loading ? (
-                        <View style={{ padding: 24, alignItems: 'center' }}>
+                        <View style={{ padding: 32, alignItems: 'center' }}>
                             <ActivityIndicator size="small" color={C.navy} />
-                            <Text style={{ color: C.muted, fontSize: 11, marginTop: 6 }}>Searching store catalog...</Text>
+                            <Text style={{ color: C.muted, fontSize: 12, marginTop: 8 }}>Searching live inventory...</Text>
                         </View>
                     ) : results.length === 0 ? (
-                        <View style={{ padding: 24, alignItems: 'center' }}>
-                            <Ionicons name="cube-outline" size={32} color={C.muted} />
-                            <Text style={{ textAlign: 'center', color: C.muted, marginTop: 8, fontSize: 12 }}>
-                                {query ? 'No matching products found.' : 'Type a product name to search catalog.'}
+                        <View style={{ padding: 32, alignItems: 'center' }}>
+                            <Ionicons name="cube-outline" size={36} color={C.muted} />
+                            <Text style={{ textAlign: 'center', color: C.muted, marginTop: 10, fontSize: 13, lineHeight: 18 }}>
+                                {query ? 'No matching products found.' : 'Type a product name to search the catalog.'}
                             </Text>
                         </View>
                     ) : (
@@ -110,10 +150,10 @@ const ProductSearchModal = ({ visible, onClose, onSearch, results, onSelect, loa
                                 key={item.id}
                                 onPress={() => { onSelect(item); onClose(); }}
                                 style={S.searchResultItem}
-                                activeOpacity={0.8}
+                                activeOpacity={0.75}
                             >
                                 <Image
-                                    source={{ uri: item.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100' }}
+                                    source={{ uri: item.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=120' }}
                                     style={S.productThumb}
                                 />
                                 <View style={{ flex: 1 }}>
@@ -121,7 +161,7 @@ const ProductSearchModal = ({ visible, onClose, onSearch, results, onSelect, loa
                                     <Text style={S.productPrice}>₦{Number(item.price || 0).toLocaleString()}</Text>
                                 </View>
                                 <View style={S.selectBadge}>
-                                    <Text style={S.selectBadgeText}>Select</Text>
+                                    <Text style={S.selectBadgeText}>Link Product</Text>
                                 </View>
                             </TouchableOpacity>
                         ))
@@ -134,7 +174,7 @@ const ProductSearchModal = ({ visible, onClose, onSearch, results, onSelect, loa
 
 // ─── Main AdminPromoBanners Component ─────────────────────────────────────────
 export const AdminPromoBanners = ({ navigation, onBack }) => {
-    // ── Live Banners State (Strictly from Supabase) ───────────────────────────
+    // ── Live Banners State ────────────────────────────────────────────────────
     const [banners, setBanners] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -146,15 +186,17 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
         title: '',
         subtitle: '',
         image_url: '',
+        theme_id: 'midnight',
         is_active: true,
         linkData: {
-            text: '',
+            text: 'Shop Deal Now →',
             timerEnd: '',
             productId: '',
             productName: '',
+            productPrice: '',
             locations: ['home'],
             discountType: 'percent',
-            discountValue: ''
+            discountValue: '20'
         },
         tempBase64: ''
     };
@@ -165,6 +207,7 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
 
     // ── AI Generator State ───────────────────────────────────────────────────
     const [generatingAI, setGeneratingAI] = useState(false);
+    const [aiTone, setAiTone] = useState('urgency');
     const [aiSuggestions, setAiSuggestions] = useState(null);
 
     // ── Product Search Modal State ───────────────────────────────────────────
@@ -176,6 +219,13 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
     const [locationFilter, setLocationFilter] = useState('all'); // 'all', 'home', 'shop', 'landing'
+
+    // ── Live Ticking for Countdown Simulator ──────────────────────────────────
+    const [clockNow, setClockNow] = useState(Date.now());
+    useEffect(() => {
+        const timer = setInterval(() => setClockNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     // ── Toast Notifications ──────────────────────────────────────────────────
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
@@ -199,10 +249,11 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
             if (data && Array.isArray(data)) {
                 const formatted = data.map(b => {
                     let linkData = {
-                        text: '',
+                        text: 'Shop Deal Now →',
                         timerEnd: '',
                         productId: '',
                         productName: '',
+                        productPrice: '',
                         locations: ['home'],
                         discountType: 'percent',
                         discountValue: ''
@@ -214,13 +265,13 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                             linkData = {
                                 ...linkData,
                                 ...parsed,
-                                locations: Array.isArray(parsed.locations) ? parsed.locations : ['home'],
+                                locations: Array.isArray(parsed.locations) && parsed.locations.length > 0 ? parsed.locations : ['home'],
                                 discountType: parsed.discountType || 'percent',
                                 discountValue: parsed.discountValue || ''
                             };
                         }
                     } catch {
-                        linkData.text = b.action_link || '';
+                        linkData.text = b.action_link || 'Shop Deal Now →';
                     }
 
                     return { ...b, linkData };
@@ -241,6 +292,20 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
 
     useEffect(() => {
         fetchLiveBanners();
+
+        // Real-Time Supabase Sync
+        const channel = supabase
+            .channel('promo_banners_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, (payload) => {
+                if (payload.new?.section === 'promo' || payload.old?.section === 'promo') {
+                    fetchLiveBanners();
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [fetchLiveBanners]);
 
     const onRefresh = () => {
@@ -297,24 +362,54 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
     const handleToggleStatus = async (banner) => {
         const newStatus = !banner.is_active;
         try {
+            // Optimistic update
+            setBanners(prev => prev.map(b => b.id === banner.id ? { ...b, is_active: newStatus } : b));
+
             const { error } = await supabase
                 .from('banners')
                 .update({ is_active: newStatus, updated_at: new Date().toISOString() })
                 .eq('id', banner.id);
 
-            if (error) throw error;
+            if (error) {
+                // Rollback
+                setBanners(prev => prev.map(b => b.id === banner.id ? { ...b, is_active: !newStatus } : b));
+                throw error;
+            }
 
-            setBanners(prev => prev.map(b => b.id === banner.id ? { ...b, is_active: newStatus } : b));
-            showToast(`Banner marked as ${newStatus ? 'ACTIVE' : 'HIDDEN'}`, 'success');
+            showToast(`Campaign is now ${newStatus ? 'LIVE ON STORE' : 'PAUSED'}`, 'success');
         } catch (e) {
             showToast('Error updating status: ' + e.message, 'error');
+        }
+    };
+
+    // ── Duplicate / Clone Banner ──────────────────────────────────────────────
+    const handleCloneBanner = async (banner) => {
+        try {
+            const clonedPayload = {
+                title: `${banner.title} (Copy)`,
+                subtitle: banner.subtitle || '',
+                image_url: banner.image_url || '',
+                is_active: false,
+                action_link: JSON.stringify(banner.linkData || {}),
+                section: 'promo',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
+            const { data, error } = await supabase.from('banners').insert([clonedPayload]).select();
+            if (error) throw error;
+
+            showToast('Campaign duplicated as draft!', 'success');
+            fetchLiveBanners();
+        } catch (err) {
+            showToast('Clone failed: ' + err.message, 'error');
         }
     };
 
     // ── Live Delete Banner ────────────────────────────────────────────────────
     const handleDelete = (id) => {
         Alert.alert(
-            'Delete Promo Banner',
+            'Delete Promo Campaign',
             'Are you sure you want to permanently delete this promo banner from the storefront?',
             [
                 { text: 'Cancel', style: 'cancel' },
@@ -325,7 +420,7 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                         try {
                             const { error } = await supabase.from('banners').delete().eq('id', id);
                             if (error) throw error;
-                            showToast('Banner deleted successfully', 'success');
+                            showToast('Banner deleted permanently', 'success');
                             setBanners(prev => prev.filter(b => b.id !== id));
                         } catch (err) {
                             showToast('Error deleting: ' + err.message, 'error');
@@ -340,11 +435,13 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
     const handleEdit = (banner) => {
         setPromoBanner({
             ...banner,
+            theme_id: banner.theme_id || 'midnight',
             linkData: {
-                text: banner.linkData?.text || '',
+                text: banner.linkData?.text || 'Shop Deal Now →',
                 timerEnd: banner.linkData?.timerEnd || '',
                 productId: banner.linkData?.productId || '',
                 productName: banner.linkData?.productName || '',
+                productPrice: banner.linkData?.productPrice || '',
                 locations: banner.linkData?.locations || ['home'],
                 discountType: banner.linkData?.discountType || 'percent',
                 discountValue: banner.linkData?.discountValue || ''
@@ -359,6 +456,19 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
         setPromoBanner(initialPromoState);
         setAiSuggestions(null);
         setIsEditing(true);
+    };
+
+    // ── Quick Date Presets ────────────────────────────────────────────────────
+    const applyDatePreset = (daysToAdd) => {
+        const d = new Date();
+        d.setDate(d.getDate() + daysToAdd);
+        d.setHours(23, 59, 59, 0);
+        const iso = d.toISOString().split('T')[0];
+        setPromoBanner(p => ({
+            ...p,
+            linkData: { ...p.linkData, timerEnd: iso }
+        }));
+        showToast(`Expiry set to +${daysToAdd} days (${iso})`, 'success');
     };
 
     // ── Image Upload via Supabase Storage ─────────────────────────────────────
@@ -452,10 +562,12 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
     const handleSelectProduct = (product) => {
         setPromoBanner(prev => ({
             ...prev,
+            title: prev.title || `Special Deal: ${product.title}`,
             linkData: {
                 ...prev.linkData,
                 productId: product.id,
-                productName: product.title
+                productName: product.title,
+                productPrice: product.price || ''
             }
         }));
         showToast('Linked product: ' + product.title, 'success');
@@ -481,12 +593,13 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
         if (generatingAI) return;
         setGeneratingAI(true);
         try {
+            const selectedToneObj = AI_CAMPAIGN_TONES.find(t => t.id === aiTone) || AI_CAMPAIGN_TONES[0];
             const context = {
                 productName: promoBanner.linkData?.productName || '',
-                subtitle: promoBanner.subtitle || '',
+                subtitle: `${selectedToneObj.label} ${promoBanner.subtitle || ''}`,
                 discount: promoBanner.linkData?.discountValue
                     ? `${promoBanner.linkData.discountValue}${promoBanner.linkData.discountType === 'percent' ? '%' : '₦'}`
-                    : '',
+                    : '25%',
                 base64Image: promoBanner.tempBase64 || null
             };
 
@@ -502,7 +615,7 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                         text: result.buttonText || prev.linkData?.text
                     }
                 }));
-                showToast('Gemini AI created promo copy!', 'success');
+                showToast('Gemini AI created high-converting copy!', 'success');
             } else {
                 showToast('Could not generate copy at this time.', 'error');
             }
@@ -516,13 +629,8 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
 
     // ── Save Promo Banner Live ────────────────────────────────────────────────
     const handleSavePromo = async () => {
-        if (!promoBanner.image_url) {
-            Alert.alert('Required Image', 'Please upload or provide a banner image URL.');
-            return;
-        }
-
         if (!promoBanner.title.trim()) {
-            Alert.alert('Required Headline', 'Please specify a banner headline or use AI Copy.');
+            Alert.alert('Headline Required', 'Please enter a campaign headline or click "AI Copy" to generate one.');
             return;
         }
 
@@ -548,7 +656,7 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
             const { error } = await supabase.from('banners').upsert(payload);
             if (error) throw error;
 
-            showToast('Promo banner saved live!', 'success');
+            showToast('Campaign successfully published live!', 'success');
             setIsEditing(false);
             fetchLiveBanners();
         } catch (err) {
@@ -558,16 +666,16 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
         }
     };
 
-    // ── Render Individual Banner Card (Compact & Modern) ──────────────────────
+    // ── Render Individual Banner Card (Balanced & Modern) ─────────────────────
     const renderBannerCard = ({ item }) => {
         const isActive = item.is_active;
-        const hasTimer = !!item.linkData?.timerEnd;
+        const countdownText = formatRemainingTime(item.linkData?.timerEnd);
         const hasDiscount = !!item.linkData?.discountValue;
         const hasProduct = !!item.linkData?.productId;
 
         return (
             <View style={S.bannerCard}>
-                {/* 16:9 Live Preview Aspect */}
+                {/* 16:9 Hero Container with Contrast Overlay */}
                 <View style={S.cardHero}>
                     <Image
                         source={{ uri: item.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=600' }}
@@ -575,64 +683,72 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                     />
                     <View style={S.cardHeroOverlay} />
 
-                    {/* Status Pill */}
-                    <TouchableOpacity
-                        onPress={() => handleToggleStatus(item)}
-                        style={[S.statusPill, { backgroundColor: isActive ? C.emeraldBg : '#F1F5F9', borderColor: isActive ? C.emeraldBorder : C.border }]}
-                    >
-                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isActive ? C.emerald : C.muted }} />
-                        <Text style={[S.statusPillText, { color: isActive ? C.emerald : C.muted }]}>
-                            {isActive ? 'ACTIVE' : 'HIDDEN'}
-                        </Text>
-                    </TouchableOpacity>
+                    {/* Top Row: Urgency Tag + Live Status Pill */}
+                    <View style={S.cardHeroTop}>
+                        {countdownText ? (
+                            <View style={[S.timerPill, countdownText === 'Expired' && S.timerPillExpired]}>
+                                <Ionicons name="time-outline" size={12} color={countdownText === 'Expired' ? C.rose : '#FFFFFF'} />
+                                <Text style={[S.timerPillText, countdownText === 'Expired' && { color: C.rose }]}>
+                                    {countdownText}
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={S.timerPill}>
+                                <Ionicons name="flash" size={11} color={C.gold} />
+                                <Text style={S.timerPillText}>STORE PROMO</Text>
+                            </View>
+                        )}
 
-                    {/* Overlay Headings */}
-                    <View style={S.heroTextWrap}>
+                        <TouchableOpacity
+                            onPress={() => handleToggleStatus(item)}
+                            style={[S.statusPill, { backgroundColor: isActive ? C.emeraldBg : '#FFFFFF', borderColor: isActive ? C.emeraldBorder : C.border }]}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: isActive ? C.emerald : C.muted }} />
+                            <Text style={[S.statusPillText, { color: isActive ? C.emerald : C.muted }]}>
+                                {isActive ? 'ACTIVE' : 'PAUSED'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Overlay Content */}
+                    <View style={S.heroBottomTextWrap}>
                         {item.subtitle ? (
                             <View style={S.badgeHighlight}>
                                 <Text style={S.badgeHighlightText}>{item.subtitle.toUpperCase()}</Text>
                             </View>
                         ) : null}
                         <Text style={S.heroTitleText} numberOfLines={2}>
-                            {item.title || 'Untitled Promo'}
+                            {item.title || 'Untitled Promo Campaign'}
                         </Text>
                     </View>
                 </View>
 
-                {/* Metadata Strip */}
+                {/* Metadata Details Body */}
                 <View style={S.cardBody}>
                     <View style={S.metaTagsRow}>
-                        {/* Locations */}
+                        {/* Display Surface Locations */}
                         {(item.linkData?.locations || ['home']).map(loc => (
                             <View key={loc} style={S.locTag}>
+                                <Ionicons name="location-outline" size={11} color={C.slate} />
                                 <Text style={S.locTagText}>{loc.toUpperCase()}</Text>
                             </View>
                         ))}
 
-                        {/* Linked Product */}
+                        {/* Linked Product Badge */}
                         {hasProduct && (
                             <View style={S.linkedProductTag}>
-                                <Ionicons name="link" size={10} color={C.indigo} />
+                                <Ionicons name="cube-outline" size={11} color={C.indigo} />
                                 <Text style={S.linkedProductText} numberOfLines={1}>
-                                    {item.linkData?.productName || 'PRODUCT'}
+                                    {item.linkData?.productName || 'Product'}
                                 </Text>
                             </View>
                         )}
 
-                        {/* Countdown */}
-                        {hasTimer && (
-                            <View style={S.timerTag}>
-                                <Ionicons name="time-outline" size={10} color={C.amber} />
-                                <Text style={S.timerTagText}>
-                                    EXP: {new Date(item.linkData.timerEnd).toLocaleDateString()}
-                                </Text>
-                            </View>
-                        )}
-
-                        {/* Discount */}
+                        {/* Discount Badge */}
                         {hasDiscount && (
                             <View style={S.discountTag}>
-                                <Ionicons name="pricetag-outline" size={10} color={C.emerald} />
+                                <Ionicons name="pricetag-outline" size={11} color={C.emerald} />
                                 <Text style={S.discountTagText}>
                                     {item.linkData.discountValue}{item.linkData.discountType === 'percent' ? '%' : '₦'} OFF
                                 </Text>
@@ -640,27 +756,39 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                         )}
                     </View>
 
-                    {/* Card Actions */}
+                    {/* Action Bar */}
                     <View style={S.cardActionsRow}>
                         <TouchableOpacity
                             onPress={() => handleToggleStatus(item)}
                             style={S.quickToggleBtn}
+                            activeOpacity={0.7}
                         >
-                            <Ionicons name={isActive ? 'eye-off-outline' : 'eye-outline'} size={13} color={C.slate} />
-                            <Text style={S.quickToggleText}>{isActive ? 'Hide' : 'Activate'}</Text>
+                            <Ionicons name={isActive ? 'pause-outline' : 'play-outline'} size={14} color={C.slate} />
+                            <Text style={S.quickToggleText}>{isActive ? 'Pause' : 'Activate'}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => handleCloneBanner(item)}
+                            style={S.cloneBtn}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="copy-outline" size={13} color={C.purple} />
+                            <Text style={S.cloneBtnText}>Clone</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             onPress={() => handleEdit(item)}
                             style={S.editBtn}
+                            activeOpacity={0.7}
                         >
-                            <Ionicons name="create-outline" size={13} color={C.navy} />
+                            <Ionicons name="create-outline" size={13} color={C.blue} />
                             <Text style={S.editBtnText}>Edit</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             onPress={() => handleDelete(item.id)}
                             style={S.deleteBtn}
+                            activeOpacity={0.7}
                         >
                             <Ionicons name="trash-outline" size={13} color={C.rose} />
                             <Text style={S.deleteBtnText}>Delete</Text>
@@ -671,40 +799,50 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
         );
     };
 
-    // ── Editor Form View ──────────────────────────────────────────────────────
+    // ── Editor Form View (Balanced & Modern) ──────────────────────────────────
     if (isEditing) {
+        const remainingSim = formatRemainingTime(promoBanner.linkData?.timerEnd);
+
         return (
-            <ScrollView style={S.container} contentContainerStyle={S.editScroll}>
+            <ScrollView style={S.container} contentContainerStyle={S.editScroll} showsVerticalScrollIndicator={false}>
                 <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
 
-                {/* Compact Edit Top Bar */}
+                {/* Top Action Bar */}
                 <View style={S.editTopBar}>
                     <TouchableOpacity onPress={() => setIsEditing(false)} style={S.backButton}>
-                        <Ionicons name="arrow-back" size={16} color={C.navy} />
+                        <Ionicons name="arrow-back" size={18} color={C.navy} />
                     </TouchableOpacity>
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                        <Text style={S.headerTitle}>{promoBanner.id ? 'Edit Promo' : 'New Promo Campaign'}</Text>
-                        <Text style={S.headerSubtitle}>AI Copywriting & Interactive Countdown</Text>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={S.headerTitle}>{promoBanner.id ? 'Edit Promo Campaign' : 'Create Promo Campaign'}</Text>
+                        <Text style={S.headerSubtitle}>Countdown timer & Gemini AI copywriter</Text>
                     </View>
                     <TouchableOpacity
                         onPress={handleAIGenerate}
                         disabled={generatingAI}
                         style={S.aiGenerateBtn}
+                        activeOpacity={0.8}
                     >
                         {generatingAI ? (
                             <ActivityIndicator size="small" color={C.navy} />
                         ) : (
                             <>
-                                <Ionicons name="sparkles" size={14} color={C.navy} />
+                                <Ionicons name="sparkles" size={15} color={C.navy} />
                                 <Text style={S.aiGenerateBtnText}>AI Copy</Text>
                             </>
                         )}
                     </TouchableOpacity>
                 </View>
 
-                {/* ── Dynamic Live Preview Aspect ─────────────────────────────── */}
+                {/* ── Interactive Live Storefront Simulator ────────────────────── */}
                 <View style={S.livePreviewWrapper}>
-                    <Text style={S.sectionLabel}>LIVE STOREFRONT PREVIEW</Text>
+                    <View style={S.previewHeaderRow}>
+                        <Text style={S.sectionLabel}>LIVE STOREFRONT PREVIEW</Text>
+                        <View style={S.liveDotWrap}>
+                            <View style={S.liveDot} />
+                            <Text style={S.liveText}>Real-Time Preview</Text>
+                        </View>
+                    </View>
+
                     <View style={S.previewHero}>
                         <Image
                             source={{ uri: promoBanner.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=600' }}
@@ -712,66 +850,185 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                         />
                         <View style={S.previewOverlay} />
 
-                        {promoBanner.subtitle ? (
-                            <View style={S.previewBadge}>
-                                <Text style={S.previewBadgeText}>{promoBanner.subtitle.toUpperCase()}</Text>
-                            </View>
-                        ) : null}
+                        {/* Top Ribbon inside Preview */}
+                        <View style={S.previewTopRibbon}>
+                            {promoBanner.subtitle ? (
+                                <View style={S.previewBadge}>
+                                    <Text style={S.previewBadgeText}>{promoBanner.subtitle.toUpperCase()}</Text>
+                                </View>
+                            ) : (
+                                <View style={S.previewBadge}>
+                                    <Text style={S.previewBadgeText}>LIMITED TIME</Text>
+                                </View>
+                            )}
 
+                            {remainingSim && (
+                                <View style={S.previewTimerTag}>
+                                    <Ionicons name="time-outline" size={11} color="#FFFFFF" />
+                                    <Text style={S.previewTimerText}>{remainingSim}</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Headline */}
                         <Text style={S.previewTitle} numberOfLines={2}>
-                            {promoBanner.title || 'Enter banner headline below...'}
+                            {promoBanner.title || 'Enter your promotional campaign headline below...'}
                         </Text>
 
-                        {promoBanner.linkData?.text ? (
+                        {/* Bottom Row inside Preview */}
+                        <View style={S.previewBottomRow}>
+                            {promoBanner.linkData?.productName ? (
+                                <View style={S.previewProductSnippet}>
+                                    <Ionicons name="link" size={12} color="#FFFFFF" />
+                                    <Text style={S.previewProductText} numberOfLines={1}>
+                                        {promoBanner.linkData.productName}
+                                    </Text>
+                                    {promoBanner.linkData.discountValue && (
+                                        <Text style={S.previewDiscountText}>
+                                            -{promoBanner.linkData.discountValue}{promoBanner.linkData.discountType === 'percent' ? '%' : '₦'}
+                                        </Text>
+                                    )}
+                                </View>
+                            ) : null}
+
                             <View style={S.previewCtaBtn}>
-                                <Text style={S.previewCtaText}>{promoBanner.linkData.text}</Text>
+                                <Text style={S.previewCtaText}>
+                                    {promoBanner.linkData?.text || 'Shop Now →'}
+                                </Text>
                             </View>
-                        ) : null}
+                        </View>
                     </View>
                 </View>
 
-                {/* ── Editor Form Fields ───────────────────────────────────────── */}
+                {/* ── AI Copywriter Assistant Strip ───────────────────────────── */}
+                <View style={S.aiAssistantCard}>
+                    <View style={S.aiCardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="sparkles" size={16} color={C.gold} />
+                            <Text style={S.aiCardTitle}>Gemini Copy Assistant</Text>
+                        </View>
+                        <Text style={S.aiCardSub}>Select tone & tap AI Copy</Text>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.toneScroll}>
+                        {AI_CAMPAIGN_TONES.map(tone => {
+                            const isSelected = aiTone === tone.id;
+                            return (
+                                <TouchableOpacity
+                                    key={tone.id}
+                                    onPress={() => setAiTone(tone.id)}
+                                    style={[S.toneChip, isSelected && S.toneChipActive]}
+                                >
+                                    <Ionicons name={tone.icon} size={13} color={isSelected ? C.navy : C.muted} />
+                                    <Text style={[S.toneChipText, isSelected && S.toneChipTextActive]}>{tone.label}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+
+                    {aiSuggestions && (
+                        <View style={S.aiSuggestionsBox}>
+                            <Text style={S.aiSuggestionHeader}>Recently Generated by AI:</Text>
+                            <TouchableOpacity
+                                onPress={() => setPromoBanner(p => ({
+                                    ...p,
+                                    title: aiSuggestions.title || p.title,
+                                    subtitle: aiSuggestions.subtitle || p.subtitle,
+                                    linkData: { ...p.linkData, text: aiSuggestions.buttonText || p.linkData.text }
+                                }))}
+                                style={S.aiSuggestionRow}
+                            >
+                                <Ionicons name="checkmark-circle" size={15} color={C.emerald} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.aiSuggestionHeadline}>{aiSuggestions.title}</Text>
+                                    <Text style={S.aiSuggestionSub}>{aiSuggestions.subtitle} • CTA: {aiSuggestions.buttonText}</Text>
+                                </View>
+                                <Text style={S.aiApplyText}>Apply</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </View>
+
+                {/* ── Campaign Settings Card ──────────────────────────────────── */}
                 <View style={S.formCard}>
-                    {/* Status & Display Locations */}
+                    {/* Status Toggle & Surfaces */}
                     <View style={S.rowBetween}>
-                        <Text style={S.inputTitle}>BANNER STATUS</Text>
+                        <Text style={S.inputTitle}>CAMPAIGN VISIBILITY</Text>
                         <TouchableOpacity
                             onPress={() => setPromoBanner(p => ({ ...p, is_active: !p.is_active }))}
-                            style={[S.statusToggle, { backgroundColor: promoBanner.is_active ? C.emeraldBg : '#F1F5F9', borderColor: promoBanner.is_active ? C.emeraldBorder : C.border }]}
+                            style={[S.statusToggle, { backgroundColor: promoBanner.is_active ? C.emeraldBg : '#FFFFFF', borderColor: promoBanner.is_active ? C.emeraldBorder : C.border }]}
                         >
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: promoBanner.is_active ? C.emerald : C.muted }} />
+                            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: promoBanner.is_active ? C.emerald : C.muted }} />
                             <Text style={[S.statusToggleText, { color: promoBanner.is_active ? C.emerald : C.muted }]}>
-                                {promoBanner.is_active ? 'ACTIVE' : 'HIDDEN'}
+                                {promoBanner.is_active ? 'ACTIVE (LIVE)' : 'PAUSED (DRAFT)'}
                             </Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* Display Locations */}
-                    <View style={{ marginTop: 12, marginBottom: 14 }}>
-                        <Text style={S.inputTitle}>TARGET PAGES</Text>
-                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                            {['home', 'shop', 'landing'].map(loc => {
-                                const selected = promoBanner.linkData?.locations?.includes(loc);
+                    {/* Display Surfaces */}
+                    <View style={{ marginTop: 14, marginBottom: 14 }}>
+                        <Text style={S.inputSubLabel}>DISPLAY SURFACES IN STORE</Text>
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+                            {[
+                                { id: 'home', label: 'Home Page' },
+                                { id: 'shop', label: 'Shop Catalog' },
+                                { id: 'landing', label: 'Landing' }
+                            ].map(loc => {
+                                const active = promoBanner.linkData?.locations?.includes(loc.id);
                                 return (
                                     <TouchableOpacity
-                                        key={loc}
-                                        onPress={() => toggleLocation(loc)}
-                                        style={[S.locSelectChip, selected && S.locSelectChipActive]}
+                                        key={loc.id}
+                                        onPress={() => toggleLocation(loc.id)}
+                                        style={[S.locSelectChip, active && S.locSelectChipActive]}
                                     >
-                                        <Ionicons name={selected ? 'checkbox' : 'square-outline'} size={14} color={selected ? C.navy : C.muted} />
-                                        <Text style={[S.locSelectText, selected && S.locSelectTextActive]}>
-                                            {loc === 'home' ? 'Home' : loc === 'shop' ? 'Shop' : 'Landing'}
-                                        </Text>
+                                        <Ionicons name={active ? 'checkbox' : 'square-outline'} size={15} color={active ? C.navy : C.muted} />
+                                        <Text style={[S.locSelectText, active && S.locSelectTextActive]}>{loc.label}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
                         </View>
                     </View>
 
-                    {/* Banner Image Source */}
+                    {/* Headline */}
                     <View style={{ marginBottom: 14 }}>
-                        <Text style={S.inputTitle}>BANNER IMAGE</Text>
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                        <Text style={S.inputTitle}>CAMPAIGN HEADLINE</Text>
+                        <TextInput
+                            style={S.formInput}
+                            placeholder="e.g., Ramadan Mega Deal: Up to 40% Off Selected Electronics"
+                            placeholderTextColor={C.subtle}
+                            value={promoBanner.title}
+                            onChangeText={t => setPromoBanner(p => ({ ...p, title: t }))}
+                        />
+                    </View>
+
+                    {/* Badge / Tagline */}
+                    <View style={{ marginBottom: 14 }}>
+                        <Text style={S.inputTitle}>TOP BADGE TEXT (TAGLINE)</Text>
+                        <TextInput
+                            style={S.formInput}
+                            placeholder="e.g., FLASH SALE, LIMITED DEAL, WEEKEND SPECIAL"
+                            placeholderTextColor={C.subtle}
+                            value={promoBanner.subtitle}
+                            onChangeText={t => setPromoBanner(p => ({ ...p, subtitle: t }))}
+                        />
+                    </View>
+
+                    {/* CTA Button Text */}
+                    <View style={{ marginBottom: 14 }}>
+                        <Text style={S.inputTitle}>BUTTON CTA TEXT</Text>
+                        <TextInput
+                            style={S.formInput}
+                            placeholder="e.g., Shop Deal Now →, Claim Voucher"
+                            placeholderTextColor={C.subtle}
+                            value={promoBanner.linkData?.text}
+                            onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, text: t } }))}
+                        />
+                    </View>
+
+                    {/* Banner Image URL / Upload */}
+                    <View style={{ marginBottom: 14 }}>
+                        <Text style={S.inputTitle}>BANNER BACKGROUND IMAGE</Text>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'center' }}>
                             <TouchableOpacity
                                 onPress={handlePickBannerImage}
                                 disabled={uploadingBanner}
@@ -781,194 +1038,174 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                                     <ActivityIndicator size="small" color={C.navy} />
                                 ) : (
                                     <>
-                                        <Ionicons name="cloud-upload-outline" size={15} color={C.navy} />
-                                        <Text style={S.uploadImageText}>Upload File</Text>
+                                        <Ionicons name="cloud-upload-outline" size={16} color={C.navy} />
+                                        <Text style={S.uploadImageText}>Upload</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
 
                             <TextInput
                                 style={S.imageUrlInput}
-                                placeholder="Or paste public image URL..."
+                                placeholder="Paste image URL (https://...)"
                                 placeholderTextColor={C.subtle}
                                 value={promoBanner.image_url}
-                                onChangeText={url => setPromoBanner(p => ({ ...p, image_url: url }))}
+                                onChangeText={t => setPromoBanner(p => ({ ...p, image_url: t }))}
                             />
                         </View>
                     </View>
 
-                    {/* Headline, Badge & Button CTA */}
-                    <View style={{ gap: 10 }}>
-                        <View>
-                            <Text style={S.inputTitle}>MAIN HEADLINE</Text>
-                            <TextInput
-                                style={S.formInput}
-                                placeholder="e.g. End of Month Mega Sale 50% Off"
-                                placeholderTextColor={C.subtle}
-                                value={promoBanner.title}
-                                onChangeText={t => setPromoBanner(p => ({ ...p, title: t }))}
-                            />
-                            {aiSuggestions?.title && (
-                                <Text style={S.aiTip}>AI Idea: {aiSuggestions.title}</Text>
-                            )}
-                        </View>
-
-                        <View>
-                            <Text style={S.inputTitle}>BADGE TEXT (HIGHLIGHT)</Text>
-                            <TextInput
-                                style={S.formInput}
-                                placeholder="e.g. FLASH SALE or LIMITED TIME"
-                                placeholderTextColor={C.subtle}
-                                value={promoBanner.subtitle}
-                                onChangeText={t => setPromoBanner(p => ({ ...p, subtitle: t }))}
-                            />
-                        </View>
-
-                        <View>
-                            <Text style={S.inputTitle}>BUTTON CALL-TO-ACTION</Text>
-                            <TextInput
-                                style={S.formInput}
-                                placeholder="e.g. SHOP NOW or CLAIM 30% OFF"
-                                placeholderTextColor={C.subtle}
-                                value={promoBanner.linkData?.text}
-                                onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, text: t } }))}
-                            />
-                        </View>
-
-                        {/* Countdown Date & Linked Product */}
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                            {/* Countdown Date Picker */}
-                            <View style={{ flex: 1 }}>
-                                <Text style={S.inputTitle}>EXPIRY COUNTDOWN</Text>
-                                <TouchableOpacity
-                                    onPress={() => setShowDatePicker(true)}
-                                    style={[S.pickerBtn, promoBanner.linkData?.timerEnd && S.pickerBtnActive]}
-                                >
-                                    <Text style={[S.pickerText, promoBanner.linkData?.timerEnd && S.pickerTextActive]} numberOfLines={1}>
-                                        {promoBanner.linkData?.timerEnd
-                                            ? new Date(promoBanner.linkData.timerEnd).toLocaleDateString()
-                                            : 'Select Date...'}
-                                    </Text>
-                                    {promoBanner.linkData?.timerEnd ? (
-                                        <TouchableOpacity onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, timerEnd: '' } }))}>
-                                            <Ionicons name="close-circle" size={15} color={C.muted} />
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <Ionicons name="calendar-outline" size={15} color={C.muted} />
-                                    )}
-                                </TouchableOpacity>
-
-                                {showDatePicker && (
-                                    Platform.OS === 'web' ? (
-                                        <View style={{ marginTop: 6 }}>
-                                            <input
-                                                type="date"
-                                                value={promoBanner.linkData?.timerEnd || ''}
-                                                onChange={(e) => {
-                                                    setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, timerEnd: e.target.value } }));
-                                                    setShowDatePicker(false);
-                                                }}
-                                                style={{
-                                                    padding: '8px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #CBD5E1',
-                                                    backgroundColor: '#FFFFFF',
-                                                    fontSize: '12px',
-                                                    color: '#0F172A',
-                                                    width: '100%'
-                                                }}
-                                            />
-                                        </View>
-                                    ) : (
-                                        <DateTimePicker
-                                            value={promoBanner.linkData?.timerEnd ? new Date(promoBanner.linkData.timerEnd) : new Date()}
-                                            mode="date"
-                                            display="default"
-                                            minimumDate={new Date()}
-                                            onChange={(event, selectedDate) => {
-                                                setShowDatePicker(Platform.OS === 'ios');
-                                                if (selectedDate) {
-                                                    const formatted = selectedDate.toISOString().split('T')[0];
-                                                    setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, timerEnd: formatted } }));
-                                                }
-                                            }}
-                                        />
-                                    )
-                                )}
-                            </View>
-
-                            {/* Linked Product Selector */}
-                            <View style={{ flex: 1 }}>
-                                <Text style={S.inputTitle}>LINKED PRODUCT</Text>
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        performProductSearch('');
-                                        setSearchModalVisible(true);
-                                    }}
-                                    style={[S.pickerBtn, promoBanner.linkData?.productId && S.pickerBtnActive]}
-                                >
-                                    <Text style={[S.pickerText, promoBanner.linkData?.productId && S.pickerTextActive]} numberOfLines={1}>
-                                        {promoBanner.linkData?.productName || 'Pick Product...'}
-                                    </Text>
-                                    {promoBanner.linkData?.productId ? (
-                                        <TouchableOpacity onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, productId: '', productName: '' } }))}>
-                                            <Ionicons name="close-circle" size={15} color={C.muted} />
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <Ionicons name="link-outline" size={15} color={C.muted} />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        {/* Promotional Discount */}
-                        <View style={S.discountBox}>
-                            <Text style={S.inputTitle}>PROMOTIONAL DISCOUNT</Text>
-                            <View style={{ flexDirection: 'row', gap: 6, marginVertical: 6 }}>
-                                <TouchableOpacity
-                                    onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, discountType: 'percent' } }))}
-                                    style={[S.discountTypeBtn, promoBanner.linkData?.discountType === 'percent' && S.discountTypeBtnActive]}
-                                >
-                                    <Text style={[S.discountTypeText, promoBanner.linkData?.discountType === 'percent' && S.discountTypeTextActive]}>
-                                        Percentage (%)
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, discountType: 'amount' } }))}
-                                    style={[S.discountTypeBtn, promoBanner.linkData?.discountType === 'amount' && S.discountTypeBtnActive]}
-                                >
-                                    <Text style={[S.discountTypeText, promoBanner.linkData?.discountType === 'amount' && S.discountTypeTextActive]}>
-                                        Fixed (₦)
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <TextInput
-                                style={S.formInput}
-                                placeholder={promoBanner.linkData?.discountType === 'percent' ? 'e.g. 25' : 'e.g. 5000'}
-                                placeholderTextColor={C.subtle}
-                                keyboardType="numeric"
-                                value={promoBanner.linkData?.discountValue}
-                                onChangeText={v => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, discountValue: v } }))}
-                            />
-                        </View>
-
-                        {/* Save Banner Button */}
+                    {/* Link Catalog Product */}
+                    <View style={{ marginBottom: 14 }}>
+                        <Text style={S.inputTitle}>LINK STORE PRODUCT</Text>
                         <TouchableOpacity
-                            onPress={handleSavePromo}
-                            disabled={saving}
-                            style={S.saveButton}
+                            onPress={() => {
+                                performProductSearch('');
+                                setSearchModalVisible(true);
+                            }}
+                            style={[S.pickerBtn, promoBanner.linkData?.productId && S.pickerBtnActive]}
                         >
-                            {saving ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <Ionicons name="link" size={16} color={promoBanner.linkData?.productId ? C.indigo : C.muted} />
+                                <Text style={[S.pickerText, promoBanner.linkData?.productId && S.pickerTextActive]} numberOfLines={1}>
+                                    {promoBanner.linkData?.productName || 'Tap to link a product from catalog...'}
+                                </Text>
+                            </View>
+                            {promoBanner.linkData?.productId ? (
+                                <TouchableOpacity onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, productId: '', productName: '', productPrice: '' } }))}>
+                                    <Ionicons name="close-circle" size={18} color={C.muted} />
+                                </TouchableOpacity>
                             ) : (
-                                <>
-                                    <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
-                                    <Text style={S.saveButtonText}>Publish Live Promo Banner</Text>
-                                </>
+                                <Ionicons name="chevron-forward" size={16} color={C.muted} />
                             )}
                         </TouchableOpacity>
                     </View>
+
+                    {/* Countdown Expiry Date */}
+                    <View style={{ marginBottom: 14 }}>
+                        <View style={S.rowBetween}>
+                            <Text style={S.inputTitle}>COUNTDOWN EXPIRY DATE</Text>
+                            {promoBanner.linkData?.timerEnd && (
+                                <TouchableOpacity onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, timerEnd: '' } }))}>
+                                    <Text style={{ fontSize: 11, color: C.rose, fontWeight: '700' }}>Clear Timer</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Quick Presets */}
+                        <View style={{ flexDirection: 'row', gap: 6, marginVertical: 6 }}>
+                            <TouchableOpacity onPress={() => applyDatePreset(1)} style={S.datePresetBtn}>
+                                <Text style={S.datePresetText}>+24 Hours</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => applyDatePreset(3)} style={S.datePresetBtn}>
+                                <Text style={S.datePresetText}>+3 Days</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => applyDatePreset(7)} style={S.datePresetBtn}>
+                                <Text style={S.datePresetText}>+7 Days</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[S.datePresetBtn, { backgroundColor: C.navy }]}>
+                                <Text style={[S.datePresetText, { color: '#FFFFFF' }]}>Custom Date</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => setShowDatePicker(true)}
+                            style={[S.pickerBtn, promoBanner.linkData?.timerEnd && S.pickerBtnActive]}
+                        >
+                            <Text style={[S.pickerText, promoBanner.linkData?.timerEnd && S.pickerTextActive]}>
+                                {promoBanner.linkData?.timerEnd
+                                    ? `Expires on: ${promoBanner.linkData.timerEnd} (${formatRemainingTime(promoBanner.linkData.timerEnd) || 'Active'})`
+                                    : 'No countdown timer set'}
+                            </Text>
+                            <Ionicons name="calendar-outline" size={17} color={C.muted} />
+                        </TouchableOpacity>
+
+                        {showDatePicker && (
+                            Platform.OS === 'web' ? (
+                                <View style={{ marginTop: 8 }}>
+                                    <input
+                                        type="date"
+                                        value={promoBanner.linkData?.timerEnd || ''}
+                                        onChange={(e) => {
+                                            setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, timerEnd: e.target.value } }));
+                                            setShowDatePicker(false);
+                                        }}
+                                        style={{
+                                            padding: '10px 12px',
+                                            borderRadius: '8px',
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: '#FFFFFF',
+                                            fontSize: '13px',
+                                            color: '#0F172A',
+                                            width: '100%'
+                                        }}
+                                    />
+                                </View>
+                            ) : (
+                                <DateTimePicker
+                                    value={promoBanner.linkData?.timerEnd ? new Date(promoBanner.linkData.timerEnd) : new Date()}
+                                    mode="date"
+                                    display="default"
+                                    minimumDate={new Date()}
+                                    onChange={(event, selectedDate) => {
+                                        setShowDatePicker(Platform.OS === 'ios');
+                                        if (selectedDate) {
+                                            const formatted = selectedDate.toISOString().split('T')[0];
+                                            setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, timerEnd: formatted } }));
+                                        }
+                                    }}
+                                />
+                            )
+                        )}
+                    </View>
+
+                    {/* Promotional Discount Callout */}
+                    <View style={S.discountBox}>
+                        <Text style={S.inputTitle}>PROMOTIONAL DISCOUNT</Text>
+                        <View style={{ flexDirection: 'row', gap: 6, marginVertical: 8 }}>
+                            <TouchableOpacity
+                                onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, discountType: 'percent' } }))}
+                                style={[S.discountTypeBtn, promoBanner.linkData?.discountType === 'percent' && S.discountTypeBtnActive]}
+                            >
+                                <Text style={[S.discountTypeText, promoBanner.linkData?.discountType === 'percent' && S.discountTypeTextActive]}>
+                                    Percentage (%)
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, discountType: 'amount' } }))}
+                                style={[S.discountTypeBtn, promoBanner.linkData?.discountType === 'amount' && S.discountTypeBtnActive]}
+                            >
+                                <Text style={[S.discountTypeText, promoBanner.linkData?.discountType === 'amount' && S.discountTypeTextActive]}>
+                                    Fixed Amount (₦)
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TextInput
+                            style={S.formInput}
+                            placeholder={promoBanner.linkData?.discountType === 'percent' ? 'e.g. 25 (for 25% OFF)' : 'e.g. 5000 (for ₦5,000 OFF)'}
+                            placeholderTextColor={C.subtle}
+                            keyboardType="numeric"
+                            value={promoBanner.linkData?.discountValue}
+                            onChangeText={v => setPromoBanner(p => ({ ...p, linkData: { ...p.linkData, discountValue: v } }))}
+                        />
+                    </View>
+
+                    {/* Publish Campaign Button */}
+                    <TouchableOpacity
+                        onPress={handleSavePromo}
+                        disabled={saving}
+                        style={S.saveButton}
+                        activeOpacity={0.85}
+                    >
+                        {saving ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                            <>
+                                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                                <Text style={S.saveButtonText}>Publish Live Promo Campaign</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
                 </View>
 
                 {/* Product Search Modal */}
@@ -984,112 +1221,122 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
         );
     }
 
-    // ── List View (Compact & Executive) ───────────────────────────────────────
+    // ── Main List View (Balanced, Executive & Modern) ─────────────────────────
     return (
         <View style={S.container}>
             <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
 
-            {/* ── Compact Header ────────────────────────────────────────────── */}
+            {/* ── Executive Header ────────────────────────────────────────────── */}
             <View style={S.header}>
                 <View style={S.headerTopRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         {onBack ? (
                             <TouchableOpacity onPress={onBack} style={S.backButton}>
-                                <Ionicons name="arrow-back" size={16} color={C.navy} />
+                                <Ionicons name="arrow-back" size={17} color={C.navy} />
                             </TouchableOpacity>
                         ) : navigation?.canGoBack?.() ? (
                             <TouchableOpacity onPress={() => navigation.goBack()} style={S.backButton}>
-                                <Ionicons name="arrow-back" size={16} color={C.navy} />
+                                <Ionicons name="arrow-back" size={17} color={C.navy} />
                             </TouchableOpacity>
                         ) : null}
 
                         <View>
-                            <Text style={S.headerTitle}>AI Promo Banners</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <View style={S.liveDot} />
-                                <Text style={S.headerSubtitle}>Countdown Campaigns & Gemini AI Copy</Text>
+                            <Text style={S.headerTitle}>AI Promo Studio</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                                <View style={S.livePulseDot} />
+                                <Text style={S.headerSubtitle}>Real-Time Campaigns & Gemini AI Copy</Text>
                             </View>
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <TouchableOpacity
                             onPress={onRefresh}
                             style={S.iconBtn}
                             disabled={refreshing}
                         >
-                            <Ionicons name="refresh" size={15} color={C.navy} />
+                            <Ionicons name="refresh" size={16} color={C.navy} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             onPress={handleAddNew}
                             style={S.addNewBtn}
+                            activeOpacity={0.8}
                         >
-                            <Ionicons name="add" size={15} color="#FFFFFF" />
+                            <Ionicons name="add" size={16} color="#FFFFFF" />
                             <Text style={S.addNewBtnText}>New Promo</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* ── 4-Tile KPI Summary Ribbon ────────────────────────────── */}
+                {/* ── 4-Tile Live KPI Dashboard Ribbon ────────────────────────── */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={S.kpiScroll}
                 >
-                    <View style={S.kpiCard}>
+                    <TouchableOpacity
+                        onPress={() => setStatusFilter('all')}
+                        style={[S.kpiCard, statusFilter === 'all' && S.kpiCardActive]}
+                        activeOpacity={0.8}
+                    >
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.indigoBg }]}>
-                                <Ionicons name="sparkles-outline" size={12} color={C.indigo} />
+                                <Ionicons name="sparkles" size={13} color={C.indigo} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.indigo, backgroundColor: '#E0E7FF' }]}>
-                                CAMPAIGNS
+                                ALL
                             </Text>
                         </View>
                         <Text style={S.kpiValue}>{metrics.total}</Text>
-                        <Text style={S.kpiSub}>Total Banners</Text>
-                    </View>
+                        <Text style={S.kpiSub}>Total Campaigns</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                         onPress={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
                         style={[S.kpiCard, statusFilter === 'active' && S.kpiCardActive]}
+                        activeOpacity={0.8}
                     >
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.emeraldBg }]}>
-                                <Ionicons name="checkmark-done-circle-outline" size={12} color={C.emerald} />
+                                <Ionicons name="checkmark-circle" size={13} color={C.emerald} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.emerald, backgroundColor: '#DCFCE7' }]}>
-                                LIVE NOW
+                                LIVE
                             </Text>
                         </View>
                         <Text style={S.kpiValue}>{metrics.activeCount}</Text>
                         <Text style={S.kpiSub}>Active On Store</Text>
                     </TouchableOpacity>
 
-                    <View style={S.kpiCard}>
+                    <TouchableOpacity
+                        onPress={() => setStatusFilter(statusFilter === 'inactive' ? 'all' : 'inactive')}
+                        style={[S.kpiCard, statusFilter === 'inactive' && S.kpiCardActive]}
+                        activeOpacity={0.8}
+                    >
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.amberBg }]}>
-                                <Ionicons name="hourglass-outline" size={12} color={C.amber} />
+                                <Ionicons name="time" size={13} color={C.amber} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.amber, backgroundColor: '#FEF3C7' }]}>
-                                TIMERS
+                                DEALS
                             </Text>
                         </View>
                         <Text style={S.kpiValue}>{metrics.timerCount}</Text>
                         <Text style={S.kpiSub}>Countdown Deals</Text>
-                    </View>
+                    </TouchableOpacity>
 
                     <View style={S.kpiCard}>
                         <View style={S.kpiHeader}>
                             <View style={[S.kpiIconWrap, { backgroundColor: C.blueBg }]}>
-                                <Ionicons name="link-outline" size={12} color={C.blue} />
+                                <Ionicons name="cube" size={13} color={C.blue} />
                             </View>
                             <Text style={[S.kpiBadge, { color: C.blue, backgroundColor: '#DBEAFE' }]}>
                                 LINKED
                             </Text>
                         </View>
                         <Text style={S.kpiValue}>{metrics.productCount}</Text>
-                        <Text style={S.kpiSub}>Direct Products</Text>
+                        <Text style={S.kpiSub}>Catalog Products</Text>
                     </View>
                 </ScrollView>
             </View>
@@ -1097,17 +1344,17 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
             {/* ── Search & Filter Controls ────────────────────────────────── */}
             <View style={S.filterSection}>
                 <View style={S.searchBox}>
-                    <Ionicons name="search" size={15} color={C.muted} />
+                    <Ionicons name="search" size={16} color={C.muted} />
                     <TextInput
                         style={S.searchInput}
-                        placeholder="Search headline, badge, product link..."
+                        placeholder="Search promo headlines, badges, or linked items..."
                         placeholderTextColor={C.subtle}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <Ionicons name="close-circle" size={15} color={C.muted} />
+                            <Ionicons name="close-circle" size={16} color={C.muted} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -1115,9 +1362,9 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                 {/* Filter Tabs & Location Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.tabRow}>
                     {[
-                        { id: 'all', label: 'All Banners' },
+                        { id: 'all', label: 'All Campaigns' },
                         { id: 'active', label: 'Active Live' },
-                        { id: 'inactive', label: 'Hidden' }
+                        { id: 'inactive', label: 'Paused' }
                     ].map(tab => {
                         const active = statusFilter === tab.id;
                         return (
@@ -1131,12 +1378,12 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                         );
                     })}
 
-                    <View style={{ width: 1, backgroundColor: C.border, marginHorizontal: 2 }} />
+                    <View style={{ width: 1, backgroundColor: C.border, marginHorizontal: 4 }} />
 
                     {[
-                        { id: 'all', label: 'All Pages' },
+                        { id: 'all', label: 'All Surfaces' },
                         { id: 'home', label: 'Home Page' },
-                        { id: 'shop', label: 'Shop' },
+                        { id: 'shop', label: 'Shop Catalog' },
                         { id: 'landing', label: 'Landing' }
                     ].map(loc => {
                         const active = locationFilter === loc.id;
@@ -1157,7 +1404,7 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
             {loading && !refreshing ? (
                 <View style={S.centerLoader}>
                     <ActivityIndicator size="small" color={C.navy} />
-                    <Text style={S.loaderText}>Syncing live AI promo banners...</Text>
+                    <Text style={S.loaderText}>Syncing live AI promo campaigns...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -1165,25 +1412,27 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
                     renderItem={renderBannerCard}
                     keyExtractor={item => item.id ? item.id.toString() : Math.random().toString()}
                     contentContainerStyle={S.listContent}
+                    showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[C.navy, C.gold]} />
                     }
                     ListEmptyComponent={
                         <View style={S.emptyStateBox}>
                             <View style={S.emptyIconWrap}>
-                                <Ionicons name="sparkles-outline" size={32} color={C.gold} />
+                                <Ionicons name="sparkles" size={32} color={C.gold} />
                             </View>
-                            <Text style={S.emptyTitle}>No Live Promo Banners</Text>
+                            <Text style={S.emptyTitle}>No Promo Campaigns Found</Text>
                             <Text style={S.emptySubtitle}>
                                 {searchQuery
                                     ? `No campaigns match "${searchQuery}".`
-                                    : 'Create your first interactive countdown promo with Gemini AI copywriting.'}
+                                    : 'Create your first interactive countdown promo campaign with Gemini AI copywriting.'}
                             </Text>
                             <TouchableOpacity
                                 onPress={handleAddNew}
                                 style={S.createEmptyBtn}
+                                activeOpacity={0.8}
                             >
-                                <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+                                <Ionicons name="sparkles" size={15} color="#FFFFFF" />
                                 <Text style={S.createEmptyBtnText}>+ Create Promo with AI</Text>
                             </TouchableOpacity>
                         </View>
@@ -1194,7 +1443,8 @@ export const AdminPromoBanners = ({ navigation, onBack }) => {
     );
 };
 
-// ─── Compact Stylesheet ──────────────────────────────────────────────────────
+// ─── Balanced & Elegant Stylesheet ────────────────────────────────────────────
+// Calibrated with perfect visual hierarchy: zero micro-fonts, zero oversized padding
 const S = StyleSheet.create({
     container: {
         flex: 1,
@@ -1202,9 +1452,9 @@ const S = StyleSheet.create({
     },
     header: {
         backgroundColor: C.card,
-        paddingTop: 12,
-        paddingBottom: 10,
-        paddingHorizontal: 14,
+        paddingTop: 14,
+        paddingBottom: 12,
+        paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: C.border
     },
@@ -1212,12 +1462,12 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10
+        marginBottom: 12
     },
     backButton: {
-        width: 30,
-        height: 30,
-        borderRadius: 8,
+        width: 34,
+        height: 34,
+        borderRadius: 9,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
@@ -1225,26 +1475,26 @@ const S = StyleSheet.create({
         justifyContent: 'center'
     },
     headerTitle: {
-        fontSize: 17,
+        fontSize: 18,
         fontWeight: '900',
         color: C.navy,
         letterSpacing: -0.3
     },
     headerSubtitle: {
-        fontSize: 10,
+        fontSize: 11.5,
         fontWeight: '600',
         color: C.muted
     },
-    liveDot: {
-        width: 5,
-        height: 5,
-        borderRadius: 2.5,
+    livePulseDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
         backgroundColor: C.emerald
     },
     iconBtn: {
-        width: 30,
-        height: 30,
-        borderRadius: 8,
+        width: 34,
+        height: 34,
+        borderRadius: 9,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
@@ -1254,103 +1504,103 @@ const S = StyleSheet.create({
     addNewBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 9,
         backgroundColor: C.navy
     },
     addNewBtnText: {
         color: '#FFFFFF',
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '800'
     },
     kpiScroll: {
-        gap: 8,
+        gap: 10,
         paddingRight: 6
     },
     kpiCard: {
-        width: 122,
+        width: 132,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
-        borderRadius: 10,
-        padding: 9
+        borderRadius: 12,
+        padding: 10
     },
     kpiCardActive: {
         borderColor: C.navy,
         backgroundColor: '#FFFFFF',
         shadowColor: C.navy,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 5,
+        elevation: 2
     },
     kpiHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4
+        marginBottom: 6
     },
     kpiIconWrap: {
-        width: 22,
-        height: 22,
-        borderRadius: 6,
+        width: 24,
+        height: 24,
+        borderRadius: 7,
         alignItems: 'center',
         justifyContent: 'center'
     },
     kpiBadge: {
-        fontSize: 7.5,
+        fontSize: 9.5,
         fontWeight: '900',
-        paddingHorizontal: 4,
-        paddingVertical: 1.5,
-        borderRadius: 3
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        borderRadius: 4
     },
     kpiValue: {
-        fontSize: 15,
+        fontSize: 17,
         fontWeight: '900',
         color: C.navy,
         letterSpacing: -0.3
     },
     kpiSub: {
-        fontSize: 9.5,
+        fontSize: 11,
         fontWeight: '600',
         color: C.muted,
-        marginTop: 1
+        marginTop: 2
     },
     filterSection: {
         backgroundColor: C.card,
-        paddingHorizontal: 14,
-        paddingBottom: 8,
+        paddingHorizontal: 16,
+        paddingBottom: 10,
         borderBottomWidth: 1,
         borderBottomColor: C.border
     },
     searchBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
         backgroundColor: C.canvas,
-        borderRadius: 9,
-        paddingHorizontal: 10,
-        paddingVertical: 7,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         borderWidth: 1,
         borderColor: C.border,
-        marginBottom: 8
+        marginBottom: 10
     },
     searchInput: {
         flex: 1,
-        fontSize: 12,
+        fontSize: 13,
         color: C.navy,
         padding: 0
     },
     tabRow: {
         gap: 6,
-        marginBottom: 2
+        alignItems: 'center'
     },
     tabPill: {
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 7,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
@@ -1360,7 +1610,7 @@ const S = StyleSheet.create({
         borderColor: C.navy
     },
     tabPillText: {
-        fontSize: 10.5,
+        fontSize: 11.5,
         fontWeight: '700',
         color: C.muted
     },
@@ -1369,9 +1619,9 @@ const S = StyleSheet.create({
         fontWeight: '800'
     },
     chipPill: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
@@ -1381,7 +1631,7 @@ const S = StyleSheet.create({
         borderColor: C.indigoBorder
     },
     chipPillText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '700',
         color: C.muted
     },
@@ -1390,27 +1640,27 @@ const S = StyleSheet.create({
         fontWeight: '800'
     },
     listContent: {
-        padding: 12,
+        padding: 14,
         paddingBottom: 90
     },
     bannerCard: {
         backgroundColor: C.card,
-        borderRadius: 12,
-        marginBottom: 10,
+        borderRadius: 14,
+        marginBottom: 14,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: C.border,
         shadowColor: C.navy,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        elevation: 1
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2
     },
     cardHero: {
-        height: 125,
+        height: 140,
         backgroundColor: C.navy,
         position: 'relative',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         padding: 12
     },
     cardHeroImage: {
@@ -1421,7 +1671,7 @@ const S = StyleSheet.create({
         bottom: 0,
         width: '100%',
         height: '100%',
-        opacity: 0.5
+        opacity: 0.55
     },
     cardHeroOverlay: {
         position: 'absolute',
@@ -1431,108 +1681,126 @@ const S = StyleSheet.create({
         bottom: 0,
         backgroundColor: 'rgba(15, 23, 42, 0.45)'
     },
-    statusPill: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
+    cardHeroTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 2
+    },
+    timerPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-        borderRadius: 5,
+        gap: 5,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        paddingHorizontal: 8,
+        paddingVertical: 3.5,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)'
+    },
+    timerPillExpired: {
+        backgroundColor: C.roseBg,
+        borderColor: C.roseBorder
+    },
+    timerPillText: {
+        color: '#FFFFFF',
+        fontSize: 10.5,
+        fontWeight: '800'
+    },
+    statusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 8,
+        paddingVertical: 3.5,
+        borderRadius: 6,
         borderWidth: 1
     },
     statusPillText: {
-        fontSize: 8.5,
+        fontSize: 10,
         fontWeight: '900',
         letterSpacing: 0.4
     },
-    heroTextWrap: {
+    heroBottomTextWrap: {
         zIndex: 2
     },
     badgeHighlight: {
         alignSelf: 'flex-start',
         backgroundColor: C.rose,
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
         borderRadius: 4,
-        marginBottom: 3
+        marginBottom: 4
     },
     badgeHighlightText: {
         color: '#FFFFFF',
-        fontSize: 8.5,
+        fontSize: 9.5,
         fontWeight: '900',
-        letterSpacing: 0.5
+        letterSpacing: 0.4
     },
     heroTitleText: {
         color: '#FFFFFF',
-        fontSize: 14.5,
+        fontSize: 15,
         fontWeight: '900',
-        lineHeight: 18
+        lineHeight: 20
     },
     cardBody: {
-        padding: 10
+        padding: 12,
+        backgroundColor: C.card
     },
     metaTagsRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 5,
-        marginBottom: 8
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 10
     },
     locTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
         backgroundColor: C.canvas,
-        paddingHorizontal: 6,
-        paddingVertical: 2.5,
-        borderRadius: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 5,
         borderWidth: 1,
-        borderColor: C.borderLight
+        borderColor: C.border
     },
     locTagText: {
-        fontSize: 9,
+        fontSize: 10,
         fontWeight: '800',
-        color: C.muted
+        color: C.slate
     },
     linkedProductTag: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
+        gap: 4,
         backgroundColor: C.indigoBg,
-        paddingHorizontal: 6,
-        paddingVertical: 2.5,
-        borderRadius: 4
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 5,
+        borderWidth: 1,
+        borderColor: C.indigoBorder
     },
     linkedProductText: {
-        fontSize: 9,
+        fontSize: 10,
         fontWeight: '800',
         color: C.indigo
-    },
-    timerTag: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        backgroundColor: C.amberBg,
-        paddingHorizontal: 6,
-        paddingVertical: 2.5,
-        borderRadius: 4
-    },
-    timerTagText: {
-        fontSize: 9,
-        fontWeight: '800',
-        color: C.amber
     },
     discountTag: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
+        gap: 4,
         backgroundColor: C.emeraldBg,
-        paddingHorizontal: 6,
-        paddingVertical: 2.5,
-        borderRadius: 4
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 5,
+        borderWidth: 1,
+        borderColor: C.emeraldBorder
     },
     discountTagText: {
-        fontSize: 9,
-        fontWeight: '800',
+        fontSize: 10,
+        fontWeight: '900',
         color: C.emerald
     },
     cardActionsRow: {
@@ -1540,55 +1808,71 @@ const S = StyleSheet.create({
         justifyContent: 'flex-end',
         alignItems: 'center',
         gap: 6,
-        paddingTop: 8,
+        paddingTop: 10,
         borderTopWidth: 1,
         borderTopColor: C.borderLight
     },
     quickToggleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
-        paddingHorizontal: 8,
-        paddingVertical: 5,
-        borderRadius: 6,
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 7,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
     },
     quickToggleText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '700',
         color: C.slate
+    },
+    cloneBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 7,
+        backgroundColor: C.purpleBg,
+        borderWidth: 1,
+        borderColor: C.purpleBorder
+    },
+    cloneBtnText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: C.purple
     },
     editBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
-        paddingHorizontal: 9,
-        paddingVertical: 5,
-        borderRadius: 6,
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 7,
         backgroundColor: C.blueBg,
         borderWidth: 1,
         borderColor: C.blueBorder
     },
     editBtnText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '800',
         color: C.blue
     },
     deleteBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
-        paddingHorizontal: 8,
-        paddingVertical: 5,
-        borderRadius: 6,
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 7,
         backgroundColor: C.roseBg,
         borderWidth: 1,
         borderColor: C.roseBorder
     },
     deleteBtnText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '800',
         color: C.rose
     },
@@ -1596,103 +1880,124 @@ const S = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 30
+        padding: 36
     },
     loaderText: {
-        marginTop: 8,
-        fontSize: 11,
+        marginTop: 10,
+        fontSize: 12.5,
         fontWeight: '600',
         color: C.muted
     },
     emptyStateBox: {
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 28,
+        padding: 32,
         backgroundColor: C.card,
-        borderRadius: 14,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: C.border,
-        marginTop: 14
+        marginTop: 20
     },
     emptyIconWrap: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
+        width: 54,
+        height: 54,
+        borderRadius: 16,
         backgroundColor: C.canvas,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 10
+        marginBottom: 12
     },
     emptyTitle: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '800',
         color: C.navy,
-        marginBottom: 3
+        marginBottom: 4
     },
     emptySubtitle: {
-        fontSize: 11,
+        fontSize: 12,
         color: C.muted,
         textAlign: 'center',
-        lineHeight: 16,
-        marginBottom: 14
+        lineHeight: 18,
+        marginBottom: 16
     },
     createEmptyBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 8,
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 9,
         backgroundColor: C.navy
     },
     createEmptyBtnText: {
         color: '#FFFFFF',
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '800'
     },
     editScroll: {
-        padding: 12,
+        padding: 14,
         paddingBottom: 90
     },
     editTopBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12
+        marginBottom: 14
     },
     aiGenerateBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 9,
         backgroundColor: C.goldBg,
         borderWidth: 1,
         borderColor: C.goldBorder
     },
     aiGenerateBtnText: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '800',
         color: C.navy
     },
     livePreviewWrapper: {
-        marginBottom: 12
+        marginBottom: 14
+    },
+    previewHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6
     },
     sectionLabel: {
-        fontSize: 9.5,
+        fontSize: 11,
         fontWeight: '800',
         color: C.muted,
-        marginBottom: 4,
         letterSpacing: 0.5
     },
+    liveDotWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5
+    },
+    liveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: C.emerald
+    },
+    liveText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: C.emerald
+    },
     previewHero: {
-        height: 120,
+        height: 140,
         backgroundColor: C.navy,
-        borderRadius: 12,
+        borderRadius: 14,
         overflow: 'hidden',
         position: 'relative',
-        justifyContent: 'flex-end',
-        padding: 12,
+        justifyContent: 'space-between',
+        padding: 14,
         borderWidth: 1,
         borderColor: C.border
     },
@@ -1704,7 +2009,7 @@ const S = StyleSheet.create({
         bottom: 0,
         width: '100%',
         height: '100%',
-        opacity: 0.5
+        opacity: 0.55
     },
     previewOverlay: {
         position: 'absolute',
@@ -1714,42 +2019,173 @@ const S = StyleSheet.create({
         bottom: 0,
         backgroundColor: 'rgba(15, 23, 42, 0.45)'
     },
+    previewTopRibbon: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 2
+    },
     previewBadge: {
-        alignSelf: 'flex-start',
         backgroundColor: C.rose,
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
-        borderRadius: 3,
-        marginBottom: 3
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 4
     },
     previewBadgeText: {
         color: '#FFFFFF',
-        fontSize: 8,
-        fontWeight: '900'
+        fontSize: 9.5,
+        fontWeight: '900',
+        letterSpacing: 0.4
+    },
+    previewTimerTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 4
+    },
+    previewTimerText: {
+        color: '#FFFFFF',
+        fontSize: 9.5,
+        fontWeight: '800'
     },
     previewTitle: {
         color: '#FFFFFF',
-        fontSize: 13.5,
+        fontSize: 15,
         fontWeight: '900',
-        lineHeight: 17
+        lineHeight: 20,
+        zIndex: 2
+    },
+    previewBottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 2
+    },
+    previewProductSnippet: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 5
+    },
+    previewProductText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontWeight: '800',
+        maxWidth: 140
+    },
+    previewDiscountText: {
+        color: C.gold,
+        fontSize: 10,
+        fontWeight: '900'
     },
     previewCtaBtn: {
-        alignSelf: 'flex-start',
         backgroundColor: C.gold,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 4,
-        marginTop: 6
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 6
     },
     previewCtaText: {
         color: C.navy,
-        fontSize: 8.5,
+        fontSize: 10.5,
         fontWeight: '900'
+    },
+    aiAssistantCard: {
+        backgroundColor: '#FFFDF5',
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: C.goldBorder,
+        marginBottom: 14
+    },
+    aiCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8
+    },
+    aiCardTitle: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: C.navy
+    },
+    aiCardSub: {
+        fontSize: 11,
+        color: C.muted
+    },
+    toneScroll: {
+        gap: 6
+    },
+    toneChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 7,
+        backgroundColor: C.card,
+        borderWidth: 1,
+        borderColor: C.border
+    },
+    toneChipActive: {
+        backgroundColor: C.goldBg,
+        borderColor: C.goldBorder
+    },
+    toneChipText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: C.muted
+    },
+    toneChipTextActive: {
+        color: C.navy,
+        fontWeight: '800'
+    },
+    aiSuggestionsBox: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(217, 167, 58, 0.3)'
+    },
+    aiSuggestionHeader: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: C.muted,
+        marginBottom: 4
+    },
+    aiSuggestionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: C.card,
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: C.borderLight
+    },
+    aiSuggestionHeadline: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: C.navy
+    },
+    aiSuggestionSub: {
+        fontSize: 10.5,
+        color: C.muted,
+        marginTop: 1
+    },
+    aiApplyText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: C.emerald
     },
     formCard: {
         backgroundColor: C.card,
-        borderRadius: 12,
-        padding: 14,
+        borderRadius: 14,
+        padding: 16,
         borderWidth: 1,
         borderColor: C.border
     },
@@ -1759,22 +2195,28 @@ const S = StyleSheet.create({
         alignItems: 'center'
     },
     inputTitle: {
-        fontSize: 9.5,
+        fontSize: 11,
         fontWeight: '800',
         color: C.muted,
         letterSpacing: 0.4
     },
+    inputSubLabel: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: C.muted,
+        letterSpacing: 0.3
+    },
     statusToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 7,
         borderWidth: 1
     },
     statusToggleText: {
-        fontSize: 9,
+        fontSize: 10.5,
         fontWeight: '800'
     },
     locSelectChip: {
@@ -1782,9 +2224,9 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
-        paddingVertical: 6,
-        borderRadius: 6,
+        gap: 5,
+        paddingVertical: 8,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
@@ -1794,7 +2236,7 @@ const S = StyleSheet.create({
         borderColor: C.goldBorder
     },
     locSelectText: {
-        fontSize: 10.5,
+        fontSize: 11.5,
         fontWeight: '700',
         color: C.muted
     },
@@ -1805,65 +2247,59 @@ const S = StyleSheet.create({
     uploadImageBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        borderRadius: 8,
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 9,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border
     },
     uploadImageText: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: '800',
         color: C.navy
     },
     imageUrlInput: {
         flex: 1,
         backgroundColor: C.canvas,
-        borderRadius: 8,
-        paddingHorizontal: 9,
-        paddingVertical: 7,
-        fontSize: 11,
+        borderRadius: 9,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        fontSize: 12,
         color: C.navy,
         borderWidth: 1,
         borderColor: C.border
     },
     formInput: {
         backgroundColor: C.canvas,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        fontSize: 12,
+        borderRadius: 9,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 13,
         color: C.navy,
         borderWidth: 1,
         borderColor: C.border,
-        marginTop: 4
-    },
-    aiTip: {
-        fontSize: 10,
-        color: C.emerald,
-        fontWeight: '700',
-        marginTop: 3
+        marginTop: 6
     },
     pickerBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: C.canvas,
-        borderRadius: 8,
-        paddingHorizontal: 9,
-        paddingVertical: 8,
+        borderRadius: 9,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         borderWidth: 1,
         borderColor: C.border,
-        marginTop: 4
+        marginTop: 6
     },
     pickerBtnActive: {
         backgroundColor: '#FFFBEB',
         borderColor: C.goldBorder
     },
     pickerText: {
-        fontSize: 11,
+        fontSize: 12,
         color: C.muted,
         fontWeight: '600',
         flex: 1
@@ -1872,18 +2308,32 @@ const S = StyleSheet.create({
         color: C.navy,
         fontWeight: '800'
     },
+    datePresetBtn: {
+        flex: 1,
+        paddingVertical: 6,
+        borderRadius: 7,
+        backgroundColor: C.canvas,
+        borderWidth: 1,
+        borderColor: C.border,
+        alignItems: 'center'
+    },
+    datePresetText: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: C.slate
+    },
     discountBox: {
         backgroundColor: C.canvas,
-        borderRadius: 8,
-        padding: 10,
+        borderRadius: 10,
+        padding: 12,
         borderWidth: 1,
         borderColor: C.borderLight,
-        marginTop: 4
+        marginBottom: 16
     },
     discountTypeBtn: {
         flex: 1,
-        paddingVertical: 5,
-        borderRadius: 6,
+        paddingVertical: 7,
+        borderRadius: 7,
         backgroundColor: C.card,
         borderWidth: 1,
         borderColor: C.border,
@@ -1894,7 +2344,7 @@ const S = StyleSheet.create({
         borderColor: C.navy
     },
     discountTypeText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '700',
         color: C.muted
     },
@@ -1906,15 +2356,15 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 8,
         backgroundColor: C.navy,
-        paddingVertical: 12,
-        borderRadius: 9,
-        marginTop: 8
+        paddingVertical: 13,
+        borderRadius: 10,
+        marginTop: 4
     },
     saveButtonText: {
         color: '#FFFFFF',
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: '800'
     },
     modalOverlay: {
@@ -1923,33 +2373,38 @@ const S = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
         justifyContent: 'center',
-        padding: 14,
+        padding: 16,
         zIndex: 99
     },
     modalCard: {
         backgroundColor: C.card,
-        borderRadius: 14,
-        padding: 14,
+        borderRadius: 16,
+        padding: 16,
         maxHeight: '75%',
         borderWidth: 1,
         borderColor: C.border
     },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
+    },
     modalTitle: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '900',
         color: C.navy
     },
     modalSub: {
-        fontSize: 10,
+        fontSize: 11.5,
         color: C.muted,
-        marginTop: 1
+        marginTop: 2
     },
-    iconButton: {
-        width: 26,
-        height: 26,
-        borderRadius: 6,
+    modalCloseBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 8,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.border,
@@ -1959,51 +2414,57 @@ const S = StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
         backgroundColor: C.canvas,
-        borderRadius: 8,
-        paddingHorizontal: 9,
-        paddingVertical: 6,
+        borderRadius: 9,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
         borderWidth: 1,
         borderColor: C.border,
-        marginVertical: 10
+        marginVertical: 12
+    },
+    modalSearchInput: {
+        flex: 1,
+        fontSize: 13,
+        color: C.navy,
+        padding: 0
     },
     searchResultItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        padding: 7,
-        borderRadius: 8,
+        gap: 10,
+        padding: 9,
+        borderRadius: 9,
         backgroundColor: C.canvas,
         borderWidth: 1,
         borderColor: C.borderLight
     },
     productThumb: {
-        width: 34,
-        height: 34,
-        borderRadius: 6,
+        width: 38,
+        height: 38,
+        borderRadius: 8,
         backgroundColor: '#E2E8F0'
     },
     productTitle: {
-        fontSize: 11.5,
+        fontSize: 12.5,
         fontWeight: '800',
         color: C.navy
     },
     productPrice: {
-        fontSize: 10.5,
+        fontSize: 11.5,
         fontWeight: '700',
         color: C.gold,
-        marginTop: 1
+        marginTop: 2
     },
     selectBadge: {
         backgroundColor: C.navy,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: 7
     },
     selectBadgeText: {
         color: '#FFFFFF',
-        fontSize: 9.5,
+        fontSize: 10.5,
         fontWeight: '800'
     }
 });
