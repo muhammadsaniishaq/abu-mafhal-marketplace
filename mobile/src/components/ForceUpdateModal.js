@@ -79,11 +79,16 @@ export const ForceUpdateModal = ({
 
     // Get current app version from Expo config or fallback
     const currentAppVersion = useMemo(() => {
-        return (
-            Constants.expoConfig?.version ||
-            Constants.manifest?.version ||
-            '1.0.0'
-        );
+        try {
+            return (
+                Constants?.expoConfig?.version ||
+                Constants?.manifest2?.extra?.expoClient?.version ||
+                Constants?.manifest?.version ||
+                '1.0.0'
+            );
+        } catch (_) {
+            return '1.0.0';
+        }
     }, []);
 
     const latestAppVersion = activeSettings.latest_app_version || '1.0.0';
@@ -109,15 +114,21 @@ export const ForceUpdateModal = ({
     useEffect(() => {
         if (!isVisible || !isMandatory) return;
 
-        const backHandler = BackHandler.addEventListener(
-            'hardwareBackPress',
-            () => {
-                // Return true to prevent going back
-                return true;
-            }
-        );
+        let backHandler = null;
+        try {
+            backHandler = BackHandler.addEventListener(
+                'hardwareBackPress',
+                () => true
+            );
+        } catch (_) {}
 
-        return () => backHandler.remove();
+        return () => {
+            try {
+                if (backHandler && backHandler.remove) {
+                    backHandler.remove();
+                }
+            } catch (_) {}
+        };
     }, [isVisible, isMandatory]);
 
     // Handle Open Google Play Store

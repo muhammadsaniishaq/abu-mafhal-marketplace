@@ -2,29 +2,60 @@ import 'react-native-gesture-handler';
 import { LogBox, Text, TextInput, ScrollView, FlatList, SectionList } from 'react-native';
 import React, { useState, useEffect } from 'react';
 
-// Kwata-kwata kange zoom da canza girman rubutu a dukkan manhajar mobile
-if (Text.defaultProps == null) Text.defaultProps = {};
-Text.defaultProps.allowFontScaling = false;
-Text.defaultProps.maxFontSizeMultiplier = 1;
+// Kwata-kwata kange zoom da canza girman rubutu a dukkan manhajar mobile (safe guard)
+try {
+    if (Text) {
+        if (Text.defaultProps == null) Text.defaultProps = {};
+        if (Text.defaultProps) {
+            Text.defaultProps.allowFontScaling = false;
+            Text.defaultProps.maxFontSizeMultiplier = 1;
+        }
+    }
+} catch (_) {}
 
-if (TextInput.defaultProps == null) TextInput.defaultProps = {};
-TextInput.defaultProps.allowFontScaling = false;
-TextInput.defaultProps.maxFontSizeMultiplier = 1;
+try {
+    if (TextInput) {
+        if (TextInput.defaultProps == null) TextInput.defaultProps = {};
+        if (TextInput.defaultProps) {
+            TextInput.defaultProps.allowFontScaling = false;
+            TextInput.defaultProps.maxFontSizeMultiplier = 1;
+        }
+    }
+} catch (_) {}
 
-if (ScrollView.defaultProps == null) ScrollView.defaultProps = {};
-ScrollView.defaultProps.maximumZoomScale = 1;
-ScrollView.defaultProps.minimumZoomScale = 1;
-ScrollView.defaultProps.bouncesZoom = false;
+try {
+    if (ScrollView) {
+        if (ScrollView.defaultProps == null) ScrollView.defaultProps = {};
+        if (ScrollView.defaultProps) {
+            ScrollView.defaultProps.maximumZoomScale = 1;
+            ScrollView.defaultProps.minimumZoomScale = 1;
+            ScrollView.defaultProps.bouncesZoom = false;
+        }
+    }
+} catch (_) {}
 
-if (FlatList.defaultProps == null) FlatList.defaultProps = {};
-FlatList.defaultProps.maximumZoomScale = 1;
-FlatList.defaultProps.minimumZoomScale = 1;
-FlatList.defaultProps.bouncesZoom = false;
+try {
+    if (FlatList) {
+        if (FlatList.defaultProps == null) FlatList.defaultProps = {};
+        if (FlatList.defaultProps) {
+            FlatList.defaultProps.maximumZoomScale = 1;
+            FlatList.defaultProps.minimumZoomScale = 1;
+            FlatList.defaultProps.bouncesZoom = false;
+        }
+    }
+} catch (_) {}
 
-if (SectionList.defaultProps == null) SectionList.defaultProps = {};
-SectionList.defaultProps.maximumZoomScale = 1;
-SectionList.defaultProps.minimumZoomScale = 1;
-SectionList.defaultProps.bouncesZoom = false;
+try {
+    if (SectionList) {
+        if (SectionList.defaultProps == null) SectionList.defaultProps = {};
+        if (SectionList.defaultProps) {
+            SectionList.defaultProps.maximumZoomScale = 1;
+            SectionList.defaultProps.minimumZoomScale = 1;
+            SectionList.defaultProps.bouncesZoom = false;
+        }
+    }
+} catch (_) {}
+
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppSettingsProvider } from './src/context/AppSettingsContext';
