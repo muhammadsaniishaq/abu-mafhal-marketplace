@@ -837,6 +837,81 @@ RETURN PURE JSON ONLY. NO MARKDOWN TICKS. NO EXPLANATIONS.`;
     },
 
     /**
+     * AI Promo Copywriter for Admin Banners & Campaigns
+     * Generates catchy title, punchy badge subtitle, high-conversion button CTA, and notification copy
+     */
+    generatePromoCopy: async (context = {}) => {
+        const { productName = '', subtitle = '', discount = '', base64Image = null } = context;
+        const key = await getActiveApiKey();
+
+        const defaultResult = {
+            title: productName ? `Mega Deal: ${productName} ${discount ? discount + ' OFF' : ''}`.trim() : 'Exclusive Marketplace Super Sale',
+            subtitle: subtitle || (discount ? `${discount} DISCOUNT` : 'LIMITED TIME OFFER'),
+            buttonText: 'SHOP DEAL NOW',
+            notification: `Don't miss out! Get huge savings on ${productName || 'top marketplace deals'} today before stock runs out.`
+        };
+
+        if (key) {
+            try {
+                const prompt = `You are a world-class e-commerce copywriter for Abu-Mafhal Marketplace.
+Generate a high-converting promo banner copy based on:
+Product: "${productName || 'General Storewide Promo'}"
+Discount: "${discount || 'Special Discount'}"
+Extra Context: "${subtitle || ''}"
+
+Return ONLY a valid JSON object with these exact keys:
+{
+  "title": "Short, punchy main headline (max 8 words)",
+  "subtitle": "Short badge text (2-3 words, e.g. 'FLASH SALE' or '50% OFF')",
+  "buttonText": "High-converting action CTA (e.g. 'CLAIM 50% OFF', 'SHOP NOW')",
+  "notification": "Exciting 1-sentence marketing pitch"
+}
+Do not include any markdown backticks or explanations, only valid JSON.`;
+
+                const parts = [{ text: prompt }];
+                if (base64Image) {
+                    parts.push({
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: base64Image
+                        }
+                    });
+                }
+
+                const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+                for (const m of models) {
+                    try {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts }],
+                                generationConfig: { temperature: 0.7, maxOutputTokens: 250 }
+                            })
+                        });
+                        if (!response.ok) continue;
+                        const result = await response.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const parsed = cleanAIJsonResponse(text);
+                        if (parsed && parsed.title) {
+                            return {
+                                title: parsed.title,
+                                subtitle: parsed.subtitle || defaultResult.subtitle,
+                                buttonText: parsed.buttonText || defaultResult.buttonText,
+                                notification: parsed.notification || defaultResult.notification
+                            };
+                        }
+                    } catch (_) {}
+                }
+            } catch (e) {
+                console.warn('AI promo generation fallback:', e);
+            }
+        }
+
+        return defaultResult;
+    },
+
+    /**
      * Voice Product Recognition / Speech-To-Text Search
      * Converts recorded audio base64 or recognized voice string into search keywords
      */
