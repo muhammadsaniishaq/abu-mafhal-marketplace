@@ -179,26 +179,20 @@ export const AppSettingsProvider = ({ children }) => {
         // 2. Background sync
         fetchSettings();
 
-        // Subscribe to changes (Realtime)
+        // Subscribe to changes (Realtime - INSERT, UPDATE, DELETE)
         const subscription = supabase
             .channel('app_settings_changes')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, payload => {
-                console.log('Settings updated realtime:', payload.new);
-                if (payload.new) {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, payload => {
+                if (payload?.new) {
                     const updated = payload.new;
                     if (updated.key && updated.value !== undefined) {
                         setSettings(prev => ({
                             ...prev,
                             [updated.key]: unwrapSettingValue(updated.value)
                         }));
-                    } else {
-                        const cleaned = {};
-                        Object.keys(updated).forEach(k => {
-                            cleaned[k] = unwrapSettingValue(updated[k]);
-                        });
-                        setSettings(prev => ({ ...prev, ...cleaned }));
                     }
                 }
+                fetchSettings();
             })
             .subscribe();
 

@@ -272,6 +272,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [showItemsAccordion, setShowItemsAccordion] = useState(true);
     const [availableLiveCoupons, setAvailableLiveCoupons] = useState([]);
 
+    // Check if user claimed a promo from Temu Announcement Banner
+    useEffect(() => {
+        AsyncStorage.getItem('@abumafhal_applied_coupon').then(savedCode => {
+            if (savedCode && !couponCode) {
+                setCouponCode(savedCode.trim().toUpperCase());
+            }
+        }).catch(() => {});
+    }, []);
+
     // Live Admin Coupons fetcher & Realtime sync
     useEffect(() => {
         const fetchLiveCoupons = async () => {
@@ -283,9 +292,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     .order('created_at', { ascending: false });
 
                 let list = [];
-                if (!error && Array.isArray(data)) {
+                if (!error && Array.isArray(data) && data.length > 0) {
                     list = data;
-                } else if (error?.code === 'PGRST205') {
+                } else {
                     // Fallback to app_settings.coupons_list
                     const { data: row } = await supabase
                         .from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
@@ -992,7 +1001,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
             if (!error && data) {
                 coupon = data;
-            } else if (error?.code === 'PGRST205') {
+            } else {
                 // 2. Fallback: check app_settings.coupons_list
                 const { data: row } = await supabase
                     .from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();

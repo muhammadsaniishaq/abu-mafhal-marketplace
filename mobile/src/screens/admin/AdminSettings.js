@@ -437,6 +437,7 @@ export const AdminSettings = ({ navigation }) => {
     const [announcementBadge,      setAnnouncementBadge]      = useState(settings?.announcement_badge || 'TEMU DEAL');
     const [announcementStyle,      setAnnouncementStyle]      = useState(settings?.announcement_style || 'temu');
     const [announcementActionText, setAnnouncementActionText] = useState(settings?.announcement_action_text || 'Claim ➔');
+    const [announcementCouponCode, setAnnouncementCouponCode] = useState(settings?.announcement_coupon_code || 'TEMU30');
     const [platformLocale,     setPlatformLocale]     = useState(settings?.platform_locale || 'en');
     const [seoTitle,           setSeoTitle]           = useState(settings?.seo_title || '');
     const [seoDescription,     setSeoDescription]     = useState(settings?.seo_description || '');
@@ -815,7 +816,7 @@ export const AdminSettings = ({ navigation }) => {
             // Phase-4
             admin_name: adminName, admin_title: adminTitle,
             announcement_text: announcementText, announcement_active: announcementActive, announcement_color: announcementColor,
-            announcement_badge: announcementBadge, announcement_style: announcementStyle, announcement_action_text: announcementActionText,
+            announcement_badge: announcementBadge, announcement_style: announcementStyle, announcement_action_text: announcementActionText, announcement_coupon_code: announcementCouponCode,
             platform_locale: platformLocale,
             seo_title: seoTitle, seo_description: seoDescription, seo_keywords: seoKeywords,
             enable_watermark: enableWatermark, watermark_text: watermarkText,
@@ -2886,6 +2887,16 @@ export const AdminSettings = ({ navigation }) => {
                                 hint="Button text on the right side of the banner"
                             />
 
+                            {/* Linked Promo Voucher Code */}
+                            <Inp
+                                label="Linked Promo Voucher Code"
+                                value={announcementCouponCode}
+                                onChange={v => { setAnnouncementCouponCode(v.toUpperCase()); setUnsaved(true); }}
+                                icon="pricetag-outline"
+                                placeholder="e.g. TEMU30"
+                                hint="Customers who click 'Claim' will copy and auto-apply this code at checkout"
+                            />
+
                             {/* Live Temu Preview */}
                             <Text style={[S.iLabel, { color: T.muted, marginTop: 4, marginBottom: 8 }]}>LIVE INTERACTIVE TEMU PREVIEW</Text>
                             <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
@@ -2896,7 +2907,8 @@ export const AdminSettings = ({ navigation }) => {
                                         announcement_badge: announcementBadge || 'TEMU DEAL',
                                         announcement_style: announcementStyle || 'temu',
                                         announcement_color: announcementColor,
-                                        announcement_action_text: announcementActionText || 'Claim ➔'
+                                        announcement_action_text: announcementActionText || 'Claim ➔',
+                                        announcement_coupon_code: announcementCouponCode || 'TEMU30'
                                     }}
                                 />
                             </View>
