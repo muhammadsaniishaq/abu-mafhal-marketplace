@@ -2,11 +2,11 @@
   "expo": {
     "name": "Abu Mafhal",
     "slug": "abu-mafhal",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.abumafhal.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "splash": {
         "image": "./assets/splash-icon.png",
         "resizeMode": "contain",
@@ -40,18 +40,21 @@
         "expo-font",
         {
           "fonts": [
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.ttf"
+            "./assets/fonts/Ionicons.ttf",
+            "./assets/fonts/ionicons.ttf",
+            "./assets/fonts/Feather.ttf",
+            "./assets/fonts/feather.ttf",
+            "./assets/fonts/FontAwesome.ttf",
+            "./assets/fonts/fontawesome.ttf",
+            "./assets/fonts/FontAwesome5_Brands.ttf",
+            "./assets/fonts/FontAwesome5_Regular.ttf",
+            "./assets/fonts/FontAwesome5_Solid.ttf",
+            "./assets/fonts/MaterialCommunityIcons.ttf",
+            "./assets/fonts/material-community.ttf",
+            "./assets/fonts/MaterialIcons.ttf",
+            "./assets/fonts/material.ttf",
+            "./assets/fonts/AntDesign.ttf",
+            "./assets/fonts/anticon.ttf"
           ]
         }
       ],
