@@ -2,59 +2,9 @@ import 'react-native-gesture-handler';
 import { LogBox, Text, TextInput, ScrollView, FlatList, SectionList } from 'react-native';
 import React, { useState, useEffect } from 'react';
 
-// Kwata-kwata kange zoom da canza girman rubutu a dukkan manhajar mobile (safe guard)
-try {
-    if (Text) {
-        if (Text.defaultProps == null) Text.defaultProps = {};
-        if (Text.defaultProps) {
-            Text.defaultProps.allowFontScaling = false;
-            Text.defaultProps.maxFontSizeMultiplier = 1;
-        }
-    }
-} catch (_) {}
 
-try {
-    if (TextInput) {
-        if (TextInput.defaultProps == null) TextInput.defaultProps = {};
-        if (TextInput.defaultProps) {
-            TextInput.defaultProps.allowFontScaling = false;
-            TextInput.defaultProps.maxFontSizeMultiplier = 1;
-        }
-    }
-} catch (_) {}
-
-try {
-    if (ScrollView) {
-        if (ScrollView.defaultProps == null) ScrollView.defaultProps = {};
-        if (ScrollView.defaultProps) {
-            ScrollView.defaultProps.maximumZoomScale = 1;
-            ScrollView.defaultProps.minimumZoomScale = 1;
-            ScrollView.defaultProps.bouncesZoom = false;
-        }
-    }
-} catch (_) {}
-
-try {
-    if (FlatList) {
-        if (FlatList.defaultProps == null) FlatList.defaultProps = {};
-        if (FlatList.defaultProps) {
-            FlatList.defaultProps.maximumZoomScale = 1;
-            FlatList.defaultProps.minimumZoomScale = 1;
-            FlatList.defaultProps.bouncesZoom = false;
-        }
-    }
-} catch (_) {}
-
-try {
-    if (SectionList) {
-        if (SectionList.defaultProps == null) SectionList.defaultProps = {};
-        if (SectionList.defaultProps) {
-            SectionList.defaultProps.maximumZoomScale = 1;
-            SectionList.defaultProps.minimumZoomScale = 1;
-            SectionList.defaultProps.bouncesZoom = false;
-        }
-    }
-} catch (_) {}
+// LogBox ignore safe warnings in production
+LogBox.ignoreLogs(['Warning: ...', 'defaultProps will be removed']);
 
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -246,25 +196,30 @@ export default function App() {
     useEffect(() => {
         let isMounted = true;
         async function preloadFonts() {
-            try {
-                await Font.loadAsync({
-                    ...Ionicons.font,
-                    ...MaterialIcons.font,
-                    ...FontAwesome5.font,
-                    ...FontAwesome.font,
-                    ...Feather.font,
-                    ...MaterialCommunityIcons.font,
-                    ...AntDesign.font,
-                    ...Entypo.font,
-                    ...SimpleLineIcons.font,
-                    ...Octicons.font,
-                });
-            } catch (err) {
-                console.log('Fonts preload note:', err);
-            } finally {
-                if (isMounted) {
-                    setFontsLoaded(true);
+            const fontSets = [
+                Ionicons?.font,
+                MaterialIcons?.font,
+                FontAwesome5?.font,
+                FontAwesome?.font,
+                Feather?.font,
+                MaterialCommunityIcons?.font,
+                AntDesign?.font,
+                Entypo?.font,
+                SimpleLineIcons?.font,
+                Octicons?.font,
+            ];
+
+            for (const fontSet of fontSets) {
+                if (!fontSet) continue;
+                try {
+                    await Font.loadAsync(fontSet);
+                } catch (_) {
+                    // Safe fallback idan wata font din ba ta loda ba
                 }
+            }
+
+            if (isMounted) {
+                setFontsLoaded(true);
             }
         }
         preloadFonts();

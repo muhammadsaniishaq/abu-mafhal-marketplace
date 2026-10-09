@@ -41,11 +41,8 @@
         {
           "fonts": [
             "./assets/fonts/Ionicons.ttf",
-            "./assets/fonts/ionicons.ttf",
             "./assets/fonts/Feather.ttf",
-            "./assets/fonts/feather.ttf",
             "./assets/fonts/FontAwesome.ttf",
-            "./assets/fonts/fontawesome.ttf",
             "./assets/fonts/FontAwesome5_Brands.ttf",
             "./assets/fonts/FontAwesome5_Regular.ttf",
             "./assets/fonts/FontAwesome5_Solid.ttf",
@@ -54,7 +51,11 @@
             "./assets/fonts/MaterialIcons.ttf",
             "./assets/fonts/material.ttf",
             "./assets/fonts/AntDesign.ttf",
-            "./assets/fonts/anticon.ttf"
+            "./assets/fonts/anticon.ttf",
+            "./assets/fonts/Entypo.ttf",
+            "./assets/fonts/Octicons.ttf",
+            "./assets/fonts/SimpleLineIcons.ttf",
+            "./assets/fonts/simple-line-icons.ttf"
           ]
         }
       ],
