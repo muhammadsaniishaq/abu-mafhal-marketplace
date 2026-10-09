@@ -250,12 +250,100 @@ export default function App() {
                 style.id = styleId;
                 style.innerHTML = `
                     @font-face {
-                        font-family: 'Ionicons';
-                        src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf') format('truetype');
+                        font-family: 'ionicons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Ionicons.ttf') format('truetype');
                     }
                     @font-face {
-                        font-family: 'Material Icons';
-                        src: url('https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf') format('truetype');
+                        font-family: 'Ionicons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Ionicons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'material';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'MaterialIcons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'material-community';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'MaterialCommunityIcons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'feather';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Feather.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'Feather';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Feather.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'anticon';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/AntDesign.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'AntDesign';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/AntDesign.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'fontawesome';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome5_Solid';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Solid.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome5Free-Solid';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Solid.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome5_Regular';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Regular.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome5Free-Regular';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Regular.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome5_Brands';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Brands.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'FontAwesome5Brands-Regular';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Brands.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'entypo';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Entypo.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'Entypo';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Entypo.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'octicons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Octicons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'Octicons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Octicons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'simple-line-icons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/SimpleLineIcons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'SimpleLineIcons';
+                        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/SimpleLineIcons.ttf') format('truetype');
                     }
                     html, body, #root, #root * {
                         touch-action: pan-x pan-y !important;
