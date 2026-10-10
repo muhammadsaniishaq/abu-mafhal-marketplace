@@ -8,9 +8,18 @@ import { Platform } from 'react-native';
 export const supabaseUrl = 'https://ejqymvjrfqqljzjlwcin.supabase.co';
 export const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqcXltdmpyZnFxbGp6amx3Y2luIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNzIxNTAsImV4cCI6MjA4MTY0ODE1MH0.CcY21LL1wyeQQJU3ZIQ9isLAjhm05Bjg5BrsNII1yng';
 
+const getAuthStorage = () => {
+    try {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            return window.localStorage;
+        }
+    } catch (_) {}
+    return AsyncStorage;
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-        storage: Platform.OS === 'web' ? window.localStorage : AsyncStorage,
+        storage: getAuthStorage(),
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
@@ -18,13 +27,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Tells Supabase Auth to continuously refresh the session automatically
-// if the app is in the foreground.
+// if the app is in the foreground (safe-guarded).
 AppState.addEventListener('change', (state) => {
-    if (state === 'active') {
-        supabase.auth.startAutoRefresh();
-    } else {
-        supabase.auth.stopAutoRefresh();
-    }
+    try {
+        if (state === 'active') {
+            supabase?.auth?.startAutoRefresh?.();
+        } else {
+            supabase?.auth?.stopAutoRefresh?.();
+        }
+    } catch (_) {}
 });
 
 // Handle Auth State Changes (including refresh errors)
