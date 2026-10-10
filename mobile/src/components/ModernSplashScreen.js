@@ -87,13 +87,36 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800, fontsLoad
             setTimeElapsed(true);
         }, minimumDuration);
 
+        // Failsafe timeout: Splash screen will NEVER hang or freeze the app regardless of font loading state
+        const maxSafetyTimer = setTimeout(() => {
+            if (!hasFinishedRef.current) {
+                hasFinishedRef.current = true;
+                Animated.parallel([
+                    Animated.timing(fadeAnim, {
+                        toValue: 0,
+                        duration: 350,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(scaleAnim, {
+                        toValue: 1.05,
+                        duration: 350,
+                        useNativeDriver: true,
+                    }),
+                ]).start(() => {
+                    if (glowLoopRef.current) glowLoopRef.current.stop();
+                    if (onFinish) onFinish();
+                });
+            }
+        }, Math.max(minimumDuration + 700, 2500));
+
         return () => {
             clearTimeout(statusTimer1);
             clearTimeout(statusTimer2);
             clearTimeout(minDurationTimer);
+            clearTimeout(maxSafetyTimer);
             if (glowLoopRef.current) glowLoopRef.current.stop();
         };
-    }, [minimumDuration]);
+    }, [minimumDuration, onFinish, fadeAnim, scaleAnim]);
 
     // 4. Smooth exit transition once BOTH minimum duration has passed AND fonts are loaded
     useEffect(() => {
@@ -115,7 +138,7 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800, fontsLoad
                 if (onFinish) onFinish();
             });
         }
-    }, [timeElapsed, fontsLoaded, onFinish]);
+    }, [timeElapsed, fontsLoaded, onFinish, fadeAnim, scaleAnim]);
 
     const progressWidth = progressAnim.interpolate({
         inputRange: [0, 1],

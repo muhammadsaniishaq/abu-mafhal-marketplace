@@ -192,34 +192,84 @@ export default function App() {
     const [showSplash, setShowSplash] = useState(true);
     const [fontsLoaded, setFontsLoaded] = useState(false);
 
-    // Rigakafin matsalolin gumaka (icons): loda dukkan vector icon fonts tun a splash screen
+    // Rigakafin matsalolin gumaka (icons): loda dukkan vector icon fonts tun a splash screen tare da sunaye masu manyan da kananan haruffa
     useEffect(() => {
         let isMounted = true;
         async function preloadFonts() {
-            const fontSets = [
-                Ionicons?.font,
-                MaterialIcons?.font,
-                FontAwesome5?.font,
-                FontAwesome?.font,
-                Feather?.font,
-                MaterialCommunityIcons?.font,
-                AntDesign?.font,
-                Entypo?.font,
-                SimpleLineIcons?.font,
-                Octicons?.font,
-            ];
+            try {
+                await Font.loadAsync({
+                    // Ionicons
+                    'ionicons': require('./assets/fonts/Ionicons.ttf'),
+                    'Ionicons': require('./assets/fonts/Ionicons.ttf'),
 
-            for (const fontSet of fontSets) {
-                if (!fontSet) continue;
+                    // MaterialIcons
+                    'material': require('./assets/fonts/MaterialIcons.ttf'),
+                    'MaterialIcons': require('./assets/fonts/MaterialIcons.ttf'),
+                    'Material Icons': require('./assets/fonts/MaterialIcons.ttf'),
+
+                    // MaterialCommunityIcons
+                    'material-community': require('./assets/fonts/MaterialCommunityIcons.ttf'),
+                    'MaterialCommunityIcons': require('./assets/fonts/MaterialCommunityIcons.ttf'),
+                    'Material Community Icons': require('./assets/fonts/MaterialCommunityIcons.ttf'),
+
+                    // Feather
+                    'feather': require('./assets/fonts/Feather.ttf'),
+                    'Feather': require('./assets/fonts/Feather.ttf'),
+
+                    // FontAwesome
+                    'FontAwesome': require('./assets/fonts/FontAwesome.ttf'),
+                    'fontawesome': require('./assets/fonts/FontAwesome.ttf'),
+
+                    // FontAwesome 5
+                    'FontAwesome5Free-Solid': require('./assets/fonts/FontAwesome5_Solid.ttf'),
+                    'FontAwesome5_Solid': require('./assets/fonts/FontAwesome5_Solid.ttf'),
+                    'FontAwesome5Solid': require('./assets/fonts/FontAwesome5_Solid.ttf'),
+                    'FontAwesome5Free-Regular': require('./assets/fonts/FontAwesome5_Regular.ttf'),
+                    'FontAwesome5_Regular': require('./assets/fonts/FontAwesome5_Regular.ttf'),
+                    'FontAwesome5Regular': require('./assets/fonts/FontAwesome5_Regular.ttf'),
+                    'FontAwesome5Brands-Regular': require('./assets/fonts/FontAwesome5_Brands.ttf'),
+                    'FontAwesome5_Brands': require('./assets/fonts/FontAwesome5_Brands.ttf'),
+                    'FontAwesome5Free-Brand': require('./assets/fonts/FontAwesome5_Brands.ttf'),
+
+                    // AntDesign
+                    'anticon': require('./assets/fonts/AntDesign.ttf'),
+                    'AntDesign': require('./assets/fonts/AntDesign.ttf'),
+
+                    // Entypo
+                    'entypo': require('./assets/fonts/Entypo.ttf'),
+                    'Entypo': require('./assets/fonts/Entypo.ttf'),
+
+                    // Octicons
+                    'octicons': require('./assets/fonts/Octicons.ttf'),
+                    'Octicons': require('./assets/fonts/Octicons.ttf'),
+
+                    // SimpleLineIcons
+                    'simple-line-icons': require('./assets/fonts/SimpleLineIcons.ttf'),
+                    'SimpleLineIcons': require('./assets/fonts/SimpleLineIcons.ttf'),
+                });
+            } catch (err) {
+                console.warn('Font.loadAsync primary load note:', err?.message);
+                // Secondary fallback using built-in font definitions
                 try {
-                    await Font.loadAsync(fontSet);
-                } catch (_) {
-                    // Safe fallback idan wata font din ba ta loda ba
+                    const fallbackSets = [
+                        Ionicons?.font,
+                        MaterialIcons?.font,
+                        FontAwesome?.font,
+                        Feather?.font,
+                        MaterialCommunityIcons?.font,
+                        AntDesign?.font,
+                        Entypo?.font,
+                        SimpleLineIcons?.font,
+                        Octicons?.font,
+                    ];
+                    for (const fSet of fallbackSets) {
+                        if (fSet) await Font.loadAsync(fSet).catch(() => {});
+                    }
+                } catch (_) {}
+            } finally {
+                if (isMounted) {
+                    setFontsLoaded(true);
                 }
-            }
-
-            if (isMounted) {
-                setFontsLoaded(true);
             }
         }
         preloadFonts();
