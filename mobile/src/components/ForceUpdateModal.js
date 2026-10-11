@@ -84,26 +84,35 @@ export const ForceUpdateModal = ({
         return () => pulse.stop();
     }, []);
 
-    // Get current app version from Expo config or fallback
+    // Get current app version from Expo config or fallback to actual app version
     const currentAppVersion = useMemo(() => {
         try {
             return (
                 Constants?.expoConfig?.version ||
                 Constants?.manifest2?.extra?.expoClient?.version ||
                 Constants?.manifest?.version ||
-                '1.0.0'
+                '1.0.8'
             );
         } catch (_) {
-            return '1.0.0';
+            return '1.0.8';
         }
     }, []);
 
-    const latestAppVersion = activeSettings.latest_app_version || '1.0.0';
+    const latestAppVersion = activeSettings.latest_app_version || '1.0.8';
     const minRequiredVersion = activeSettings.min_required_version || '1.0.0';
     const forceUpdateEnabled = !!activeSettings.force_update_enabled;
     const playStoreUrl =
         activeSettings.play_store_url ||
         'https://play.google.com/store/apps/details?id=com.abumafhal.app';
+
+    // Wait until app is stably mounted for at least 3 seconds before evaluating update alert
+    const [readyToCheck, setReadyToCheck] = useState(false);
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setReadyToCheck(true);
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Update conditions
     // 1. Mandatory if current version is strictly lower than min_required_version
@@ -114,8 +123,8 @@ export const ForceUpdateModal = ({
     // Is update strictly required / mandatory?
     const isMandatory = testMode ? true : (isBelowMin || (forceUpdateEnabled && isOutdated));
 
-    // Show modal if either mandatory or (outdated and not dismissed yet)
-    const isVisible = testMode ? true : ((isMandatory || isOutdated) && !dismissed);
+    // Show modal only when fully mounted, not dismissed, and update is genuinely needed
+    const isVisible = testMode ? true : (readyToCheck && (isMandatory || isOutdated) && !dismissed);
 
     // Block hardware back button on Android when update is mandatory
     useEffect(() => {
@@ -200,19 +209,8 @@ export const ForceUpdateModal = ({
     if (!isVisible) return null;
 
     return (
-        <Modal
-            visible={isVisible}
-            transparent={true}
-            animationType="fade"
-            statusBarTranslucent={true}
-            onRequestClose={() => {
-                if (!isMandatory) {
-                    setDismissed(true);
-                }
-            }}
-        >
-            <View style={styles.overlay}>
-                <View style={styles.compactCard}>
+        <View style={styles.overlay}>
+            <View style={styles.compactCard}>
                     {/* Glowing Accent Line */}
                     <View style={[styles.glowLine, { backgroundColor: isMandatory ? '#EF4444' : '#10B981' }]} />
 
@@ -363,13 +361,14 @@ export const ForceUpdateModal = ({
                     </ScrollView>
                 </View>
             </View>
-        </Modal>
     );
 };
 
 const styles = StyleSheet.create({
     overlay: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 999999,
+        elevation: 999999,
         backgroundColor: 'rgba(2, 6, 17, 0.90)',
         justifyContent: 'center',
         alignItems: 'center',

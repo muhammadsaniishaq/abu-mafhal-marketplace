@@ -2,30 +2,30 @@
   "expo": {
     "name": "Abu Mafhal",
     "slug": "abu-mafhal",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D1E32"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "package": "com.abumafhal.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "splash": {
         "image": "./assets/splash-icon.png",
         "resizeMode": "contain",
-        "backgroundColor": "#0D1E32"
+        "backgroundColor": "#FFFFFF"
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0D1E32"
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true
     },
@@ -46,19 +46,12 @@
             "./assets/fonts/FontAwesome5_Brands.ttf",
             "./assets/fonts/FontAwesome5_Regular.ttf",
             "./assets/fonts/FontAwesome5_Solid.ttf",
-            "./assets/fonts/FontAwesome5Free-Solid.ttf",
-            "./assets/fonts/FontAwesome5Free-Regular.ttf",
-            "./assets/fonts/FontAwesome5Brands-Regular.ttf",
             "./assets/fonts/MaterialCommunityIcons.ttf",
-            "./assets/fonts/material-community.ttf",
             "./assets/fonts/MaterialIcons.ttf",
-            "./assets/fonts/material.ttf",
             "./assets/fonts/AntDesign.ttf",
-            "./assets/fonts/anticon.ttf",
             "./assets/fonts/Entypo.ttf",
             "./assets/fonts/Octicons.ttf",
-            "./assets/fonts/SimpleLineIcons.ttf",
-            "./assets/fonts/simple-line-icons.ttf"
+            "./assets/fonts/SimpleLineIcons.ttf"
           ]
         }
       ],
