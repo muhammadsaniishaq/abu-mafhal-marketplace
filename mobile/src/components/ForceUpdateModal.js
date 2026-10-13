@@ -91,14 +91,14 @@ export const ForceUpdateModal = ({
                 Constants?.expoConfig?.version ||
                 Constants?.manifest2?.extra?.expoClient?.version ||
                 Constants?.manifest?.version ||
-                '1.0.8'
+                '1.0.9'
             );
         } catch (_) {
-            return '1.0.8';
+            return '1.0.9';
         }
     }, []);
 
-    const latestAppVersion = activeSettings.latest_app_version || '1.0.8';
+    const latestAppVersion = activeSettings.latest_app_version || '1.0.9';
     const minRequiredVersion = activeSettings.min_required_version || '1.0.0';
     const forceUpdateEnabled = !!activeSettings.force_update_enabled;
     const playStoreUrl =

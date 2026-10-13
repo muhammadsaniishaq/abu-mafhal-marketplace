@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 // LogBox ignore safe warnings in production
 LogBox.ignoreLogs(['Warning: ...', 'defaultProps will be removed']);
 
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef, getStateFromPath as defaultGetStateFromPath } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppSettingsProvider } from './src/context/AppSettingsContext';
 import { supabase } from './src/lib/supabase';
@@ -122,10 +122,15 @@ const linking = {
                 if (['shop', 'cart', 'wishlist', 'profile', 'categories', 'stores', 'wallet', 'home', 'settings'].includes(clean)) {
                     return { routes: [{ name: 'Main', params: { screen: clean, ...params } }] };
                 }
-                if (clean === 'main') return { routes: [{ name: 'Main', params }] };
             }
         }
-        return undefined;
+        if (typeof defaultGetStateFromPath === 'function') {
+            try {
+                const fallbackState = defaultGetStateFromPath(path, options);
+                if (fallbackState) return fallbackState;
+            } catch (_) {}
+        }
+        return { routes: [{ name: 'Landing' }] };
     }
 };
 

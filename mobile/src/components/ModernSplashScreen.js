@@ -217,7 +217,7 @@ export const ModernSplashScreen = ({ onFinish, minimumDuration = 1800, fontsLoad
                         <Text style={styles.trustBadgeText}>100% Escrow Protection • CBN Regulated Banking</Text>
                     </View>
 
-                    <Text style={styles.versionText}>Official Google Play Store Edition • v1.0.8</Text>
+                    <Text style={styles.versionText}>Official Google Play Store Edition • v1.0.9</Text>
                 </Animated.View>
             </LinearGradient>
         </Animated.View>

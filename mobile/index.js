@@ -32,7 +32,17 @@ if (typeof global !== 'undefined') {
 }
 
 import { registerRootComponent } from 'expo';
+import React from 'react';
 import App from './App';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
-registerRootComponent(App);
+function Root() {
+    return (
+        <ErrorBoundary>
+            <App />
+        </ErrorBoundary>
+    );
+}
+
+registerRootComponent(Root);
 

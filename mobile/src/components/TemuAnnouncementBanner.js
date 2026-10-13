@@ -7,10 +7,10 @@ import {
     StyleSheet,
     Platform,
     Modal,
-    Clipboard,
     Vibration,
     ScrollView
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -172,7 +172,11 @@ export const TemuAnnouncementBanner = ({
     const handleCopyAndApplyCoupon = async (codeToCopy = promoCode) => {
         try {
             const finalCode = (codeToCopy || promoCode).trim().toUpperCase();
-            Clipboard.setString(finalCode);
+            if (Clipboard?.setStringAsync) {
+                await Clipboard.setStringAsync(finalCode);
+            } else if (Clipboard?.setString) {
+                Clipboard.setString(finalCode);
+            }
             await AsyncStorage.setItem('@abumafhal_applied_coupon', finalCode);
             setCopiedCoupon(true);
             if (Platform.OS !== 'web') {
