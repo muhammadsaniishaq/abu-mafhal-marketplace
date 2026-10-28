@@ -91,7 +91,7 @@ const resolveProductId = (route) => {
             }
 
             // 5. Local storage cached ID
-            if (window.localStorage) {
+            if (typeof window !== 'undefined' && window.localStorage) {
                 const storedId = window.localStorage.getItem('@abumafhal_last_product_id');
                 if (storedId) return storedId;
             }

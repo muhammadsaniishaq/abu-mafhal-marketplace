@@ -644,7 +644,7 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
         return null;
     }
 
-    const pendingOrdersCount = orders.filter(o => o.status === 'pending').length;
+    const pendingOrdersCount = Array.isArray(orders) ? orders.filter(o => o && o.status === 'pending').length : 0;
 
     // ─────────────────────────────────────────────────────────────
     // RENDER HEADER

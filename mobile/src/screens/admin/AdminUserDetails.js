@@ -2,8 +2,9 @@ import * as React from 'react';
 import {
     View, Text, Modal, TouchableOpacity, ScrollView, TextInput,
     ActivityIndicator, Alert, StyleSheet, Linking, KeyboardAvoidingView,
-    Platform, Dimensions, Clipboard
+    Platform, Dimensions
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -142,16 +143,21 @@ export const AdminUserDetails = ({ visible, user, navigation, onClose, onUpdate 
     };
 
     const totalSpent = React.useMemo(() => {
-        return orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+        if (!Array.isArray(orders)) return 0;
+        return orders.reduce((sum, o) => sum + (Number(o?.total_amount) || 0), 0);
     }, [orders]);
 
     const copyText = (val, label) => {
         if (!val) return;
-        if (Platform.OS === 'web') {
-            navigator.clipboard.writeText(val);
-        } else {
-            Clipboard.setString(val);
-        }
+        try {
+            if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(val);
+            } else if (Clipboard && Clipboard.setStringAsync) {
+                Clipboard.setStringAsync(String(val)).catch(() => {});
+            } else if (Clipboard && Clipboard.setString) {
+                Clipboard.setString(String(val));
+            }
+        } catch (_) {}
         Alert.alert('Copied', `${label} copied to clipboard.`);
     };
 
@@ -655,7 +661,7 @@ export const AdminUserDetails = ({ visible, user, navigation, onClose, onUpdate 
                                 <View style={S.card}>
                                     <Text style={S.cardTitle}>Recent Ledger Transactions ({transactions.length})</Text>
 
-                                    {transactions.length === 0 ? (
+                                    {(!Array.isArray(transactions) || transactions.length === 0) ? (
                                         <View style={S.emptyState}>
                                             <Ionicons name="receipt-outline" size={28} color={C.subtle} />
                                             <Text style={S.emptyStateText}>No ledger transactions recorded.</Text>
@@ -692,7 +698,7 @@ export const AdminUserDetails = ({ visible, user, navigation, onClose, onUpdate 
                         {/* ────────────── TAB 3: ORDERS ────────────── */}
                         {activeTab === 'orders' && (
                             <View style={{ gap: 10 }}>
-                                {orders.length === 0 ? (
+                                {(!Array.isArray(orders) || orders.length === 0) ? (
                                     <View style={[S.card, S.emptyState]}>
                                         <Ionicons name="cart-outline" size={32} color={C.subtle} />
                                         <Text style={S.emptyStateText}>No orders recorded for this user.</Text>
@@ -701,7 +707,7 @@ export const AdminUserDetails = ({ visible, user, navigation, onClose, onUpdate 
                                     orders.map(o => (
                                         <View key={o.id} style={S.orderCard}>
                                             <View style={S.orderTop}>
-                                                <Text style={S.orderId}>Order #{o.id.toString().slice(0, 8)}</Text>
+                                                <Text style={S.orderId}>Order #{String(o?.id || '').slice(0, 8).toUpperCase()}</Text>
                                                 <View style={[S.badgePill, {
                                                     backgroundColor: o.status === 'delivered' ? C.emeraldBg : C.amberBg,
                                                     borderColor: o.status === 'delivered' ? C.emeraldBorder : C.amberBorder
@@ -798,56 +804,58 @@ export const AdminUserDetails = ({ visible, user, navigation, onClose, onUpdate 
                     </ScrollView>
                 </KeyboardAvoidingView>
 
-                {/* ── CUSTOM WALLET MODAL ── */}
-                <Modal visible={adjustModal} transparent animationType="fade" onRequestClose={() => setAdjustModal(false)}>
-                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={S.modalOverlay}>
-                        <View style={S.modalCard}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <Text style={S.modalTitle}>
-                                    {adjustType === 'credit' ? 'Credit Wallet' : 'Debit Wallet'}
-                                </Text>
-                                <TouchableOpacity onPress={() => setAdjustModal(false)}>
-                                    <Ionicons name="close" size={18} color={C.muted} />
-                                </TouchableOpacity>
+                {/* ── CUSTOM WALLET ADJUST OVERLAY (NON-NESTED FOR ZERO-CRASH ON ANDROID) ── */}
+                {adjustModal && (
+                    <View style={[StyleSheet.absoluteFillObject, S.modalOverlay, { zIndex: 9999 }]}>
+                        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                            <View style={S.modalCard}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                    <Text style={S.modalTitle}>
+                                        {adjustType === 'credit' ? 'Credit Wallet' : 'Debit Wallet'}
+                                    </Text>
+                                    <TouchableOpacity onPress={() => setAdjustModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                        <Ionicons name="close" size={18} color={C.muted} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <TextInput
+                                    placeholder="Amount in Naira (₦)"
+                                    placeholderTextColor={C.subtle}
+                                    keyboardType="numeric"
+                                    value={adjustAmount}
+                                    onChangeText={setAdjustAmount}
+                                    style={S.textInput}
+                                    autoFocus
+                                />
+
+                                <TextInput
+                                    placeholder="Reason / Description"
+                                    placeholderTextColor={C.subtle}
+                                    value={adjustReason}
+                                    onChangeText={setAdjustReason}
+                                    style={[S.textInput, { marginTop: 8 }]}
+                                />
+
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                                    <TouchableOpacity onPress={() => setAdjustModal(false)} style={S.cancelBtn}>
+                                        <Text style={S.cancelBtnText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={handleExecuteAdjustment}
+                                        disabled={adjusting}
+                                        style={[S.confirmBtn, { backgroundColor: adjustType === 'credit' ? C.emerald : C.rose }]}
+                                    >
+                                        {adjusting ? (
+                                            <ActivityIndicator color="#FFFFFF" size="small" />
+                                        ) : (
+                                            <Text style={S.confirmBtnText}>Confirm {adjustType === 'credit' ? 'Credit' : 'Debit'}</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-
-                            <TextInput
-                                placeholder="Amount in Naira (₦)"
-                                placeholderTextColor={C.subtle}
-                                keyboardType="numeric"
-                                value={adjustAmount}
-                                onChangeText={setAdjustAmount}
-                                style={S.textInput}
-                                autoFocus
-                            />
-
-                            <TextInput
-                                placeholder="Reason / Description"
-                                placeholderTextColor={C.subtle}
-                                value={adjustReason}
-                                onChangeText={setAdjustReason}
-                                style={[S.textInput, { marginTop: 8 }]}
-                            />
-
-                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-                                <TouchableOpacity onPress={() => setAdjustModal(false)} style={S.cancelBtn}>
-                                    <Text style={S.cancelBtnText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={handleExecuteAdjustment}
-                                    disabled={adjusting}
-                                    style={[S.confirmBtn, { backgroundColor: adjustType === 'credit' ? C.emerald : C.rose }]}
-                                >
-                                    {adjusting ? (
-                                        <ActivityIndicator color="#FFFFFF" size="small" />
-                                    ) : (
-                                        <Text style={S.confirmBtnText}>Confirm {adjustType === 'credit' ? 'Credit' : 'Debit'}</Text>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </Modal>
+                        </KeyboardAvoidingView>
+                    </View>
+                )}
 
             </View>
         </Modal>

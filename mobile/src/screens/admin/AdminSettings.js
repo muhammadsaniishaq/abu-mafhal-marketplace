@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useRef, useCallback, useContext } 
 import {
     View, Text, Switch, TouchableOpacity, ScrollView, TextInput,
     Alert, ActivityIndicator, Image, Animated, Dimensions,
-    StatusBar, Modal, FlatList, Clipboard, Platform, Linking
+    StatusBar, Modal, FlatList, Platform, Linking
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -707,7 +708,13 @@ export const AdminSettings = ({ navigation }) => {
 
     const copyPlayStoreUrl = () => {
         const targetUrl = playStoreUrl || 'https://play.google.com/store/apps/details?id=com.abumafhal.app';
-        Clipboard.setString(targetUrl);
+        try {
+            if (Clipboard?.setStringAsync) {
+                Clipboard.setStringAsync(targetUrl).catch(() => {});
+            } else if (Clipboard?.setString) {
+                Clipboard.setString(targetUrl);
+            }
+        } catch (_) {}
         Alert.alert('Link Copied! 📋', 'Google Play Store URL copied to clipboard.');
     };
 
@@ -1522,7 +1529,13 @@ export const AdminSettings = ({ navigation }) => {
                                 </View>
                                 <TouchableOpacity
                                     onPress={() => {
-                                        Clipboard.setString(wh.url);
+                                        try {
+                                            if (Clipboard?.setStringAsync) {
+                                                Clipboard.setStringAsync(wh.url).catch(() => {});
+                                            } else if (Clipboard?.setString) {
+                                                Clipboard.setString(wh.url);
+                                            }
+                                        } catch (_) {}
                                         Alert.alert('Copied! 📋', `${wh.name} URL copied to clipboard.`);
                                     }}
                                     style={[S.copyBtn, { backgroundColor: T.surface, borderColor: T.border }]}
@@ -3245,7 +3258,13 @@ export const AdminSettings = ({ navigation }) => {
                             <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
                                 <TouchableOpacity
                                     onPress={() => {
-                                        Clipboard.setString(importJsonText);
+                                        try {
+                                            if (Clipboard?.setStringAsync) {
+                                                Clipboard.setStringAsync(importJsonText || '').catch(() => {});
+                                            } else if (Clipboard?.setString) {
+                                                Clipboard.setString(importJsonText || '');
+                                            }
+                                        } catch (_) {}
                                         Alert.alert('Copied! 📋', 'Full snapshot JSON copied to clipboard.');
                                     }}
                                     style={[S.deployBtn, { flex: 1, backgroundColor: '#3B82F6', justifyContent: 'center' }]}

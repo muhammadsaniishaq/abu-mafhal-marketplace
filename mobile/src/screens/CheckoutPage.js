@@ -367,13 +367,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             const fullMsg = title ? `${title}: ${message}` : message;
             if (buttons && buttons.length > 1) {
-                const confirmed = window.confirm(fullMsg);
+                const confirmed = window.confirm ? window.confirm(fullMsg) : true;
                 if (confirmed) {
                     const actionBtn = buttons.find(b => b.style !== 'cancel' && b.onPress);
                     if (actionBtn && actionBtn.onPress) actionBtn.onPress();
                 }
             } else {
-                window.alert(fullMsg);
+                if (window.alert) window.alert(fullMsg);
             }
         } else {
             Alert.alert(title, message, buttons);

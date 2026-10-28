@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, ActivityIndicator,
-    Alert, Modal, ScrollView, TextInput, Share, Linking, RefreshControl, Clipboard, Image
+    Alert, Modal, ScrollView, TextInput, Share, Linking, RefreshControl, Image
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -666,7 +667,13 @@ export const AdminOrders = ({ navigation, onBack }) => {
     // 6. COPY REFERENCE ───────────────────────────────────────────────────────
     const copyReference = (ref) => {
         if (!ref) return;
-        Clipboard.setString(ref);
+        try {
+            if (Clipboard?.setStringAsync) {
+                Clipboard.setStringAsync(String(ref)).catch(() => {});
+            } else if (Clipboard?.setString) {
+                Clipboard.setString(String(ref));
+            }
+        } catch (_) {}
         setCopiedRef(true);
         setTimeout(() => setCopiedRef(false), 2000);
     };

@@ -1304,13 +1304,15 @@ export const AdminUsers = ({ navigation: propNav }) => {
             </Modal>
 
             {/* User Details Slide Modal */}
-            <AdminUserDetails
-                visible={detailVis}
-                user={selUser}
-                navigation={nav}
-                onClose={() => setDetailVis(false)}
-                onUpdate={loadData}
-            />
+            {detailVis && selUser && (
+                <AdminUserDetails
+                    visible={detailVis}
+                    user={selUser}
+                    navigation={nav}
+                    onClose={() => setDetailVis(false)}
+                    onUpdate={loadData}
+                />
+            )}
 
             {/* WhatsApp Integration Modal */}
             <WhatsAppActionModal

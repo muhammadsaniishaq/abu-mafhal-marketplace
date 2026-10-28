@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, TextInput,
     Alert, Modal, Switch, ScrollView, StyleSheet,
-    ActivityIndicator, Clipboard, Dimensions, StatusBar, RefreshControl, Platform
+    ActivityIndicator, Dimensions, StatusBar, RefreshControl, Platform
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -1003,14 +1004,16 @@ export const AdminCoupons = ({ onBack, navigation }) => {
     // ── Copy code ──────────────────────────────────────────────────────────────
     const copyCode = (code) => {
         try {
-            if (Clipboard && Clipboard.setString) {
-                Clipboard.setString(code);
+            if (Clipboard?.setStringAsync) {
+                Clipboard.setStringAsync(String(code)).catch(() => {});
+            } else if (Clipboard?.setString) {
+                Clipboard.setString(String(code));
             } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                navigator.clipboard.writeText(code);
+                navigator.clipboard.writeText(String(code));
             }
             Alert.alert('Copied!', `"${code}" copied to clipboard.`);
         } catch (e) {
-            Alert.alert('Coupon Code', code);
+            Alert.alert('Coupon Code', String(code));
         }
     };
 

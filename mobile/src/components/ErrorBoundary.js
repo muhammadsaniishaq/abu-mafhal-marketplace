@@ -28,11 +28,17 @@ export class ErrorBoundary extends React.Component {
         this.setState({ errorInfo });
     }
 
-    handleReload = () => {
+    handleReload = async () => {
         try {
             if (typeof window !== 'undefined' && window.localStorage) {
                 window.localStorage.setItem('@abumafhal_last_screen', 'Main');
                 window.location.hash = '';
+            }
+        } catch (_) {}
+        try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            if (AsyncStorage) {
+                await AsyncStorage.setItem('@abumafhal_last_screen', 'Main');
             }
         } catch (_) {}
 
@@ -40,22 +46,30 @@ export class ErrorBoundary extends React.Component {
 
         if (this.props.onReset) {
             this.props.onReset();
-        } else if (typeof window !== 'undefined') {
+        } else if (typeof window !== 'undefined' && window.location) {
             window.location.href = '/mobile';
         }
     };
 
-    handleGoHome = () => {
+    handleGoHome = async () => {
         try {
             if (typeof window !== 'undefined' && window.localStorage) {
                 window.localStorage.setItem('@abumafhal_last_screen', 'Main');
                 window.location.hash = '';
             }
         } catch (_) {}
+        try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            if (AsyncStorage) {
+                await AsyncStorage.setItem('@abumafhal_last_screen', 'Main');
+            }
+        } catch (_) {}
 
         this.setState({ hasError: false, error: null, errorInfo: null });
 
-        if (typeof window !== 'undefined') {
+        if (this.props.onReset) {
+            this.props.onReset();
+        } else if (typeof window !== 'undefined' && window.location) {
             window.location.href = '/mobile';
         }
     };

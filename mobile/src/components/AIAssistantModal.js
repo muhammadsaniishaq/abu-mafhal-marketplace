@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback,
     ScrollView, Modal, ActivityIndicator, KeyboardAvoidingView,
-    Platform, Image, Animated, Easing, Clipboard, Alert, Dimensions, Share
+    Platform, Image, Animated, Easing, Alert, Dimensions, Share
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -342,7 +343,12 @@ export const AIAssistantModal = ({ visible, onClose, user, onNavigate }) => {
             {/* Context menu overlay */}
             {menu && <ContextMenu msg={menu} visible={!!menu} accent={accent}
                 onClose={() => setMenu(null)}
-                onCopy={() => Clipboard.setString(menu.content)}
+                onCopy={() => {
+                    try {
+                        if (Clipboard?.setStringAsync) Clipboard.setStringAsync(String(menu.content)).catch(() => {});
+                        else if (Clipboard?.setString) Clipboard.setString(String(menu.content));
+                    } catch (_) {}
+                }}
                 onShare={() => Share.share({ message: menu.content.replace(/\*\*/g, '') })}
                 onSpeak={() => handleSpeak(menu)}
                 speaking={speaking === menu.id}

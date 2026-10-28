@@ -42,7 +42,7 @@ const BRAND = {
 // Canvas compression for web
 const compressImageOnWeb = (dataUrl, callback) => {
     try {
-        if (typeof window === 'undefined' || typeof document === 'undefined') {
+        if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof document === 'undefined' || !window.Image) {
             callback(dataUrl);
             return;
         }
@@ -304,7 +304,7 @@ export const AdminBrands = ({ navigation, onBack }) => {
             }
         };
 
-        if (Platform.OS === 'web') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
             if (window.confirm(`Are you sure you want to delete brand "${brand.name}"?`)) {
                 doDelete();
             }
@@ -327,7 +327,7 @@ export const AdminBrands = ({ navigation, onBack }) => {
         );
 
         if (unaddedPresets.length === 0) {
-            if (Platform.OS === 'web') {
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
                 window.alert('All 32 global brand presets are already in your catalog!');
             } else {
                 Alert.alert('Catalog Up to Date', 'All 32 top brand presets already exist.');
@@ -341,7 +341,7 @@ export const AdminBrands = ({ navigation, onBack }) => {
             try {
                 await seedPresetBrands(unaddedPresets);
                 await fetchBrandsData(true);
-                if (Platform.OS === 'web') {
+                if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
                     window.alert(`Successfully imported ${unaddedPresets.length} global brands!`);
                 } else {
                     Alert.alert('Success', `Imported ${unaddedPresets.length} global brands.`);
@@ -353,7 +353,7 @@ export const AdminBrands = ({ navigation, onBack }) => {
             }
         };
 
-        if (Platform.OS === 'web') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
             if (window.confirm(confirmMsg)) executeSeed();
         } else {
             Alert.alert('Import Global Brands', confirmMsg, [

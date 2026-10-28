@@ -10,8 +10,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback,
     ScrollView, Modal, ActivityIndicator, KeyboardAvoidingView,
-    Platform, Animated, Easing, Clipboard, Alert, Dimensions, Share, Image
+    Platform, Animated, Easing, Alert, Dimensions, Share, Image
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -323,7 +324,12 @@ export const AdminAIAssistantModal = ({ visible, onClose, onNavigate, user }) =>
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             {menu && <CtxMenu visible={!!menu} onClose={() => setMenu(null)} speaking={speaking === menu.id}
-                onCopy={() => Clipboard.setString(menu.content)} onShare={() => Share.share({ message: menu.content.replace(/\*\*/g, '') })}
+                onCopy={() => {
+                    try {
+                        if (Clipboard?.setStringAsync) Clipboard.setStringAsync(String(menu.content)).catch(() => {});
+                        else if (Clipboard?.setString) Clipboard.setString(String(menu.content));
+                    } catch (_) {}
+                }} onShare={() => Share.share({ message: menu.content.replace(/\*\*/g, '') })}
                 onSpeak={() => handleSpeak(menu)} onFeedback={t => setFeedback(p => ({ ...p, [menu.id]: p[menu.id] === t ? null : t }))} />}
 
             {/* History Drawer */}

@@ -113,16 +113,17 @@ export const VendorProducts = ({
     setRefreshing,
     fetchDashboardData,
 }) => {
-    const filtered = products.filter(p => {
-        const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase());
+    const safeProducts = Array.isArray(products) ? products : [];
+    const filtered = safeProducts.filter(p => {
+        const matchSearch = p.name?.toLowerCase().includes((search || '').toLowerCase());
         const stock = p.stock_quantity ?? p.stock ?? 0;
         if (stockFilter === 'out')  return matchSearch && stock === 0;
         if (stockFilter === 'low')  return matchSearch && stock > 0 && stock <= 5;
         return matchSearch;
     });
 
-    const outCount = products.filter(p => (p.stock_quantity ?? p.stock ?? 0) === 0).length;
-    const lowCount = products.filter(p => { const s = p.stock_quantity ?? p.stock ?? 0; return s > 0 && s <= 5; }).length;
+    const outCount = safeProducts.filter(p => (p.stock_quantity ?? p.stock ?? 0) === 0).length;
+    const lowCount = safeProducts.filter(p => { const s = p.stock_quantity ?? p.stock ?? 0; return s > 0 && s <= 5; }).length;
 
     const FILTERS = [
         { key: 'all', label: `All (${products.length})`,   color: '#0E1A2E' },
