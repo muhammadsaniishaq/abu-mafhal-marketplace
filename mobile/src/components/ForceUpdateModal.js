@@ -91,10 +91,10 @@ export const ForceUpdateModal = ({
                 Constants?.expoConfig?.version ||
                 Constants?.manifest2?.extra?.expoClient?.version ||
                 Constants?.manifest?.version ||
-                '1.0.9'
+                '1.1.0'
             );
         } catch (_) {
-            return '1.0.9';
+            return '1.1.0';
         }
     }, []);
 
