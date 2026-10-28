@@ -1,0 +1,41 @@
+# EAS ignore configuration
+# Learn more: https://docs.expo.dev/build-reference/eas-ignore/
+
+# dependencies
+node_modules/
+
+# local builds and exports
+dist/
+web-build/
+.expo/
+
+# temporary and debug logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+bundle_error.txt
+bundle_response.txt
+expo_build_log.txt
+index_dump.html
+
+# ignore local native directories so EAS generates a fresh native project from app.json
+android/
+ios/
+
+# SQL scripts and test diagnostic files (not needed for mobile runtime build)
+*.sql
+*.ts
+check_*.js
+debug_*.js
+probe_*.js
+inspect_*.js
+repair_*.js
+replace_*.js
+setup_*.js
+test_*.js
+test*.js
+assign_driver.js
+patch-*.js
+verify_*.js
+introspect_schema.js
