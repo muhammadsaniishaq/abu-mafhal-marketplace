@@ -8,12 +8,14 @@ if (typeof global !== 'undefined') {
         global.ErrorUtils.setGlobalHandler((error, isFatal) => {
             try {
                 console.error('[CRASH_SHIELD] Intercepted error:', error?.message || error, 'isFatal:', isFatal);
+                if (error?.stack) {
+                    console.error('[CRASH_SHIELD] Stack trace:', error.stack);
+                }
             } catch (_) {}
-            // In development, pass to original handler for redbox
-            if (__DEV__ && defaultHandler) {
+
+            if (defaultHandler) {
                 defaultHandler(error, isFatal);
             }
-            // In production APK/AAB release: swallow fatal exit and keep app alive safely
         });
     }
 
