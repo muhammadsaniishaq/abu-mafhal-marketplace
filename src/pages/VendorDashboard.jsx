@@ -5,7 +5,8 @@ import { supabase } from '../config/supabase';
 import { 
   Menu, X, Search, Bell, ShoppingCart, Store, CheckCircle, ExternalLink,
   LayoutDashboard, Package, ShoppingBag, Users, BarChart3, Settings,
-  CreditCard, Megaphone, Star, MessageSquare, HelpCircle, Crown, ChevronDown
+  CreditCard, Megaphone, Star, MessageSquare, HelpCircle, Crown, ChevronDown,
+  Code2
 } from 'lucide-react';
 
 const VendorDashboard = () => {
@@ -57,6 +58,7 @@ const VendorDashboard = () => {
     { label: 'Dashboard', path: '/vendor/analytics', icon: LayoutDashboard },
     { label: 'Products', path: '/vendor/products', icon: Package },
     { label: 'Orders', path: '/vendor/orders', icon: ShoppingBag, badge: 12, badgeColor: 'bg-rose-500' },
+    { label: 'Developer API', path: '/vendor/api', icon: Code2, badge: 'PRO', badgeColor: 'bg-[#00BFA5]' },
     { label: 'Customers', path: '/vendor/customers', icon: Users },
     { label: 'Analytics', path: '/vendor/analytics', icon: BarChart3 },
     { label: 'Store Settings', path: '/vendor/settings', icon: Settings },

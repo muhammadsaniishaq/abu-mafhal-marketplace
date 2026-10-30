@@ -64,6 +64,7 @@ import VendorProfile from './components/vendor/VendorProfile';
 import VendorSettings from './components/vendor/VendorSettings';
 import VendorWallet from './components/vendor/VendorWallet';
 import VendorDisputes from './components/vendor/VendorDisputes';
+import VendorApiDocs from './components/vendor/VendorApiDocs';
 
 // ==================== BUYER COMPONENTS ====================
 import BuyerOrders from './components/buyer/BuyerOrders';
@@ -304,6 +305,8 @@ function App() {
                   <Route path="profile" element={<VendorProfile />} />
                   <Route path="wallet" element={<VendorWallet />} />
                   <Route path="disputes" element={<VendorDisputes />} />
+                  <Route path="api" element={<VendorApiDocs />} />
+                  <Route path="developer" element={<VendorApiDocs />} />
                   <Route path="settings" element={<VendorSettings />} />
                 </Route>
 

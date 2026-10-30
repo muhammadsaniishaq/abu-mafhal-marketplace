@@ -197,6 +197,15 @@ export const VendorDrawer = ({
             badge: null
         },
         {
+            id: 'developer_api',
+            title: 'Developer REST API',
+            desc: 'Generate API Keys & integrate with other sites',
+            icon: 'code-slash-outline',
+            activeIcon: 'code-slash',
+            color: '#00BFA5',
+            badge: 'REST'
+        },
+        {
             id: 'followers',
             title: 'Store Followers & Fans',
             desc: 'Customer base & store promotion',

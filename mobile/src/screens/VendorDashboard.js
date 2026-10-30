@@ -37,6 +37,7 @@ import { VendorAnalytics } from './VendorAnalytics';
 import { VendorShippingSettings } from './VendorShippingSettings';
 import { VendorQRCodeCard } from './VendorQRCodeCard';
 import { ConversationsScreen } from './ConversationsScreen';
+import { VendorApiKeys } from './VendorApiKeys';
 
 const NAVY = '#070D1B';
 const DARK_SURFACE = '#0E1A2E';
@@ -45,7 +46,7 @@ const GOLD_LIGHT = '#FDE68A';
 
 const VALID_VENDOR_TABS = [
     'overview', 'analytics', 'products', 'orders', 'wallet', 
-    'shipping', 'qr_card', 'messages', 'store_profile', 'followers'
+    'shipping', 'qr_card', 'messages', 'store_profile', 'followers', 'developer_api'
 ];
 
 const getInitialVendorTab = (route) => {
@@ -766,6 +767,7 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                     { id: 'overview', label: 'Overview', icon: 'speedometer-outline' },
                     { id: 'analytics', label: 'Analytics', icon: 'bar-chart-outline' },
                     { id: 'products', label: 'Products', icon: 'cube-outline', count: products.length },
+                    { id: 'developer_api', label: 'Developer API', icon: 'code-slash-outline' },
                     { id: 'orders', label: 'Orders', icon: 'receipt-outline', count: orders.length },
                     { id: 'wallet', label: 'Wallet', icon: 'wallet-outline' },
                     { id: 'shipping', label: 'Shipping', icon: 'bicycle-outline' },
@@ -963,6 +965,14 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                                 vendor={vendor}
                                 onBack={() => setActiveTab('overview')}
                                 fetchDashboardData={fetchDashboardData}
+                            />
+                        )}
+
+                        {(activeTab === 'developer_api' || activeTab === 'api') && (
+                            <VendorApiKeys
+                                user={user}
+                                vendor={vendor}
+                                onBack={() => setActiveTab('overview')}
                             />
                         )}
                     </>
