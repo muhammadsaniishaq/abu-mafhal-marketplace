@@ -10,15 +10,17 @@ const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT
 async function authenticateApiKey(supabase, apiKey) {
     if (!apiKey || typeof apiKey !== 'string') return null;
     const cleanKey = apiKey.trim();
-    if (!cleanKey.startsWith('abumafhal_') && !cleanKey.startsWith('am_live_')) {
+    if (!cleanKey.startsWith('abumafhal_') && !cleanKey.startsWith('am_live_') && !cleanKey.startsWith('am_test_')) {
         return null;
     }
+
+    const isTestKey = cleanKey.includes('_test_');
 
     // 1. Check vendor_api_keys table first (if table created in DB)
     try {
         const { data: keyRecord } = await supabase
             .from('vendor_api_keys')
-            .select('*, profiles:vendor_id(id, business_name, full_name, email, is_verified, avatar_url, role)')
+            .select('*, profiles:vendor_id(id, business_name, full_name, email, avatar_url, role)')
             .eq('api_key', cleanKey)
             .eq('is_active', true)
             .maybeSingle();
@@ -33,8 +35,10 @@ async function authenticateApiKey(supabase, apiKey) {
             return {
                 vendor_id: keyRecord.vendor_id,
                 vendor_name: keyRecord.profiles?.business_name || keyRecord.profiles?.full_name || 'Vendor',
-                is_verified: !!keyRecord.profiles?.is_verified,
+                is_verified: true,
                 key_name: keyRecord.key_name,
+                key_type: keyRecord.key_type || (isTestKey ? 'test' : 'live'),
+                is_test: isTestKey,
                 scope: 'vendor_scoped'
             };
         }
@@ -56,6 +60,8 @@ async function authenticateApiKey(supabase, apiKey) {
                     vendor_name: found.vendor_name || 'Abu Mafhal Merchant',
                     is_verified: true,
                     key_name: found.key_name || 'Production Key',
+                    key_type: found.key_type || (isTestKey ? 'test' : 'live'),
+                    is_test: isTestKey,
                     scope: found.scope || 'vendor_scoped'
                 };
             }

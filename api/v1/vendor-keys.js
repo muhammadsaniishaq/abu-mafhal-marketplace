@@ -4,9 +4,10 @@ import crypto from 'crypto';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ejqymvjrfqqljzjlwcin.supabase.co';
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqcXltdmpyZnFxbGp6amx3Y2luIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNzIxNTAsImV4cCI6MjA4MTY0ODE1MH0.CcY21LL1wyeQQJU3ZIQ9isLAjhm05Bjg5BrsNII1yng';
 
-function generateRandomApiKey() {
+function generateRandomApiKey(keyType = 'live') {
     const randomHex = crypto.randomBytes(24).toString('hex');
-    return `abumafhal_live_${randomHex}`;
+    const prefix = keyType === 'test' ? 'abumafhal_test_' : 'abumafhal_live_';
+    return `${prefix}${randomHex}`;
 }
 
 export default async function handler(req, res) {
@@ -109,13 +110,15 @@ export default async function handler(req, res) {
             }
 
             const keyName = (body.key_name || 'Production Storefront Key').trim();
-            const newApiKey = generateRandomApiKey();
+            const keyType = body.key_type === 'test' ? 'test' : 'live';
+            const newApiKey = generateRandomApiKey(keyType);
 
             const newKeyRecord = {
                 id: crypto.randomUUID ? crypto.randomUUID() : `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
                 vendor_id: userId,
                 vendor_name: vendorProfile.business_name || vendorProfile.full_name || 'Vendor',
                 key_name: keyName,
+                key_type: keyType,
                 api_key: newApiKey,
                 is_active: true,
                 rate_limit_per_minute: 120,
