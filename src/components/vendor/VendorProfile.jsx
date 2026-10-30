@@ -491,7 +491,7 @@ const VendorProfile = () => {
                 <div className="text-[11px] text-slate-500 bg-white/90 p-3 rounded-xl border border-slate-200 shadow-sm max-w-sm flex items-start gap-2.5 shrink-0">
                   <Lock className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
                   <span>
-                    <strong>Admin Controlled:</strong> Slogan / Tagline da Shaidar Shago (Verified Badge) ana bayar da su ne kuma ana tantance su ta hannun Admin kawai don tabbatar da ingancin shago.
+                    <strong>Admin Controlled:</strong> Slogan / Tagline and Store Verified Badge are issued and authenticated exclusively by Platform Administration to maintain marketplace trust.
                   </span>
                 </div>
               </div>

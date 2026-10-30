@@ -987,6 +987,115 @@ print(response.json())`
           </pre>
         </div>
       </div>
+
+      {/* ─── Real-Time Webhooks & Events (Modern Feature) ─── */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200">
+                <Zap className="w-4 h-4" />
+              </div>
+              <h2 className="text-lg font-bold text-[#0A192F]">Webhooks & Real-Time Event Dispatch</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              Receive automatic HTTP POST payloads whenever an order is placed, paid, or fulfilled.
+            </p>
+          </div>
+          <span className="px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold self-start md:self-auto">
+            HMAC-SHA256 Signed
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+          <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="font-mono text-xs font-bold text-[#0A192F]">order.created</span>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Triggers immediately when a customer creates a checkout order for items in your store.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00BFA5]" />
+              <span className="font-mono text-xs font-bold text-[#0A192F]">payment.success</span>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Dispatches when customer funds are confirmed by Abu Mafhal direct payment gateway.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="font-mono text-xs font-bold text-[#0A192F]">stock.low_alert</span>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Automatic alert payload whenever an item drops below 5 units remaining in active inventory.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-xs font-bold text-[#0A192F] block">Your Webhook Receiver Endpoint</span>
+            <span className="text-xs text-slate-500">Configure your secure HTTPS endpoint in Store Settings &gt; Integrations</span>
+          </div>
+          <code className="text-xs font-mono bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
+            https://your-domain.com/webhooks/abumafhal
+          </code>
+        </div>
+      </div>
+
+      {/* ─── HTTP Status Codes & Error Handling (Modern Spec) ─── */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
+        <div className="flex items-center gap-2.5 pb-6 border-b border-slate-100">
+          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200">
+            <Activity className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-[#0A192F]">HTTP Response & Error Standards</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Predictable status codes returned across all abumafhal.com APIs</p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-slate-100 mt-2">
+          <div className="py-3 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              <span className="px-2 py-0.5 rounded font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">200 OK</span>
+              <span className="font-medium text-slate-700">Request succeeded; returns data payload and pagination.</span>
+            </div>
+            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">JSON</span>
+          </div>
+
+          <div className="py-3 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              <span className="px-2 py-0.5 rounded font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200">401 Unauthorized</span>
+              <span className="font-medium text-slate-700">Missing x-api-key header or invalid authorization bearer token.</span>
+            </div>
+            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">JSON</span>
+          </div>
+
+          <div className="py-3 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              <span className="px-2 py-0.5 rounded font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200">403 Forbidden</span>
+              <span className="font-medium text-slate-700">API Key is inactive or revoked. Create a new key above.</span>
+            </div>
+            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">JSON</span>
+          </div>
+
+          <div className="py-3 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              <span className="px-2 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">429 Rate Limit</span>
+              <span className="font-medium text-slate-700">Maximum 120 requests per minute per key exceeded.</span>
+            </div>
+            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">JSON</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
