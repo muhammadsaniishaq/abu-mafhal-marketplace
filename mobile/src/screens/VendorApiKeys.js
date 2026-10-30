@@ -473,7 +473,44 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                 <Text style={styles.jsonCopy}>Copy JSON</Text>
                             </TouchableOpacity>
                         </View>
-                        <ScrollView horizontal style={{ maxHeight: 220 }}>
+
+                        {/* Visual Preview for Products if available */}
+                        {selectedApi === 'products' && Array.isArray(testResult.data?.data) && testResult.data.data.length > 0 && (
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingVertical: 10 }}>
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    {testResult.data.data.slice(0, 5).map((prod) => (
+                                        <View key={prod.id} style={styles.mobileProductCard}>
+                                            {prod.primary_image ? (
+                                                <Image source={{ uri: prod.primary_image }} style={styles.mobileProductImg} resizeMode="contain" />
+                                            ) : (
+                                                <View style={styles.mobileProductImgPlaceholder}>
+                                                    <Ionicons name="cube-outline" size={24} color="#94A3B8" />
+                                                </View>
+                                            )}
+                                            <Text numberOfLines={1} style={styles.mobileProductName}>{prod.name}</Text>
+                                            <Text style={styles.mobileProductPrice}>₦{Number(prod.price).toLocaleString()}</Text>
+                                            <View style={styles.mobileStockBadge}>
+                                                <Text style={styles.mobileStockBadgeText}>{prod.available_stock} in stock</Text>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            </ScrollView>
+                        )}
+
+                        {/* Visual Preview for Payments Checkout */}
+                        {selectedApi === 'payments' && testResult.data?.data?.checkout_url && (
+                            <View style={styles.paymentSuccessBox}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                                    <Text style={{ fontWeight: 'bold', fontSize: 13, color: '#065F46' }}>Session Initialized</Text>
+                                </View>
+                                <Text style={{ fontSize: 11, color: '#047857' }}>Ref: {testResult.data.data.reference}</Text>
+                                <Text style={{ fontSize: 11, color: '#047857', fontWeight: 'bold' }}>Amount: ₦{Number(testResult.data.data.amount).toLocaleString()}</Text>
+                            </View>
+                        )}
+
+                        <ScrollView horizontal style={{ maxHeight: 180, marginTop: 8 }}>
                             <Text style={styles.jsonText}>{JSON.stringify(testResult.data, null, 2)}</Text>
                         </ScrollView>
                     </View>
@@ -512,6 +549,57 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         <Ionicons name="copy-outline" size={13} color="#0D9488" />
                         <Text style={styles.snippetCopyText}>Copy Code</Text>
                     </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Webhooks & Real-Time Event Dispatch */}
+            <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                    <Ionicons name="flash-outline" size={18} color="#8B5CF6" />
+                    <Text style={styles.cardTitle}>Webhooks & Real-Time Events</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: SLATE_600, marginBottom: 12, lineHeight: 17 }}>
+                    Receive instant webhook notifications at your endpoint for automated order fulfillment and payment verification.
+                </Text>
+
+                <View style={{ gap: 8 }}>
+                    <View style={styles.webhookEventRow}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                        <Text style={styles.webhookEventName}>order.created</Text>
+                        <Text style={styles.webhookEventDesc}>New customer store order</Text>
+                    </View>
+                    <View style={styles.webhookEventRow}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00BFA5' }} />
+                        <Text style={styles.webhookEventName}>payment.success</Text>
+                        <Text style={styles.webhookEventDesc}>Direct payment confirmed</Text>
+                    </View>
+                    <View style={styles.webhookEventRow}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B' }} />
+                        <Text style={styles.webhookEventName}>stock.low_alert</Text>
+                        <Text style={styles.webhookEventDesc}>Stock below 5 items</Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* HTTP Response Standards */}
+            <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                    <Ionicons name="pulse-outline" size={18} color="#0284C7" />
+                    <Text style={styles.cardTitle}>HTTP Response Standards</Text>
+                </View>
+                <View style={{ gap: 8 }}>
+                    <View style={styles.httpCodeRow}>
+                        <Text style={[styles.httpCodeBadge, { backgroundColor: '#DEF7EC', color: '#03543F' }]}>200 OK</Text>
+                        <Text style={styles.httpCodeDesc}>Success. Returns data and pagination.</Text>
+                    </View>
+                    <View style={styles.httpCodeRow}>
+                        <Text style={[styles.httpCodeBadge, { backgroundColor: '#FEF08A', color: '#854D0E' }]}>401 Unauthorized</Text>
+                        <Text style={styles.httpCodeDesc}>Missing or invalid x-api-key header.</Text>
+                    </View>
+                    <View style={styles.httpCodeRow}>
+                        <Text style={[styles.httpCodeBadge, { backgroundColor: '#FEE2E2', color: '#991B1B' }]}>403 Forbidden</Text>
+                        <Text style={styles.httpCodeDesc}>Revoked or expired API credential.</Text>
+                    </View>
                 </View>
             </View>
         </ScrollView>
@@ -911,5 +999,107 @@ const styles = StyleSheet.create({
         color: '#38BDF8',
         fontSize: 11,
         fontWeight: 'bold'
+    },
+    mobileProductCard: {
+        width: 140,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1
+    },
+    mobileProductImg: {
+        width: '100%',
+        height: 70,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        marginBottom: 6
+    },
+    mobileProductImgPlaceholder: {
+        width: '100%',
+        height: 70,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6
+    },
+    mobileProductName: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: SLATE_900,
+        marginBottom: 2
+    },
+    mobileProductPrice: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#0F766E',
+        marginBottom: 4
+    },
+    mobileStockBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        backgroundColor: '#DCFCE7'
+    },
+    mobileStockBadgeText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: '#166534'
+    },
+    paymentSuccessBox: {
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        borderRadius: 10,
+        padding: 10,
+        marginBottom: 8
+    },
+    webhookEventRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#F8FAFC',
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    webhookEventName: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        color: SLATE_900,
+        width: 110
+    },
+    webhookEventDesc: {
+        fontSize: 11,
+        color: SLATE_600,
+        flex: 1
+    },
+    httpCodeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 4
+    },
+    httpCodeBadge: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6
+    },
+    httpCodeDesc: {
+        fontSize: 11,
+        color: SLATE_600,
+        flex: 1
     }
 });

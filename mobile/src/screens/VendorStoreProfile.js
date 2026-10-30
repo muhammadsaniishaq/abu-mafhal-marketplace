@@ -442,7 +442,7 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                     <Text style={s.verificationStatusSub}>
                                         {isVerified
                                             ? 'Verified by Abu Mafhal Marketplace Administration with an official buyer trust mark.'
-                                            : 'Gaskiyar amincewar shago (verification) na karkashin ikon Admin ne kadai bayan tantance takardun kasuwanci.'}
+                                            : 'Official store verification is issued exclusively by Marketplace Administration following business credential review.'}
                                     </Text>
                                 </View>
                             </View>
@@ -481,13 +481,13 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                         value={tagline}
                                         onChangeText={setTagline}
                                         editable={userIsAdmin}
-                                        placeholder={userIsAdmin ? "e.g. Premium Gadgets, Genuine Warranty & 24h Delivery" : "Babu taken shago da Admin ya saita ba tukuna"}
+                                        placeholder={userIsAdmin ? "e.g. Premium Gadgets, Genuine Warranty & 24h Delivery" : "No official store tagline assigned yet"}
                                         placeholderTextColor="#94A3B8"
                                     />
                                 </View>
                                 {!userIsAdmin && (
                                     <Text style={s.fieldLockNotice}>
-                                        🔒 Slogan / Tagline na vendor na karkashin ikon Admin ne kadai. Tuntubi Admin din kasuwa don sanya ko canza taken shagonku.
+                                        🔒 Store Slogan / Tagline is controlled exclusively by Platform Administration. Contact Marketplace Admin to set or update your official store slogan.
                                     </Text>
                                 )}
                             </View>
