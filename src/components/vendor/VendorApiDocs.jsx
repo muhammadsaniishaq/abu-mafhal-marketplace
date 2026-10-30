@@ -125,7 +125,10 @@ export default function VendorApiDocs() {
     }
   };
 
-  const revokeKey = async (keyId) => {
+  const revokeKey = async (keyRecord) => {
+    const keyId = typeof keyRecord === 'object' ? keyRecord.id : keyRecord;
+    const apiKey = typeof keyRecord === 'object' ? keyRecord.api_key : null;
+
     if (!window.confirm('Are you sure you want to revoke this API Key? Any external applications using this key will immediately lose access.')) {
       return;
     }
@@ -136,13 +139,14 @@ export default function VendorApiDocs() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vendor_id: vendorId,
-          key_id: keyId
+          key_id: keyId,
+          api_key: apiKey
         })
       });
 
       if (res.ok) {
         setApiKeys(prev => {
-          const updated = prev.filter(k => k.id !== keyId);
+          const updated = prev.filter(k => (keyId ? k.id !== keyId : true) && (apiKey ? k.api_key !== apiKey : true));
           if (updated.length > 0) setSelectedApiKey(updated[0].api_key);
           else setSelectedApiKey('abumafhal_test_sandbox_verified_key');
           return updated;
@@ -593,7 +597,7 @@ print(response.json())`
                         <span className="font-bold text-[#0A192F]">{k.total_requests || 0} calls</span>
                       </div>
                       <button
-                        onClick={() => revokeKey(k.id)}
+                        onClick={() => revokeKey(k)}
                         className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-all cursor-pointer"
                         title="Revoke this API Key"
                       >

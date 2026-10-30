@@ -80,7 +80,8 @@ export default async function handler(req, res) {
                     return res.status(200).json({
                         status: 'success',
                         code: 200,
-                        keys: tableKeys
+                        keys: tableKeys,
+                        data: tableKeys
                     });
                 }
             } catch (_) {}
@@ -98,7 +99,8 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 status: 'success',
                 code: 200,
-                keys: vendorKeys
+                keys: vendorKeys,
+                data: vendorKeys
             });
         }
 
@@ -163,24 +165,26 @@ export default async function handler(req, res) {
                 status: 'success',
                 code: 201,
                 message: 'Vendor API Key successfully created!',
-                key: newKeyRecord
+                key: newKeyRecord,
+                data: newKeyRecord
             });
         }
 
         // ─── DELETE: Revoke API Key ──────────────────────────────────────────────
         if (req.method === 'DELETE') {
             const keyToRevoke = req.body?.api_key || req.query?.api_key;
-            if (!keyToRevoke) {
-                return res.status(400).json({ status: 'error', message: 'Missing api_key to revoke.' });
+            const keyIdToRevoke = req.body?.key_id || req.query?.key_id;
+
+            if (!keyToRevoke && !keyIdToRevoke) {
+                return res.status(400).json({ status: 'error', message: 'Missing api_key or key_id to revoke.' });
             }
 
             // Revoke in table
             try {
-                await supabase
-                    .from('vendor_api_keys')
-                    .delete()
-                    .eq('api_key', keyToRevoke)
-                    .eq('vendor_id', userId);
+                let q = supabase.from('vendor_api_keys').delete().eq('vendor_id', userId);
+                if (keyToRevoke) q = q.eq('api_key', keyToRevoke);
+                else if (keyIdToRevoke) q = q.eq('id', keyIdToRevoke);
+                await q;
             } catch (_) {}
 
             // Revoke in app_settings
@@ -192,7 +196,13 @@ export default async function handler(req, res) {
                     .maybeSingle();
 
                 if (settingRow?.value?.keys) {
-                    const filtered = settingRow.value.keys.filter(k => !(k.api_key === keyToRevoke && k.vendor_id === userId));
+                    const filtered = settingRow.value.keys.filter(k => {
+                        if (k.vendor_id !== userId) return true;
+                        if (keyToRevoke && k.api_key === keyToRevoke) return false;
+                        if (keyIdToRevoke && k.id === keyIdToRevoke) return false;
+                        return true;
+                    });
+
                     await supabase.from('app_settings').upsert({
                         key: 'vendor_api_keys',
                         value: { keys: filtered },
