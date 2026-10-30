@@ -6,7 +6,7 @@ import {
   ExternalLink, Sparkles, BookOpen, AlertCircle, ArrowUpRight,
   ShieldCheck, Globe, Zap, Cpu, CheckCircle2, Lock, Eye, EyeOff,
   Database, Server, Layers, Play, CreditCard, ShoppingBag, Send,
-  HelpCircle, Activity, FileJson
+  HelpCircle, Activity, FileJson, ShieldAlert, Clock, Unlock
 } from 'lucide-react';
 
 export default function VendorApiDocs() {
@@ -23,8 +23,14 @@ export default function VendorApiDocs() {
   const [apiErrorMsg, setApiErrorMsg] = useState('');
   const [revealedKeys, setRevealedKeys] = useState({});
 
+  // API Access Approval Lock State
+  const [accessStatus, setAccessStatus] = useState('loading'); // 'approved' | 'pending' | 'rejected' | 'not_requested'
+  const [accessRequest, setAccessRequest] = useState(null);
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [requestNote, setRequestNote] = useState('');
+
   // Interactive Playground State
-  const [selectedEndpoint, setSelectedEndpoint] = useState('products'); // 'products' | 'payments' | 'orders'
+  const [selectedEndpoint, setSelectedEndpoint] = useState('products'); // 'products' | 'payments' | 'orders' | 'analytics'
   const [testingEndpoint, setTestingEndpoint] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
@@ -36,6 +42,13 @@ export default function VendorApiDocs() {
   const [customerEmail, setCustomerEmail] = useState('customer@example.com');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
 
+  // Webhook Simulator State
+  const [webhookUrl, setWebhookUrl] = useState('https://webhook.site/demo-abumafhal');
+  const [webhookEvent, setWebhookEvent] = useState('order.created');
+  const [webhookSecret, setWebhookSecret] = useState('am_sec_demo99482710');
+  const [simulatingWebhook, setSimulatingWebhook] = useState(false);
+  const [webhookSimResult, setWebhookSimResult] = useState(null);
+
   const [selectedApiKey, setSelectedApiKey] = useState('');
   const [responseViewMode, setResponseViewMode] = useState('visual'); // 'visual' | 'json'
 
@@ -44,6 +57,7 @@ export default function VendorApiDocs() {
   const productsApiUrl = `${officialDomain}/api/v1/products`;
   const paymentsApiUrl = `${officialDomain}/api/v1/payments`;
   const ordersApiUrl = `${officialDomain}/api/v1/orders`;
+  const analyticsApiUrl = `${officialDomain}/api/v1/analytics`;
 
   useEffect(() => {
     if (vendorId) {
@@ -58,10 +72,13 @@ export default function VendorApiDocs() {
       const res = await fetch(`/api/v1/vendor-keys?vendor_id=${vendorId}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
-          setApiKeys(data.data);
-          if (!selectedApiKey) {
-            setSelectedApiKey(data.data[0].api_key);
+        if (data.status === 'success') {
+          setAccessStatus(data.access_status || 'not_requested');
+          setAccessRequest(data.access_request || null);
+          const retrievedKeys = Array.isArray(data.keys) ? data.keys : Array.isArray(data.data) ? data.data : [];
+          setApiKeys(retrievedKeys);
+          if (retrievedKeys.length > 0 && !selectedApiKey) {
+            setSelectedApiKey(retrievedKeys[0].api_key);
           }
           setLoading(false);
           return;
@@ -89,8 +106,48 @@ export default function VendorApiDocs() {
     }
   };
 
+  const submitAccessRequest = async () => {
+    if (!vendorId) return;
+    setRequestingAccess(true);
+    setApiErrorMsg('');
+    setApiSuccessMsg('');
+
+    try {
+      const res = await fetch('/api/v1/vendor-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendor_id: vendorId,
+          action: 'request_access',
+          note: requestNote.trim()
+        })
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.status === 'success') {
+        setAccessStatus('pending');
+        setApiSuccessMsg(result.message || 'Developer API access request submitted! Admin will review shortly.');
+        await loadKeys();
+      } else {
+        setApiErrorMsg(result.message || 'Failed to submit API access request.');
+      }
+    } catch (err) {
+      console.error('API access request error:', err);
+      setApiErrorMsg('Network error while requesting developer API access.');
+    } finally {
+      setRequestingAccess(false);
+    }
+  };
+
   const generateNewKey = async () => {
     if (!vendorId) return;
+
+    if (accessStatus !== 'approved') {
+      setApiErrorMsg('Developer API access is currently locked. You must submit a request and obtain administrator approval before generating keys.');
+      return;
+    }
+
     setGenerating(true);
     setApiErrorMsg('');
     setApiSuccessMsg('');
@@ -209,13 +266,21 @@ export default function VendorApiDocs() {
           customer_name: 'Customer Name'
         })
       };
-    } else {
+    } else if (selectedEndpoint === 'orders') {
       // Orders
       const q = new URLSearchParams();
       if (filterLimit) q.append('limit', filterLimit);
       if (orderStatusFilter !== 'all') q.append('status', orderStatusFilter);
       testPath = `/api/v1/orders?${q.toString()}`;
       displayUrl = `${ordersApiUrl}?${q.toString()}`;
+      options = {
+        method: 'GET',
+        headers: { 'x-api-key': activeKeyString, 'Accept': 'application/json' }
+      };
+    } else {
+      // Analytics & Telemetry
+      testPath = '/api/v1/analytics';
+      displayUrl = analyticsApiUrl;
       options = {
         method: 'GET',
         headers: { 'x-api-key': activeKeyString, 'Accept': 'application/json' }
@@ -245,6 +310,67 @@ export default function VendorApiDocs() {
       });
     } finally {
       setTestingEndpoint(false);
+    }
+  };
+
+  const simulateWebhookPing = async () => {
+    setSimulatingWebhook(true);
+    setWebhookSimResult(null);
+
+    const samplePayload = {
+      event: webhookEvent,
+      timestamp: new Date().toISOString(),
+      id: `evt_${Date.now()}`,
+      data: webhookEvent === 'order.created' ? {
+        order_number: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+        status: 'pending',
+        currency: 'NGN',
+        total_amount: 14500,
+        customer: { name: 'Amina Bello', email: 'amina@example.com', phone: '+2348012345678' }
+      } : webhookEvent === 'payment.success' ? {
+        reference: `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+        status: 'paid',
+        amount: 25000,
+        channel: 'card',
+        paid_at: new Date().toISOString()
+      } : {
+        product_id: 'prod_987162',
+        product_name: 'Wireless Bluetooth Earbuds Pro',
+        remaining_units: 3,
+        threshold: 5
+      }
+    };
+
+    try {
+      const startTime = performance.now();
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-abumafhal-signature': `sha256=${Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')}`,
+          'x-abumafhal-event': webhookEvent
+        },
+        body: JSON.stringify(samplePayload)
+      }).catch((e) => ({ ok: false, status: 0, statusText: e.message || 'CORS / Network Blocked' }));
+
+      const endTime = performance.now();
+      setWebhookSimResult({
+        delivered: res.ok || res.status === 200 || res.status === 201 || res.status === 204,
+        status: res.status || 0,
+        statusText: res.statusText || 'Sent Payload',
+        latencyMs: Math.round(endTime - startTime),
+        payload: samplePayload
+      });
+    } catch (e) {
+      setWebhookSimResult({
+        delivered: false,
+        status: 0,
+        statusText: e.message || 'Failed to dispatch ping',
+        latencyMs: 0,
+        payload: samplePayload
+      });
+    } finally {
+      setSimulatingWebhook(false);
     }
   };
 
@@ -329,7 +455,7 @@ payload = {
 response = requests.post(url, headers=headers, json=payload)
 print(response.json())`
       };
-    } else {
+    } else if (selectedEndpoint === 'orders') {
       return {
         curl: `# 3. Orders API — Query Customer Orders
 curl -X GET "${ordersApiUrl}?limit=10&status=all" \\
@@ -349,6 +475,38 @@ import requests
 
 response = requests.get("${ordersApiUrl}?limit=10", headers={"x-api-key": "${activeKeyString}"})
 print(response.json())`
+      };
+    } else {
+      return {
+        curl: `# 4. Storefront Telemetry & Analytics API
+curl -X GET "${analyticsApiUrl}" \\
+  -H "x-api-key: ${activeKeyString}" \\
+  -H "Accept: application/json"`,
+        javascript: `// JavaScript — Fetch Storefront Inventory & Telemetry
+async function getStoreAnalytics() {
+  const response = await fetch("${analyticsApiUrl}", {
+    method: "GET",
+    headers: {
+      "x-api-key": "${activeKeyString}",
+      "Accept": "application/json"
+    }
+  });
+
+  const { inventory_summary, sales_summary, api_health } = await response.json();
+  console.log("Active Listings:", inventory_summary.active_listings);
+  console.log("Gross Revenue:", sales_summary.currency_symbol + sales_summary.gross_revenue.toLocaleString());
+  console.log("Gateway Latency:", api_health.average_latency_ms + "ms");
+}
+getStoreAnalytics();`,
+        python: `# Python 3 — Telemetry & Analytics
+import requests
+
+url = "${analyticsApiUrl}"
+headers = { "x-api-key": "${activeKeyString}" }
+response = requests.get(url, headers=headers)
+data = response.json()
+print("Inventory:", data.get("inventory_summary"))
+print("Sales:", data.get("sales_summary"))`
       };
     }
   };
@@ -439,75 +597,248 @@ print(response.json())`
         </div>
       )}
 
-      {/* ─── Credentials Management Card ─── */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-50 text-[#D9A73A] flex items-center justify-center border border-amber-200">
-                <Key className="w-4 h-4" />
+      {/* ─── Credentials Management Card / Access Lock ─── */}
+      {accessStatus === 'loading' ? (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center flex flex-col items-center justify-center gap-3">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#00BFA5]" />
+          <span className="text-xs text-slate-500 font-medium">Verifying API access permissions...</span>
+        </div>
+      ) : accessStatus === 'pending' ? (
+        <div className="bg-white rounded-3xl border border-amber-200 shadow-sm p-6 lg:p-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-100/40 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <Clock className="w-6 h-6 text-amber-600 animate-spin" />
               </div>
-              <h2 className="text-lg font-bold text-[#0A192F]">API Credentials & Keys</h2>
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  Under Review
+                </div>
+                <h2 className="text-xl font-extrabold text-[#0A192F]">Developer API Access: Pending Admin Approval</h2>
+                <p className="text-xs text-slate-600 max-w-xl leading-relaxed">
+                  Your application for developer API credentials has been received and is waiting for review by an Abu Mafhal platform administrator. Once approved, you will be able to generate and manage live and sandbox API keys immediately.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-slate-500">
+                  <span className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-xl">
+                    <strong>Submitted:</strong> {accessRequest?.requested_at ? new Date(accessRequest.requested_at).toLocaleDateString() : 'Today'}
+                  </span>
+                  {accessRequest?.note && (
+                    <span className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-xl italic">
+                      &quot;{accessRequest.note}&quot;
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-slate-500 mt-1.5">
-              Create <span className="text-emerald-700 font-bold">Live Production Keys</span> for commercial store integration or <span className="text-amber-700 font-bold">Sandbox Test Keys</span> for test catalog and simulated checkout.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => {
-                  setNewKeyType('live');
-                  setNewKeyName('Production Live Key');
-                }}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  newKeyType === 'live' ? 'bg-[#00BFA5] text-white shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
-                }`}
-              >
-                Live Key
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewKeyType('test');
-                  setNewKeyName('Sandbox Test Key');
-                }}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  newKeyType === 'test' ? 'bg-[#D9A73A] text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
-                }`}
-              >
-                Test Key (Sandbox)
-              </button>
+            <div className="flex flex-col items-center gap-2 px-5 py-4 bg-amber-50/70 border border-amber-200 rounded-2xl shrink-0">
+              <Lock className="w-5 h-5 text-amber-700" />
+              <span className="text-[11px] font-bold text-amber-900">Key Generation Locked</span>
+              <span className="text-[10px] text-amber-700 text-center">Unlocks upon admin approval</span>
             </div>
-
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="Key Name"
-              className="text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00BFA5]/20 focus:border-[#00BFA5] transition-all w-52 text-slate-800"
-            />
-            <button
-              onClick={generateNewKey}
-              disabled={generating}
-              className="px-4 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
-            >
-              {generating ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00BFA5]" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-[#D9A73A]" />
-                  <span>Generate Key</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
+      ) : accessStatus === 'rejected' ? (
+        <div className="bg-white rounded-3xl border border-rose-200 shadow-sm p-6 lg:p-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-rose-100/40 rounded-full blur-3xl pointer-events-none" />
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-6 h-6 text-rose-600" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold uppercase tracking-wider">
+                  Access Declined
+                </div>
+                <h2 className="text-xl font-extrabold text-[#0A192F]">Developer API Access: Declined</h2>
+                <p className="text-xs text-slate-600 max-w-xl leading-relaxed">
+                  Your previous developer API access request was declined by the administrator. Review the feedback below and submit an updated application.
+                </p>
+                {accessRequest?.admin_note && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-medium">
+                    <strong>Admin Note:</strong> {accessRequest.admin_note}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 space-y-3">
+              <label className="block text-xs font-bold text-[#0A192F]">Submit New Integration Application</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={requestNote}
+                  onChange={(e) => setRequestNote(e.target.value)}
+                  placeholder="Explain your updated use case (e.g., verified store with custom mobile app integration)..."
+                  className="flex-1 text-xs px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:border-[#00BFA5]"
+                />
+                <button
+                  onClick={submitAccessRequest}
+                  disabled={requestingAccess}
+                  className="px-5 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {requestingAccess ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                  Re-submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : accessStatus === 'not_requested' ? (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-[#00BFA5]/10 via-amber-50/30 to-transparent rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col lg:flex-row items-start justify-between gap-8">
+            <div className="space-y-3 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0A192F]/5 border border-[#0A192F]/15 text-[#0A192F] text-[11px] font-bold uppercase tracking-wider">
+                <Lock className="w-3.5 h-3.5 text-[#D9A73A]" />
+                Admin Approval Required
+              </div>
+              <h2 className="text-2xl font-extrabold text-[#0A192F]">Developer API Access is Locked</h2>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                To ensure store security, data privacy, and reliable gateway performance, developer API access requires administrative authorization. Once approved, you can generate production and sandbox credentials to connect your store with external mobile apps, websites, POS systems, or accounting software.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  <span className="font-bold text-[#0A192F] block mb-0.5">⚡ Fast Review</span>
+                  <span>Reviewed by admin within 24 hours</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  <span className="font-bold text-[#0A192F] block mb-0.5">🔒 Multi-Key Support</span>
+                  <span>Live production & sandbox test keys</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  <span className="font-bold text-[#0A192F] block mb-0.5">📦 Full Catalog API</span>
+                  <span>Products, Payments, Orders & Telemetry</span>
+                </div>
+              </div>
+
+              <div className="pt-3 space-y-2">
+                <label className="block text-xs font-bold text-[#0A192F]">Describe Your Integration / Use Case</label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    value={requestNote}
+                    onChange={(e) => setRequestNote(e.target.value)}
+                    placeholder="e.g. Custom mobile shopping app, ERP inventory sync, external WooCommerce store..."
+                    className="flex-1 text-xs px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:border-[#00BFA5]"
+                  />
+                  <button
+                    onClick={submitAccessRequest}
+                    disabled={requestingAccess}
+                    className="px-6 py-2.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md shadow-[#00BFA5]/20 disabled:opacity-50"
+                  >
+                    {requestingAccess ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Request API Access</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full lg:w-72 p-5 rounded-2xl bg-gradient-to-br from-[#0A192F] to-[#112240] text-white space-y-3 shadow-lg shrink-0">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#00BFA5]" />
+                <span className="text-xs font-bold">API Security Policy</span>
+              </div>
+              <ul className="text-[11px] text-slate-300 space-y-2">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-[#00BFA5]">✓</span> Rate limited to 120 calls/min
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-[#00BFA5]">✓</span> Scoped strictly to your vendor store
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-[#00BFA5]">✓</span> Admin instant-revocation protection
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-[#00BFA5]">✓</span> HMAC-SHA256 encrypted webhooks
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-[#D9A73A] flex items-center justify-center border border-amber-200">
+                  <Key className="w-4 h-4" />
+                </div>
+                <h2 className="text-lg font-bold text-[#0A192F]">API Credentials & Keys</h2>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold uppercase">
+                  <ShieldCheck className="w-3 h-3" /> Approved
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1.5">
+                Create <span className="text-emerald-700 font-bold">Live Production Keys</span> for commercial store integration or <span className="text-amber-700 font-bold">Sandbox Test Keys</span> for test catalog and simulated checkout.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewKeyType('live');
+                    setNewKeyName('Production Live Key');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    newKeyType === 'live' ? 'bg-[#00BFA5] text-white shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
+                  }`}
+                >
+                  Live Key
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewKeyType('test');
+                    setNewKeyName('Sandbox Test Key');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    newKeyType === 'test' ? 'bg-[#D9A73A] text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
+                  }`}
+                >
+                  Test Key (Sandbox)
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="Key Name"
+                className="text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00BFA5]/20 focus:border-[#00BFA5] transition-all w-52 text-slate-800"
+              />
+              <button
+                onClick={generateNewKey}
+                disabled={generating}
+                className="px-4 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
+              >
+                {generating ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00BFA5]" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-[#D9A73A]" />
+                    <span>Generate Key</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
 
         {/* Keys List */}
         <div className="mt-6">
@@ -611,6 +942,7 @@ print(response.json())`
           )}
         </div>
       </div>
+      )}
 
       {/* ─── Interactive Live Playground (Products, Payments, Orders) ─── */}
       <div id="playground" className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
@@ -628,10 +960,10 @@ print(response.json())`
           </div>
 
           {/* Endpoint Selector */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold overflow-x-auto">
             <button
               onClick={() => { setSelectedEndpoint('products'); setTestResult(null); }}
-              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                 selectedEndpoint === 'products' ? 'bg-[#00BFA5] text-white shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
               }`}
             >
@@ -639,7 +971,7 @@ print(response.json())`
             </button>
             <button
               onClick={() => { setSelectedEndpoint('payments'); setTestResult(null); }}
-              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                 selectedEndpoint === 'payments' ? 'bg-[#0A192F] text-[#D9A73A] shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
               }`}
             >
@@ -647,11 +979,19 @@ print(response.json())`
             </button>
             <button
               onClick={() => { setSelectedEndpoint('orders'); setTestResult(null); }}
-              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                 selectedEndpoint === 'orders' ? 'bg-[#0A192F] text-white shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
               }`}
             >
               📋 Orders API
+            </button>
+            <button
+              onClick={() => { setSelectedEndpoint('analytics'); setTestResult(null); }}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                selectedEndpoint === 'analytics' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:text-[#0A192F]'
+              }`}
+            >
+              📊 Telemetry & Analytics
             </button>
           </div>
         </div>
@@ -747,7 +1087,7 @@ print(response.json())`
                 />
               </div>
             </div>
-          ) : (
+          ) : selectedEndpoint === 'orders' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Orders Limit</label>
@@ -774,6 +1114,16 @@ print(response.json())`
                 </select>
               </div>
             </div>
+          ) : (
+            <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-purple-600" />
+                <span>Storefront Telemetry aggregates live active inventory, low-stock warnings, gross sales, and payment health.</span>
+              </div>
+              <span className="font-mono text-[11px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-md border border-purple-200">
+                GET /api/v1/analytics
+              </span>
+            </div>
           )}
         </div>
 
@@ -791,7 +1141,7 @@ print(response.json())`
             <>
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>
-                Send Live Request ({selectedEndpoint === 'products' ? 'GET Products' : selectedEndpoint === 'payments' ? 'POST Payment Session' : 'GET Orders'})
+                Send Live Request ({selectedEndpoint === 'products' ? 'GET Products' : selectedEndpoint === 'payments' ? 'POST Payment Session' : selectedEndpoint === 'orders' ? 'GET Orders' : 'GET Analytics Telemetry'})
               </span>
             </>
           )}
@@ -928,6 +1278,62 @@ print(response.json())`
               </div>
             )}
 
+            {/* Visual View for Analytics & Telemetry */}
+            {responseViewMode === 'visual' && selectedEndpoint === 'analytics' && testResult.body?.inventory_summary && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Gross Revenue</span>
+                    <span className="text-lg font-extrabold text-[#0A192F]">
+                      ₦{Number(testResult.body.sales_summary?.gross_revenue || 0).toLocaleString()}
+                    </span>
+                    <span className="text-[11px] text-emerald-600 font-semibold block mt-1">
+                      {testResult.body.sales_summary?.total_orders || 0} Total Orders
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Active Listings</span>
+                    <span className="text-lg font-extrabold text-[#00BFA5]">
+                      {testResult.body.inventory_summary?.active_listings || 0}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium block mt-1">
+                      {testResult.body.inventory_summary?.in_stock || 0} In Stock
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Low Stock Alert</span>
+                    <span className="text-lg font-extrabold text-amber-600">
+                      {testResult.body.inventory_summary?.low_stock_warning || 0}
+                    </span>
+                    <span className="text-[11px] text-amber-700 font-medium block mt-1">
+                      &lt; 5 Units Remaining
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Gateway Latency</span>
+                    <span className="text-lg font-extrabold text-indigo-600">
+                      {testResult.timeMs}ms
+                    </span>
+                    <span className="text-[11px] text-emerald-600 font-semibold block mt-1 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      {testResult.body.api_health?.gateway_status || 'OPERATIONAL'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between text-xs text-indigo-900">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-indigo-600" />
+                    <span>Vendor: <strong>{testResult.body.vendor?.name}</strong> • Mode: <strong className="uppercase">{testResult.body.mode}</strong></span>
+                  </div>
+                  <span className="text-indigo-600 font-mono text-[11px]">{new Date(testResult.body.timestamp).toLocaleTimeString()}</span>
+                </div>
+              </div>
+            )}
+
             {/* Raw JSON View */}
             {(responseViewMode === 'json' || !testResult.body?.data) && (
               <pre className="bg-[#0A192F] text-emerald-400 p-5 rounded-2xl text-xs font-mono overflow-x-auto max-h-96 border border-[#1e3a63] leading-relaxed shadow-inner">
@@ -1051,6 +1457,82 @@ print(response.json())`
           <code className="text-xs font-mono bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
             https://your-domain.com/webhooks/abumafhal
           </code>
+        </div>
+
+        {/* Interactive Webhook Ping & Test Simulator */}
+        <div className="mt-6 pt-6 border-t border-slate-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-purple-600" />
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#0A192F]">Interactive Webhook Simulator</h3>
+            </div>
+            <span className="text-[11px] text-slate-500">Simulate real-time POST events with cryptographic HMAC signatures</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Target Endpoint URL</label>
+              <input
+                type="text"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://webhook.site/..."
+                className="w-full text-xs font-mono px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Simulation Event</label>
+              <select
+                value={webhookEvent}
+                onChange={(e) => setWebhookEvent(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer"
+              >
+                <option value="order.created">order.created (New Order)</option>
+                <option value="payment.success">payment.success (Payment Verified)</option>
+                <option value="stock.low_alert">stock.low_alert (Low Stock Warning)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <button
+              onClick={simulateWebhookPing}
+              disabled={simulatingWebhook}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+            >
+              {simulatingWebhook ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Dispatching Event...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Test Webhook Ping</span>
+                </>
+              )}
+            </button>
+
+            <span className="text-[11px] text-slate-400">
+              Includes <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-600">x-abumafhal-signature</code> header
+            </span>
+          </div>
+
+          {webhookSimResult && (
+            <div className="p-4 rounded-2xl bg-slate-900 text-slate-200 text-xs font-mono space-y-2 border border-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${webhookSimResult.delivered ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <strong>Result:</strong> {webhookSimResult.statusText} ({webhookSimResult.status})
+                </span>
+                <span className="text-slate-400">Latency: {webhookSimResult.latencyMs}ms</span>
+              </div>
+              <p className="text-[11px] text-slate-400">Dispatched Payload:</p>
+              <pre className="text-emerald-400 overflow-x-auto text-[11px] leading-relaxed">
+                {JSON.stringify(webhookSimResult.payload, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
 

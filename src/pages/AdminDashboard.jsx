@@ -169,6 +169,14 @@ const MODULE_SECTIONS = [
         color: 'text-slate-600',
         badge: null
       },
+      { 
+        label: 'API Keys Management', 
+        subLabel: 'Vendor API Access & Approvals',
+        path: '/admin/api-keys', 
+        icon: ShieldCheck, 
+        color: 'text-teal-600',
+        badge: 'New'
+      },
     ]
   },
   {

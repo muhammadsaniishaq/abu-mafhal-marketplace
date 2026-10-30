@@ -32,8 +32,14 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
     const [testing, setTesting] = useState(false);
     const [activeLang, setActiveLang] = useState('curl');
     const [keyMode, setKeyMode] = useState('live'); // 'live' | 'test'
-    const [selectedApi, setSelectedApi] = useState('products'); // 'products' | 'payments' | 'orders'
+    const [selectedApi, setSelectedApi] = useState('products'); // 'products' | 'payments' | 'orders' | 'analytics'
     const [revealed, setRevealed] = useState({});
+
+    // API Access Approval Lock State
+    const [accessStatus, setAccessStatus] = useState('loading'); // 'approved' | 'pending' | 'rejected' | 'not_requested'
+    const [accessRequest, setAccessRequest] = useState(null);
+    const [requestNote, setRequestNote] = useState('');
+    const [requestingAccess, setRequestingAccess] = useState(false);
 
     // Playground parameters
     const [limit, setLimit] = useState('5');
@@ -45,6 +51,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
     const productsEndpoint = `${officialDomain}/api/v1/products`;
     const paymentsEndpoint = `${officialDomain}/api/v1/payments`;
     const ordersEndpoint = `${officialDomain}/api/v1/orders`;
+    const analyticsEndpoint = `${officialDomain}/api/v1/analytics`;
 
     useEffect(() => {
         if (vendorId) {
@@ -58,8 +65,11 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
             const res = await fetch(`${officialDomain}/api/v1/vendor-keys?vendor_id=${vendorId}`).catch(() => null);
             if (res && res.ok) {
                 const json = await res.json();
-                if (json?.status === 'success' && Array.isArray(json?.data)) {
-                    setApiKeys(json.data);
+                if (json?.status === 'success') {
+                    setAccessStatus(json.access_status || 'not_requested');
+                    setAccessRequest(json.access_request || null);
+                    const retrievedKeys = Array.isArray(json.keys) ? json.keys : Array.isArray(json.data) ? json.data : [];
+                    setApiKeys(retrievedKeys);
                     setLoading(false);
                     return;
                 }
@@ -82,8 +92,52 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
         }
     };
 
+    const submitAccessRequest = async () => {
+        if (!vendorId) return;
+        setRequestingAccess(true);
+
+        try {
+            const res = await fetch(`${officialDomain}/api/v1/vendor-keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    vendor_id: vendorId,
+                    action: 'request_access',
+                    note: requestNote.trim()
+                })
+            });
+
+            const result = await res.json();
+            if (res.ok && result.status === 'success') {
+                const msg = result.message || 'API access request submitted for admin review!';
+                if (Platform.OS === 'web') alert(msg);
+                else Alert.alert('Request Submitted', msg);
+                setAccessStatus('pending');
+                await loadApiKeys();
+            } else {
+                const errTxt = result.message || 'Failed to submit access request';
+                if (Platform.OS === 'web') alert(errTxt);
+                else Alert.alert('Request Failed', errTxt);
+            }
+        } catch (e) {
+            const errTxt = 'Network error while requesting API access';
+            if (Platform.OS === 'web') alert(errTxt);
+            else Alert.alert('Error', errTxt);
+        } finally {
+            setRequestingAccess(false);
+        }
+    };
+
     const generateNewKey = async () => {
         if (!vendorId) return;
+
+        if (accessStatus !== 'approved') {
+            const lockMsg = 'Developer API access is locked. You must submit a request and obtain admin approval before generating keys.';
+            if (Platform.OS === 'web') alert(lockMsg);
+            else Alert.alert('Access Locked', lockMsg);
+            return;
+        }
+
         setGenerating(true);
 
         try {
@@ -182,8 +236,12 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         customer_email: customerEmail || 'buyer@example.com'
                     })
                 });
-            } else {
+            } else if (selectedApi === 'orders') {
                 res = await fetch(`${ordersEndpoint}?limit=${limit}`, {
+                    headers: { 'x-api-key': activeKey, 'Accept': 'application/json' }
+                });
+            } else {
+                res = await fetch(analyticsEndpoint, {
                     headers: { 'x-api-key': activeKey, 'Accept': 'application/json' }
                 });
             }
@@ -206,17 +264,23 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
             ? `curl -X GET "${productsEndpoint}?limit=20&in_stock_only=true" \\\n  -H "x-api-key: ${activeKey}"`
             : selectedApi === 'payments'
             ? `curl -X POST "${paymentsEndpoint}" \\\n  -H "x-api-key: ${activeKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"amount": 5000, "customer_email": "buyer@example.com"}'`
-            : `curl -X GET "${ordersEndpoint}?limit=10" \\\n  -H "x-api-key: ${activeKey}"`,
+            : selectedApi === 'orders'
+            ? `curl -X GET "${ordersEndpoint}?limit=10" \\\n  -H "x-api-key: ${activeKey}"`
+            : `curl -X GET "${analyticsEndpoint}" \\\n  -H "x-api-key: ${activeKey}"`,
         javascript: selectedApi === 'products'
             ? `const res = await fetch("${productsEndpoint}?limit=20", {\n  headers: { "x-api-key": "${activeKey}" }\n});\nconst result = await res.json();\nconsole.log(result.data);`
             : selectedApi === 'payments'
             ? `const res = await fetch("${paymentsEndpoint}", {\n  method: "POST",\n  headers: { "x-api-key": "${activeKey}", "Content-Type": "application/json" },\n  body: JSON.stringify({ amount: 5000, customer_email: "buyer@example.com" })\n});\nconst { data } = await res.json();\nconsole.log(data.checkout_url);`
-            : `const res = await fetch("${ordersEndpoint}?limit=10", {\n  headers: { "x-api-key": "${activeKey}" }\n});\nconst { data } = await res.json();\nconsole.log(data);`,
+            : selectedApi === 'orders'
+            ? `const res = await fetch("${ordersEndpoint}?limit=10", {\n  headers: { "x-api-key": "${activeKey}" }\n});\nconst { data } = await res.json();\nconsole.log(data);`
+            : `const res = await fetch("${analyticsEndpoint}", {\n  headers: { "x-api-key": "${activeKey}" }\n});\nconst { inventory_summary, sales_summary } = await res.json();\nconsole.log(sales_summary);`,
         python: selectedApi === 'products'
             ? `import requests\nres = requests.get("${productsEndpoint}", headers={"x-api-key": "${activeKey}"})\nprint(res.json())`
             : selectedApi === 'payments'
             ? `import requests\npayload = {"amount": 5000, "customer_email": "buyer@example.com"}\nres = requests.post("${paymentsEndpoint}", headers={"x-api-key": "${activeKey}"}, json=payload)\nprint(res.json())`
-            : `import requests\nres = requests.get("${ordersEndpoint}?limit=10", headers={"x-api-key": "${activeKey}"})\nprint(res.json())`
+            : selectedApi === 'orders'
+            ? `import requests\nres = requests.get("${ordersEndpoint}?limit=10", headers={"x-api-key": "${activeKey}"})\nprint(res.json())`
+            : `import requests\nres = requests.get("${analyticsEndpoint}", headers={"x-api-key": "${activeKey}"})\nprint(res.json())`
     };
 
     return (
@@ -240,39 +304,131 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                     Integrate your storefront with Products, Orders, and Instant Payment Gateways directly via official APIs.
                 </Text>
 
-                {/* Key Type Selector: Live vs Test */}
-                <View style={styles.modeSelectorRow}>
-                    <TouchableOpacity
-                        onPress={() => setKeyMode('live')}
-                        style={[styles.modeBtn, keyMode === 'live' && styles.modeBtnActiveLive]}
-                    >
-                        <Ionicons name="radio-button-on" size={13} color={keyMode === 'live' ? '#FFFFFF' : '#10B981'} />
-                        <Text style={[styles.modeBtnText, keyMode === 'live' && styles.modeBtnTextActive]}>Live Keys</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setKeyMode('test')}
-                        style={[styles.modeBtn, keyMode === 'test' && styles.modeBtnActiveTest]}
-                    >
-                        <Ionicons name="flask-outline" size={13} color={keyMode === 'test' ? '#FFFFFF' : '#F59E0B'} />
-                        <Text style={[styles.modeBtnText, keyMode === 'test' && styles.modeBtnTextActive]}>Sandbox Test Keys</Text>
-                    </TouchableOpacity>
-                </View>
+                {accessStatus === 'loading' ? (
+                    <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={TEAL} />
+                        <Text style={{ fontSize: 11, color: SLATE_500, marginTop: 4 }}>Checking API permissions...</Text>
+                    </View>
+                ) : accessStatus === 'pending' ? (
+                    <View style={[styles.lockCard, styles.lockCardPending]}>
+                        <View style={styles.lockHeaderRow}>
+                            <Ionicons name="time-outline" size={20} color="#D97706" />
+                            <Text style={[styles.lockTitle, { color: '#B45309' }]}>Access Request Pending Review</Text>
+                        </View>
+                        <Text style={[styles.lockDesc, { color: '#92400E' }]}>
+                            Your developer API access application is currently being reviewed by an administrator. Key generation is locked until approved.
+                        </Text>
+                        {accessRequest?.note ? (
+                            <View style={styles.lockNoteBox}>
+                                <Text style={styles.lockNoteText}>&quot;{accessRequest.note}&quot;</Text>
+                            </View>
+                        ) : null}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="lock-closed" size={14} color="#D97706" />
+                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#B45309' }}>
+                                Awaiting Admin Approval
+                            </Text>
+                        </View>
+                    </View>
+                ) : accessStatus === 'rejected' ? (
+                    <View style={[styles.lockCard, styles.lockCardRejected]}>
+                        <View style={styles.lockHeaderRow}>
+                            <Ionicons name="close-circle-outline" size={20} color="#E11D48" />
+                            <Text style={[styles.lockTitle, { color: '#BE123C' }]}>Access Request Declined</Text>
+                        </View>
+                        <Text style={[styles.lockDesc, { color: '#9F1239' }]}>
+                            {accessRequest?.admin_note ? `Admin feedback: ${accessRequest.admin_note}` : 'Your request was not approved. Please provide more details about your integration use case.'}
+                        </Text>
+                        <TextInput
+                            value={requestNote}
+                            onChangeText={setRequestNote}
+                            placeholder="Explain your updated integration use case..."
+                            placeholderTextColor="#94A3B8"
+                            style={styles.lockInput}
+                        />
+                        <TouchableOpacity
+                            onPress={submitAccessRequest}
+                            disabled={requestingAccess}
+                            style={[styles.lockBtn, { backgroundColor: SLATE_900 }]}
+                        >
+                            {requestingAccess ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="paper-plane-outline" size={15} color="#FFFFFF" />
+                                    <Text style={styles.lockBtnText}>Re-apply for API Access</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                ) : accessStatus === 'not_requested' ? (
+                    <View style={styles.lockCard}>
+                        <View style={styles.lockHeaderRow}>
+                            <Ionicons name="lock-closed" size={20} color="#D9A73A" />
+                            <Text style={styles.lockTitle}>Developer API Access Locked</Text>
+                        </View>
+                        <Text style={styles.lockDesc}>
+                            In accordance with marketplace security policy, vendors must submit an integration request and receive admin approval before generating API keys.
+                        </Text>
+                        <TextInput
+                            value={requestNote}
+                            onChangeText={setRequestNote}
+                            placeholder="Intended use case (e.g., custom mobile app, ERP/POS sync)..."
+                            placeholderTextColor="#94A3B8"
+                            style={styles.lockInput}
+                        />
+                        <TouchableOpacity
+                            onPress={submitAccessRequest}
+                            disabled={requestingAccess}
+                            style={styles.lockBtn}
+                        >
+                            {requestingAccess ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="shield-checkmark-outline" size={15} color="#FFFFFF" />
+                                    <Text style={styles.lockBtnText}>Request Developer Access</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <>
+                        {/* Key Type Selector: Live vs Test */}
+                        <View style={styles.modeSelectorRow}>
+                            <TouchableOpacity
+                                onPress={() => setKeyMode('live')}
+                                style={[styles.modeBtn, keyMode === 'live' && styles.modeBtnActiveLive]}
+                            >
+                                <Ionicons name="radio-button-on" size={13} color={keyMode === 'live' ? '#FFFFFF' : '#10B981'} />
+                                <Text style={[styles.modeBtnText, keyMode === 'live' && styles.modeBtnTextActive]}>Live Keys</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setKeyMode('test')}
+                                style={[styles.modeBtn, keyMode === 'test' && styles.modeBtnActiveTest]}
+                            >
+                                <Ionicons name="flask-outline" size={13} color={keyMode === 'test' ? '#FFFFFF' : '#F59E0B'} />
+                                <Text style={[styles.modeBtnText, keyMode === 'test' && styles.modeBtnTextActive]}>Sandbox Test Keys</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                <TouchableOpacity
-                    onPress={generateNewKey}
-                    disabled={generating}
-                    style={styles.genBtn}
-                    activeOpacity={0.85}
-                >
-                    {generating ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                        <>
-                            <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                            <Text style={styles.genBtnText}>Generate New {keyMode.toUpperCase()} Key</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={generateNewKey}
+                            disabled={generating}
+                            style={styles.genBtn}
+                            activeOpacity={0.85}
+                        >
+                            {generating ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                                    <Text style={styles.genBtnText}>Generate New {keyMode.toUpperCase()} Key</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
 
             {/* Keys Management Card */}
@@ -364,32 +520,42 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                 </View>
 
                 {/* API Switcher */}
-                <View style={styles.apiSwitchRow}>
-                    <TouchableOpacity
-                        onPress={() => { setSelectedApi('products'); setTestResult(null); }}
-                        style={[styles.apiSwitchBtn, selectedApi === 'products' && styles.apiSwitchActiveTeal]}
-                    >
-                        <Text style={[styles.apiSwitchText, selectedApi === 'products' && styles.apiSwitchTextActive]}>
-                            📦 Products
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => { setSelectedApi('payments'); setTestResult(null); }}
-                        style={[styles.apiSwitchBtn, selectedApi === 'payments' && styles.apiSwitchActiveIndigo]}
-                    >
-                        <Text style={[styles.apiSwitchText, selectedApi === 'payments' && styles.apiSwitchTextActive]}>
-                            💳 Payments
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => { setSelectedApi('orders'); setTestResult(null); }}
-                        style={[styles.apiSwitchBtn, selectedApi === 'orders' && styles.apiSwitchActiveDark]}
-                    >
-                        <Text style={[styles.apiSwitchText, selectedApi === 'orders' && styles.apiSwitchTextActive]}>
-                            📋 Orders
-                        </Text>
-                    </TouchableOpacity>
-                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                    <View style={styles.apiSwitchRow}>
+                        <TouchableOpacity
+                            onPress={() => { setSelectedApi('products'); setTestResult(null); }}
+                            style={[styles.apiSwitchBtn, selectedApi === 'products' && styles.apiSwitchActiveTeal]}
+                        >
+                            <Text style={[styles.apiSwitchText, selectedApi === 'products' && styles.apiSwitchTextActive]}>
+                                📦 Products
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => { setSelectedApi('payments'); setTestResult(null); }}
+                            style={[styles.apiSwitchBtn, selectedApi === 'payments' && styles.apiSwitchActiveIndigo]}
+                        >
+                            <Text style={[styles.apiSwitchText, selectedApi === 'payments' && styles.apiSwitchTextActive]}>
+                                💳 Payments
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => { setSelectedApi('orders'); setTestResult(null); }}
+                            style={[styles.apiSwitchBtn, selectedApi === 'orders' && styles.apiSwitchActiveDark]}
+                        >
+                            <Text style={[styles.apiSwitchText, selectedApi === 'orders' && styles.apiSwitchTextActive]}>
+                                📋 Orders
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => { setSelectedApi('analytics'); setTestResult(null); }}
+                            style={[styles.apiSwitchBtn, selectedApi === 'analytics' && { backgroundColor: '#7C3AED' }]}
+                        >
+                            <Text style={[styles.apiSwitchText, selectedApi === 'analytics' && styles.apiSwitchTextActive]}>
+                                📊 Telemetry
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
 
                 {selectedApi === 'products' ? (
                     <View style={styles.filterRow}>
@@ -426,7 +592,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                             />
                         </View>
                     </View>
-                ) : (
+                ) : selectedApi === 'orders' ? (
                     <View style={styles.filterRow}>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.inputLabel}>Orders Limit</Text>
@@ -439,6 +605,15 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                             />
                         </View>
                     </View>
+                ) : (
+                    <View style={{ padding: 10, backgroundColor: '#F5F3FF', borderRadius: 10, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 11, color: '#6D28D9', fontWeight: 'bold' }}>
+                            📊 Real-Time Storefront Telemetry & Inventory Metrics
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#7C3AED', marginTop: 2 }}>
+                            Aggregates gross sales in ₦, active catalog count, and gateway latency.
+                        </Text>
+                    </View>
                 )}
 
                 <TouchableOpacity
@@ -447,7 +622,8 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                     style={[
                         styles.testBtn,
                         selectedApi === 'payments' && { backgroundColor: '#4F46E5' },
-                        selectedApi === 'orders' && { backgroundColor: SLATE_900 }
+                        selectedApi === 'orders' && { backgroundColor: SLATE_900 },
+                        selectedApi === 'analytics' && { backgroundColor: '#7C3AED' }
                     ]}
                     activeOpacity={0.8}
                 >
@@ -457,7 +633,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         <>
                             <Ionicons name="play" size={14} color="#FFFFFF" />
                             <Text style={styles.testBtnText}>
-                                Send Test Request ({selectedApi === 'products' ? 'GET Products' : selectedApi === 'payments' ? 'POST Payment Session' : 'GET Orders'})
+                                Send Test Request ({selectedApi === 'products' ? 'GET Products' : selectedApi === 'payments' ? 'POST Payment Session' : selectedApi === 'orders' ? 'GET Orders' : 'GET Analytics Telemetry'})
                             </Text>
                         </>
                     )}
@@ -507,6 +683,34 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                 </View>
                                 <Text style={{ fontSize: 11, color: '#047857' }}>Ref: {testResult.data.data.reference}</Text>
                                 <Text style={{ fontSize: 11, color: '#047857', fontWeight: 'bold' }}>Amount: ₦{Number(testResult.data.data.amount).toLocaleString()}</Text>
+                            </View>
+                        )}
+
+                        {/* Visual Preview for Analytics */}
+                        {selectedApi === 'analytics' && testResult.data?.inventory_summary && (
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <View>
+                                        <Text style={{ fontSize: 10, color: SLATE_500, fontWeight: 'bold' }}>GROSS REVENUE</Text>
+                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: SLATE_900 }}>
+                                            ₦{Number(testResult.data.sales_summary?.gross_revenue || 0).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 10, color: SLATE_500, fontWeight: 'bold' }}>ACTIVE LISTINGS</Text>
+                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: TEAL }}>
+                                            {testResult.data.inventory_summary?.active_listings || 0}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                                    <Text style={{ fontSize: 10, color: '#D97706', fontWeight: 'bold' }}>
+                                        ⚠️ {testResult.data.inventory_summary?.low_stock_warning || 0} Low Stock
+                                    </Text>
+                                    <Text style={{ fontSize: 10, color: '#059669', fontWeight: 'bold' }}>
+                                        ● {testResult.data.api_health?.gateway_status || 'OPERATIONAL'}
+                                    </Text>
+                                </View>
                             </View>
                         )}
 
@@ -1101,5 +1305,81 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: SLATE_600,
         flex: 1
+    },
+    lockCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2
+    },
+    lockCardPending: {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE68A'
+    },
+    lockCardRejected: {
+        backgroundColor: '#FFF1F2',
+        borderColor: '#FECDD3'
+    },
+    lockHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8
+    },
+    lockTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: SLATE_900
+    },
+    lockDesc: {
+        fontSize: 12,
+        color: SLATE_600,
+        lineHeight: 18,
+        marginBottom: 12
+    },
+    lockInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 12,
+        color: SLATE_900,
+        marginBottom: 10
+    },
+    lockBtn: {
+        backgroundColor: TEAL,
+        borderRadius: 10,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6
+    },
+    lockBtnText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: 'bold'
+    },
+    lockNoteBox: {
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        borderRadius: 8,
+        padding: 8,
+        marginBottom: 8
+    },
+    lockNoteText: {
+        fontSize: 11,
+        color: '#92400E',
+        fontStyle: 'italic'
     }
 });

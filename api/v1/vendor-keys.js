@@ -52,7 +52,7 @@ export default async function handler(req, res) {
         // Verify profile
         const { data: profile } = await supabase
             .from('profiles')
-            .select('id, business_name, full_name, email, role, avatar_url, custom_id')
+            .select('id, business_name, full_name, email, role, avatar_url, custom_id, api_access_approved')
             .eq('id', userId)
             .maybeSingle();
 
@@ -66,9 +66,33 @@ export default async function handler(req, res) {
 
         vendorProfile = profile;
 
-        // ─── GET: List Vendor Keys ──────────────────────────────────────────────
+        // ─── GET: List Vendor Keys & Access Status ──────────────────────────────
         if (req.method === 'GET') {
+            // Determine API access status
+            let accessStatus = profile.api_access_approved ? 'approved' : 'not_requested';
+            let accessRequest = null;
+
+            try {
+                const { data: reqRow } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'vendor_api_access_requests')
+                    .maybeSingle();
+
+                const requests = reqRow?.value?.requests || [];
+                const foundReq = requests.find(r => r.vendor_id === userId);
+                if (foundReq) {
+                    accessRequest = foundReq;
+                    accessStatus = foundReq.status; // 'approved' | 'pending' | 'rejected'
+                }
+            } catch (_) {}
+
+            if (profile.api_access_approved) {
+                accessStatus = 'approved';
+            }
+
             // First check vendor_api_keys table
+            let vendorKeys = [];
             try {
                 const { data: tableKeys } = await supabase
                     .from('vendor_api_keys')
@@ -77,38 +101,126 @@ export default async function handler(req, res) {
                     .order('created_at', { ascending: false });
 
                 if (tableKeys && tableKeys.length > 0) {
-                    return res.status(200).json({
-                        status: 'success',
-                        code: 200,
-                        keys: tableKeys,
-                        data: tableKeys
-                    });
+                    vendorKeys = tableKeys;
                 }
             } catch (_) {}
 
             // Fallback: check app_settings
-            const { data: settingRow } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('key', 'vendor_api_keys')
-                .maybeSingle();
+            if (vendorKeys.length === 0) {
+                const { data: settingRow } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'vendor_api_keys')
+                    .maybeSingle();
 
-            const allKeys = (settingRow?.value?.keys || []);
-            const vendorKeys = allKeys.filter(k => k.vendor_id === userId);
+                const allKeys = (settingRow?.value?.keys || []);
+                vendorKeys = allKeys.filter(k => k.vendor_id === userId);
+            }
 
             return res.status(200).json({
                 status: 'success',
                 code: 200,
+                access_status: accessStatus,
+                access_request: accessRequest,
                 keys: vendorKeys,
                 data: vendorKeys
             });
         }
 
-        // ─── POST: Generate / Create New API Key ─────────────────────────────────
+        // ─── POST: Submit API Access Request (action: 'request_access') ───────────
         if (req.method === 'POST') {
             let body = req.body || {};
             if (typeof body === 'string') {
                 try { body = JSON.parse(body); } catch (_) { body = {}; }
+            }
+
+            // Sub-action: vendor requesting API access approval
+            if (body.action === 'request_access') {
+                const requestNote = (body.note || '').trim();
+
+                const { data: existingRow } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'vendor_api_access_requests')
+                    .maybeSingle();
+
+                const requests = existingRow?.value?.requests || [];
+                const alreadyRequested = requests.find(r => r.vendor_id === userId);
+
+                if (alreadyRequested?.status === 'approved') {
+                    return res.status(200).json({
+                        status: 'success',
+                        code: 200,
+                        access_status: 'approved',
+                        message: 'Your API access is already approved. You can generate keys.'
+                    });
+                }
+
+                if (alreadyRequested?.status === 'pending') {
+                    return res.status(200).json({
+                        status: 'success',
+                        code: 200,
+                        access_status: 'pending',
+                        message: 'Your access request is already pending admin review.'
+                    });
+                }
+
+                const newRequest = {
+                    id: `req_${Date.now()}`,
+                    vendor_id: userId,
+                    vendor_name: vendorProfile.business_name || vendorProfile.full_name || 'Vendor',
+                    vendor_email: vendorProfile.email || '',
+                    status: 'pending',
+                    note: requestNote,
+                    requested_at: new Date().toISOString(),
+                    reviewed_at: null,
+                    admin_note: null
+                };
+
+                const updatedRequests = requests.filter(r => r.vendor_id !== userId);
+                updatedRequests.unshift(newRequest);
+
+                await supabase.from('app_settings').upsert({
+                    key: 'vendor_api_access_requests',
+                    value: { requests: updatedRequests },
+                    description: 'Vendor API Access Approval Queue',
+                    updated_at: new Date().toISOString()
+                });
+
+                return res.status(201).json({
+                    status: 'success',
+                    code: 201,
+                    access_status: 'pending',
+                    message: 'API access request submitted. An admin will review within 24 hours.'
+                });
+            }
+
+            // ─── Check access approval before key generation ────────────────────
+            // Check profile flag first (fast path)
+            let accessApproved = vendorProfile.api_access_approved === true;
+
+            // Check app_settings approval queue (resilient fallback)
+            if (!accessApproved) {
+                try {
+                    const { data: reqRow } = await supabase
+                        .from('app_settings')
+                        .select('value')
+                        .eq('key', 'vendor_api_access_requests')
+                        .maybeSingle();
+
+                    const requests = reqRow?.value?.requests || [];
+                    const vendorReq = requests.find(r => r.vendor_id === userId);
+                    accessApproved = vendorReq?.status === 'approved';
+                } catch (_) {}
+            }
+
+            if (!accessApproved) {
+                return res.status(403).json({
+                    status: 'error',
+                    code: 403,
+                    access_status: 'not_approved',
+                    message: 'API access not approved. Please request access and await admin approval before generating keys.'
+                });
             }
 
             const keyName = (body.key_name || 'Production Storefront Key').trim();
