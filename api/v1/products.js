@@ -206,7 +206,13 @@ export default async function handler(req, res) {
 
         // Security / Scope filter: If key is vendor-scoped, vendor sees their own products by default,
         // or can query specifically if permitted.
-        if (authResult.vendor_id && authResult.scope === 'vendor_scoped') {
+        // In TEST mode: If vendor has no products uploaded yet, let them view the active marketplace test catalog
+        if (authResult.is_test) {
+            // Test keys have access to test sandbox products across the marketplace
+            if (vendor_id) {
+                query = query.eq('vendor_id', vendor_id);
+            }
+        } else if (authResult.vendor_id && authResult.scope === 'vendor_scoped') {
             query = query.eq('vendor_id', authResult.vendor_id);
         } else if (vendor_id) {
             query = query.eq('vendor_id', vendor_id);
@@ -325,10 +331,12 @@ export default async function handler(req, res) {
         return res.status(200).json({
             status: 'success',
             code: 200,
+            mode: authResult.is_test ? 'test' : 'live',
             authenticated_as: {
                 vendor_id: authResult.vendor_id,
                 vendor_name: authResult.vendor_name,
-                key_name: authResult.key_name
+                key_name: authResult.key_name,
+                key_type: authResult.key_type || (authResult.is_test ? 'test' : 'live')
             },
             pagination: {
                 total_products: totalCount || 0,

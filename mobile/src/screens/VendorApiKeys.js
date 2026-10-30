@@ -31,8 +31,8 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
     const [testResult, setTestResult] = useState(null);
     const [testing, setTesting] = useState(false);
     const [activeLang, setActiveLang] = useState('curl');
-    const [keyMode, setKeyMode] = useState('live'); // 'live' or 'test'
-    const [selectedApi, setSelectedApi] = useState('products'); // 'products' or 'payments'
+    const [keyMode, setKeyMode] = useState('live'); // 'live' | 'test'
+    const [selectedApi, setSelectedApi] = useState('products'); // 'products' | 'payments' | 'orders'
     const [revealed, setRevealed] = useState({});
 
     // Playground parameters
@@ -44,6 +44,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
     const officialDomain = 'https://www.abumafhal.com';
     const productsEndpoint = `${officialDomain}/api/v1/products`;
     const paymentsEndpoint = `${officialDomain}/api/v1/payments`;
+    const ordersEndpoint = `${officialDomain}/api/v1/orders`;
 
     useEffect(() => {
         if (vendorId) {
@@ -98,24 +99,24 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
 
             const result = await res.json();
             if (res.ok && result.status === 'success') {
-                const msg = `Sabon ${keyMode.toUpperCase()} Key ya hadu cikin nasara a abumafhal.com!`;
+                const msg = `Successfully created ${keyMode.toUpperCase()} API key for abumafhal.com!`;
                 if (Platform.OS === 'web') alert(msg);
-                else Alert.alert('Nasarar Kirkira', msg);
+                else Alert.alert('Key Generated', msg);
                 await loadApiKeys();
             } else {
-                throw new Error(result.message || 'Matsala wajen kirkirar key');
+                throw new Error(result.message || 'Key generation failed');
             }
         } catch (err) {
-            const errTxt = err.message || 'Kuskure ya faru';
+            const errTxt = err.message || 'Error occurred';
             if (Platform.OS === 'web') alert(errTxt);
-            else Alert.alert('Kuskure', errTxt);
+            else Alert.alert('Error', errTxt);
         } finally {
             setGenerating(false);
         }
     };
 
     const revokeKey = async (keyId) => {
-        const confirmMsg = 'Shin kana da tabbacin kana son goge wannan API Key din?';
+        const confirmMsg = 'Are you sure you want to revoke this API key?';
         const doRevoke = async () => {
             try {
                 const res = await fetch(`${officialDomain}/api/v1/vendor-keys`, {
@@ -125,8 +126,8 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                 });
                 if (res.ok) {
                     setApiKeys(prev => prev.filter(k => k.id !== keyId));
-                    if (Platform.OS === 'web') alert('An goge API Key cikin nasara');
-                    else Alert.alert('An Goge', 'API Key ya goge');
+                    if (Platform.OS === 'web') alert('API Key revoked successfully');
+                    else Alert.alert('Success', 'API Key revoked');
                 }
             } catch (e) {
                 console.error(e);
@@ -136,9 +137,9 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
         if (Platform.OS === 'web') {
             if (window.confirm(confirmMsg)) doRevoke();
         } else {
-            Alert.alert('Goge API Key', confirmMsg, [
-                { text: 'A fasa', style: 'cancel' },
-                { text: 'Goge', style: 'destructive', onPress: doRevoke }
+            Alert.alert('Revoke Key', confirmMsg, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Revoke', style: 'destructive', onPress: doRevoke }
             ]);
         }
     };
@@ -159,7 +160,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
         setRevealed(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    const activeKey = apiKeys.find(k => k.is_active !== false)?.api_key || 'abumafhal_live_YOUR_KEY';
+    const activeKey = apiKeys.find(k => k.is_active !== false)?.api_key || 'abumafhal_test_sandbox_verified_key';
 
     const testEndpointLive = async () => {
         setTesting(true);
@@ -172,7 +173,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                 res = await fetch(`${productsEndpoint}?limit=${limit}&in_stock_only=true`, {
                     headers: { 'x-api-key': activeKey, 'Accept': 'application/json' }
                 });
-            } else {
+            } else if (selectedApi === 'payments') {
                 res = await fetch(paymentsEndpoint, {
                     method: 'POST',
                     headers: { 'x-api-key': activeKey, 'Content-Type': 'application/json' },
@@ -180,6 +181,10 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         amount: Number(paymentAmount) || 5000,
                         customer_email: customerEmail || 'buyer@example.com'
                     })
+                });
+            } else {
+                res = await fetch(`${ordersEndpoint}?limit=${limit}`, {
+                    headers: { 'x-api-key': activeKey, 'Accept': 'application/json' }
                 });
             }
             const elapsed = Date.now() - start;
@@ -199,13 +204,19 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
     const codeSamples = {
         curl: selectedApi === 'products'
             ? `curl -X GET "${productsEndpoint}?limit=20&in_stock_only=true" \\\n  -H "x-api-key: ${activeKey}"`
-            : `curl -X POST "${paymentsEndpoint}" \\\n  -H "x-api-key: ${activeKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"amount": 5000, "customer_email": "buyer@example.com"}'`,
+            : selectedApi === 'payments'
+            ? `curl -X POST "${paymentsEndpoint}" \\\n  -H "x-api-key: ${activeKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"amount": 5000, "customer_email": "buyer@example.com"}'`
+            : `curl -X GET "${ordersEndpoint}?limit=10" \\\n  -H "x-api-key: ${activeKey}"`,
         javascript: selectedApi === 'products'
             ? `const res = await fetch("${productsEndpoint}?limit=20", {\n  headers: { "x-api-key": "${activeKey}" }\n});\nconst result = await res.json();\nconsole.log(result.data);`
-            : `const res = await fetch("${paymentsEndpoint}", {\n  method: "POST",\n  headers: { "x-api-key": "${activeKey}", "Content-Type": "application/json" },\n  body: JSON.stringify({ amount: 5000, customer_email: "buyer@example.com" })\n});\nconst { data } = await res.json();\nconsole.log("Pay URL:", data.checkout_url);`,
+            : selectedApi === 'payments'
+            ? `const res = await fetch("${paymentsEndpoint}", {\n  method: "POST",\n  headers: { "x-api-key": "${activeKey}", "Content-Type": "application/json" },\n  body: JSON.stringify({ amount: 5000, customer_email: "buyer@example.com" })\n});\nconst { data } = await res.json();\nconsole.log(data.checkout_url);`
+            : `const res = await fetch("${ordersEndpoint}?limit=10", {\n  headers: { "x-api-key": "${activeKey}" }\n});\nconst { data } = await res.json();\nconsole.log(data);`,
         python: selectedApi === 'products'
             ? `import requests\nres = requests.get("${productsEndpoint}", headers={"x-api-key": "${activeKey}"})\nprint(res.json())`
-            : `import requests\npayload = {"amount": 5000, "customer_email": "buyer@example.com"}\nres = requests.post("${paymentsEndpoint}", headers={"x-api-key": "${activeKey}"}, json=payload)\nprint(res.json())`
+            : selectedApi === 'payments'
+            ? `import requests\npayload = {"amount": 5000, "customer_email": "buyer@example.com"}\nres = requests.post("${paymentsEndpoint}", headers={"x-api-key": "${activeKey}"}, json=payload)\nprint(res.json())`
+            : `import requests\nres = requests.get("${ordersEndpoint}?limit=10", headers={"x-api-key": "${activeKey}"})\nprint(res.json())`
     };
 
     return (
@@ -224,9 +235,9 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                     </View>
                 </View>
 
-                <Text style={styles.title}>Developer API & Payments</Text>
+                <Text style={styles.title}>Developer API & Gateways</Text>
                 <Text style={styles.subTitle}>
-                    Kira kayan shago (Products, Price, Images, Stock) da karɓar kuɗin ciniki (Payment Gateway) kai tsaye.
+                    Integrate your storefront with Products, Orders, and Instant Payment Gateways directly via official APIs.
                 </Text>
 
                 {/* Key Type Selector: Live vs Test */}
@@ -243,7 +254,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         style={[styles.modeBtn, keyMode === 'test' && styles.modeBtnActiveTest]}
                     >
                         <Ionicons name="flask-outline" size={13} color={keyMode === 'test' ? '#FFFFFF' : '#F59E0B'} />
-                        <Text style={[styles.modeBtnText, keyMode === 'test' && styles.modeBtnTextActive]}>Test Keys (Sandbox)</Text>
+                        <Text style={[styles.modeBtnText, keyMode === 'test' && styles.modeBtnTextActive]}>Sandbox Test Keys</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -258,7 +269,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                     ) : (
                         <>
                             <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                            <Text style={styles.genBtnText}>Samar da Sabon {keyMode.toUpperCase()} Key</Text>
+                            <Text style={styles.genBtnText}>Generate New {keyMode.toUpperCase()} Key</Text>
                         </>
                     )}
                 </TouchableOpacity>
@@ -268,19 +279,19 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <Ionicons name="key-outline" size={18} color="#0D9488" />
-                    <Text style={styles.cardTitle}>API Keys Dinka</Text>
+                    <Text style={styles.cardTitle}>API Credentials</Text>
                 </View>
 
                 {loading ? (
                     <View style={styles.loadingBox}>
                         <ActivityIndicator size="small" color={TEAL} />
-                        <Text style={styles.loadingTxt}>Ana duba keys...</Text>
+                        <Text style={styles.loadingTxt}>Loading credentials...</Text>
                     </View>
                 ) : apiKeys.length === 0 ? (
                     <View style={styles.emptyBox}>
                         <Ionicons name="key-outline" size={32} color="#94A3B8" />
-                        <Text style={styles.emptyTitle}>Baka da API Key a halin yanzu</Text>
-                        <Text style={styles.emptySub}>Danna maballin &quot;Samar da Sabon Key&quot; a sama don samun key.</Text>
+                        <Text style={styles.emptyTitle}>No API Keys Found</Text>
+                        <Text style={styles.emptySub}>Click &quot;Generate New Key&quot; above to create a key.</Text>
                     </View>
                 ) : (
                     apiKeys.map(k => {
@@ -320,7 +331,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                                 color="#0D9488"
                                             />
                                             <Text style={styles.copyPillText}>
-                                                {copiedKey === k.api_key ? "An Kwafa" : "Kwafa"}
+                                                {copiedKey === k.api_key ? "Copied" : "Copy"}
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
@@ -328,7 +339,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
 
                                 <View style={styles.keyFooterRow}>
                                     <Text style={styles.keyMeta}>
-                                        Kira: <Text style={{ fontWeight: 'bold', color: SLATE_800 }}>{k.total_requests || 0}</Text>
+                                        Requests: <Text style={{ fontWeight: 'bold', color: SLATE_800 }}>{k.total_requests || 0}</Text>
                                     </Text>
                                     <TouchableOpacity
                                         onPress={() => revokeKey(k.id)}
@@ -336,7 +347,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                         activeOpacity={0.7}
                                     >
                                         <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                                        <Text style={styles.revokeText}>Goge</Text>
+                                        <Text style={styles.revokeText}>Revoke</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -345,11 +356,11 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                 )}
             </View>
 
-            {/* Interactive Playground (Products vs Payments) */}
+            {/* Interactive Playground (Products vs Payments vs Orders) */}
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <Ionicons name="terminal-outline" size={18} color="#0D9488" />
-                    <Text style={styles.cardTitle}>Gwajin API Live (Playground)</Text>
+                    <Text style={styles.cardTitle}>Live Playground</Text>
                 </View>
 
                 {/* API Switcher */}
@@ -359,7 +370,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         style={[styles.apiSwitchBtn, selectedApi === 'products' && styles.apiSwitchActiveTeal]}
                     >
                         <Text style={[styles.apiSwitchText, selectedApi === 'products' && styles.apiSwitchTextActive]}>
-                            📦 Products API
+                            📦 Products
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -367,7 +378,15 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         style={[styles.apiSwitchBtn, selectedApi === 'payments' && styles.apiSwitchActiveIndigo]}
                     >
                         <Text style={[styles.apiSwitchText, selectedApi === 'payments' && styles.apiSwitchTextActive]}>
-                            💳 Payments API
+                            💳 Payments
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => { setSelectedApi('orders'); setTestResult(null); }}
+                        style={[styles.apiSwitchBtn, selectedApi === 'orders' && styles.apiSwitchActiveDark]}
+                    >
+                        <Text style={[styles.apiSwitchText, selectedApi === 'orders' && styles.apiSwitchTextActive]}>
+                            📋 Orders
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -375,7 +394,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                 {selectedApi === 'products' ? (
                     <View style={styles.filterRow}>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.inputLabel}>Adadi (Limit)</Text>
+                            <Text style={styles.inputLabel}>Limit</Text>
                             <TextInput
                                 value={limit}
                                 onChangeText={setLimit}
@@ -385,7 +404,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                             />
                         </View>
                     </View>
-                ) : (
+                ) : selectedApi === 'payments' ? (
                     <View style={styles.filterRow}>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.inputLabel}>Amount (₦)</Text>
@@ -407,12 +426,29 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                             />
                         </View>
                     </View>
+                ) : (
+                    <View style={styles.filterRow}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.inputLabel}>Orders Limit</Text>
+                            <TextInput
+                                value={limit}
+                                onChangeText={setLimit}
+                                keyboardType="numeric"
+                                style={styles.input}
+                                placeholder="5"
+                            />
+                        </View>
+                    </View>
                 )}
 
                 <TouchableOpacity
                     onPress={testEndpointLive}
                     disabled={testing}
-                    style={[styles.testBtn, selectedApi === 'payments' && { backgroundColor: '#4F46E5' }]}
+                    style={[
+                        styles.testBtn,
+                        selectedApi === 'payments' && { backgroundColor: '#4F46E5' },
+                        selectedApi === 'orders' && { backgroundColor: SLATE_900 }
+                    ]}
                     activeOpacity={0.8}
                 >
                     {testing ? (
@@ -421,7 +457,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         <>
                             <Ionicons name="play" size={14} color="#FFFFFF" />
                             <Text style={styles.testBtnText}>
-                                Tura Gwajin Request ({selectedApi === 'products' ? 'GET Products' : 'POST Create Payment'})
+                                Send Test Request ({selectedApi === 'products' ? 'GET Products' : selectedApi === 'payments' ? 'POST Payment Session' : 'GET Orders'})
                             </Text>
                         </>
                     )}
@@ -434,7 +470,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                 HTTP {testResult.status} OK • {testResult.time}ms
                             </Text>
                             <TouchableOpacity onPress={() => copyKeyText(JSON.stringify(testResult.data, null, 2))}>
-                                <Text style={styles.jsonCopy}>Kwafi JSON</Text>
+                                <Text style={styles.jsonCopy}>Copy JSON</Text>
                             </TouchableOpacity>
                         </View>
                         <ScrollView horizontal style={{ maxHeight: 220 }}>
@@ -444,11 +480,11 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                 )}
             </View>
 
-            {/* Code Examples */}
+            {/* Code Examples in English */}
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <Ionicons name="code-slash-outline" size={18} color="#4F46E5" />
-                    <Text style={styles.cardTitle}>Misalan Code na Haɗawa</Text>
+                    <Text style={styles.cardTitle}>Code Integration Samples</Text>
                 </View>
 
                 <View style={styles.langTabsRow}>
@@ -474,7 +510,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                         style={styles.snippetCopy}
                     >
                         <Ionicons name="copy-outline" size={13} color="#0D9488" />
-                        <Text style={styles.snippetCopyText}>Kwafi Code</Text>
+                        <Text style={styles.snippetCopyText}>Copy Code</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -623,14 +659,9 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: SLATE_900
     },
-    cardDesc: {
-        fontSize: 12,
-        color: SLATE_500,
-        marginBottom: 12
-    },
     apiSwitchRow: {
         flexDirection: 'row',
-        gap: 8,
+        gap: 6,
         backgroundColor: '#F1F5F9',
         padding: 4,
         borderRadius: 12,
@@ -648,8 +679,11 @@ const styles = StyleSheet.create({
     apiSwitchActiveIndigo: {
         backgroundColor: '#4F46E5'
     },
+    apiSwitchActiveDark: {
+        backgroundColor: SLATE_900
+    },
     apiSwitchText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 'bold',
         color: SLATE_600
     },
