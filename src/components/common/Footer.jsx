@@ -1,136 +1,194 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, MessageCircle, Send, ShieldCheck, Zap } from 'lucide-react';
+import {
+  Mail, Phone, MapPin, Facebook, Instagram, Twitter, MessageCircle,
+  Send, ShieldCheck, Zap, Lock, Truck, RefreshCw, CheckCircle2,
+  Download, ArrowRight, ExternalLink, Award
+} from 'lucide-react';
 
-const Footer = () => {
+export default function Footer() {
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [subscribed, setSubscribed] = useState(false);
+
+  const handleSubscribe = (e) => {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) return;
+    setSubscribed(true);
+    setTimeout(() => {
+      setSubscribed(false);
+      setNewsletterEmail('');
+    }, 4000);
+  };
+
   return (
-    <footer className="bg-white border-t border-slate-100">
-      {/* Top separator */}
-      <div className="h-px bg-gradient-to-r from-transparent via-blue-600/30 to-transparent" />
-
-      <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-          {/* Brand */}
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">
-                A
-              </div>
-              <span className="text-xl font-black text-slate-900 tracking-tighter">ABU MAFHAL</span>
+    <footer className="bg-[#0A192F] text-slate-300 font-sans border-t border-slate-800">
+      {/* ─── 1. TRUST BADGES STRIP ─── */}
+      <div className="border-b border-slate-800/80 bg-[#112240]/60 py-6 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00BFA5]/10 border border-[#00BFA5]/20 flex items-center justify-center text-[#00BFA5] shrink-0">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <p className="text-slate-500 leading-relaxed font-medium text-sm">
-              Nigeria's premier multi-vendor marketplace — connecting elite sellers with a global audience through AI-driven logistics.
+            <div>
+              <p className="text-xs font-bold text-white">100% Escrow Vault</p>
+              <p className="text-[11px] text-slate-400">Funds released upon inspection</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#D9A73A] shrink-0">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">36 States Doorstep</p>
+              <p className="text-[11px] text-slate-400">Live GPS tracking</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+              <RefreshCw className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">7-Day Free Returns</p>
+              <p className="text-[11px] text-slate-400">Dispute resolution guarantee</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">CBN-Licensed Gateways</p>
+              <p className="text-[11px] text-slate-400">Paystack & Flutterwave 256-bit</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 2. MAIN FOOTER CONTENT ─── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-8">
+          {/* Brand Info */}
+          <div className="lg:col-span-2 space-y-4">
+            <Link to="/" className="flex items-center gap-2.5">
+              <img src="/logo.png" alt="Abu Mafhal" className="w-9 h-9 object-contain rounded-xl" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <div>
+                <span className="text-xl font-black text-white tracking-tight">ABU MAFHAL</span>
+                <span className="block text-[10px] text-[#00BFA5] font-bold uppercase tracking-widest">Marketplace</span>
+              </div>
+            </Link>
+
+            <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
+              Nigeria&apos;s premier multi-vendor marketplace connecting verified merchants across 36 states with buyers via bank-grade escrow protection and instant logistics.
             </p>
-            <div className="flex gap-3">
-              {[Facebook, Instagram, Twitter, MessageCircle].map((Icon, i) => (
+
+            <div className="pt-2 space-y-2 text-xs">
+              <div className="flex items-center gap-2.5 text-slate-400">
+                <MapPin className="w-4 h-4 text-[#00BFA5] shrink-0" />
+                <span>Goni Aji Street, Gashua, Yobe State, Nigeria</span>
+              </div>
+              <div className="flex items-center gap-2.5 text-slate-400">
+                <Phone className="w-4 h-4 text-[#00BFA5] shrink-0" />
+                <a href="tel:+2348145853539" className="hover:text-white transition-colors">+234 814 585 3539</a>
+              </div>
+              <div className="flex items-center gap-2.5 text-slate-400">
+                <Mail className="w-4 h-4 text-[#00BFA5] shrink-0" />
+                <a href="mailto:support@abumafhal.com" className="hover:text-white transition-colors">support@abumafhal.com</a>
+              </div>
+            </div>
+
+            {/* Social Links */}
+            <div className="flex items-center gap-2.5 pt-2">
+              {[
+                { icon: Facebook, href: '#' },
+                { icon: Instagram, href: '#' },
+                { icon: Twitter, href: '#' },
+                { icon: MessageCircle, href: 'https://wa.me/2348145853539' }
+              ].map((s, i) => (
                 <a
                   key={i}
-                  href="#"
-                  className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all"
+                  href={s.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-[#00BFA5] hover:text-white text-slate-400 flex items-center justify-center transition-colors"
                 >
-                  <Icon className="w-4 h-4" />
+                  <s.icon className="w-4 h-4" />
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Explore */}
-          <div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-8">Explore</h3>
-            <ul className="space-y-4">
-              {[
-                { label: 'Shop Elite', path: '/shop' },
-                { label: 'Become a Vendor', path: '/vendor-application' },
-                { label: 'Global Logistics', path: '/shop' },
-                { label: 'AI Support', path: '/contact' },
-              ].map((link, i) => (
-                <li key={i}>
-                  <Link
-                    to={link.path}
-                    className="text-sm text-slate-500 hover:text-slate-900 transition-colors font-bold flex items-center gap-2 group"
-                  >
-                    <span className="h-px w-0 group-hover:w-4 bg-blue-600 transition-all rounded-full" />
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+          {/* Quick Links */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">Marketplace</h4>
+            <ul className="space-y-2 text-xs">
+              <li><Link to="/shop" className="hover:text-[#00BFA5] transition-colors">All Products</Link></li>
+              <li><Link to="/stores" className="hover:text-[#00BFA5] transition-colors">Verified Merchant Stores</Link></li>
+              <li><Link to="/pay-small-small" className="hover:text-[#D9A73A] transition-colors text-amber-400 font-semibold">Pay Small Small (PSS)</Link></li>
+              <li><Link to="/track-order" className="hover:text-[#00BFA5] transition-colors">Track Consignment</Link></li>
+              <li><Link to="/compare" className="hover:text-[#00BFA5] transition-colors">Compare Products</Link></li>
+              <li><Link to="/cart" className="hover:text-[#00BFA5] transition-colors">Shopping Cart</Link></li>
             </ul>
           </div>
 
-          {/* Company */}
-          <div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-8">Company</h3>
-            <ul className="space-y-4">
-              {[
-                { label: 'About the Founder', path: '/about' },
-                { label: 'Privacy Policy', path: '/privacy' },
-                { label: 'Terms of Service', path: '/terms' },
-                { label: 'Help Center', path: '/contact' },
-              ].map((link, i) => (
-                <li key={i}>
-                  <Link
-                    to={link.path}
-                    className="text-sm text-slate-500 hover:text-slate-900 transition-colors font-bold flex items-center gap-2 group"
-                  >
-                    <span className="h-px w-0 group-hover:w-4 bg-blue-600 transition-all rounded-full" />
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+          {/* Trust & Policy */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">Trust & Security</h4>
+            <ul className="space-y-2 text-xs">
+              <li><Link to="/terms" className="hover:text-[#00BFA5] transition-colors">100% Escrow Protocol</Link></li>
+              <li><Link to="/privacy" className="hover:text-[#00BFA5] transition-colors">Privacy & Data Protection</Link></li>
+              <li><Link to="/terms" className="hover:text-[#00BFA5] transition-colors">Terms of Service</Link></li>
+              <li><Link to="/vendor-application" className="hover:text-[#00BFA5] transition-colors text-emerald-400 font-bold">Become a Seller</Link></li>
+              <li><Link to="/contact" className="hover:text-[#00BFA5] transition-colors">Customer Help Desk</Link></li>
             </ul>
           </div>
 
-          {/* Contact */}
-          <div className="space-y-6">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600">Contact</h3>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 text-slate-500">
-                <Mail className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <span className="text-sm font-medium">support@abumafhal.com</span>
-              </div>
-              <div className="flex items-start gap-3 text-slate-500">
-                <Phone className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <span className="text-sm font-medium">+234 814 585 3539</span>
-              </div>
-              <div className="flex items-start gap-3 text-slate-500">
-                <MapPin className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <span className="text-sm font-medium">Goni Aji Street, Gashua, Yobe State, Nigeria</span>
-              </div>
-            </div>
-            {/* Security badge */}
-            <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl p-4">
-              <ShieldCheck className="text-blue-600 w-7 h-7 flex-shrink-0" />
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-blue-600">Secure Platform</p>
-                <p className="text-xs font-bold text-slate-500 mt-0.5">SSL 256-bit Encrypted</p>
-              </div>
-            </div>
+          {/* Newsletter Box */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">Get ₦2,500 Voucher</h4>
+            <p className="text-xs text-slate-400">
+              Subscribe to weekly deals, flash sales, and new arrivals directly in your inbox.
+            </p>
+
+            <form onSubmit={handleSubscribe} className="space-y-2">
+              <input
+                type="email"
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Enter your email address..."
+                className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:border-[#00BFA5]"
+                required
+              />
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+              >
+                {subscribed ? '✓ Subscribed!' : 'Subscribe'}
+              </button>
+            </form>
+
+            {subscribed && (
+              <p className="text-[11px] text-emerald-400 font-bold">
+                🎉 Welcome! Use code <span className="underline">ABUMAFHAL2500</span> at checkout.
+              </p>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Bottom bar */}
-        <div className="mt-16 pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="space-y-1 text-center md:text-left">
-            <p className="text-sm font-bold text-slate-400">
-              © {new Date().getFullYear()} Abu Mafhal Marketplace. Built for the Elite.
-            </p>
-            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-              Lagos · Kano · Abuja · Worldwide
-            </p>
-          </div>
-          <div className="flex items-center gap-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="flex items-center gap-2 hover:text-blue-600 transition-colors"
-            >
-              <Zap className="w-3 h-3 text-yellow-500" /> Back to Top
-            </button>
-            <span className="text-slate-200">V 2.1.2-ELITE</span>
+      {/* ─── 3. COPYRIGHT & DISCLAIMER ─── */}
+      <div className="border-t border-slate-800/80 py-6 px-4 sm:px-6 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p>© {new Date().getFullYear()} Abu Mafhal Marketplace Ltd. RC-1849204. All rights reserved.</p>
+          <div className="flex items-center gap-4 text-[11px]">
+            <span>Payments powered by Paystack & Flutterwave</span>
+            <span>•</span>
+            <span className="text-[#00BFA5] font-bold">abumafhal.com</span>
           </div>
         </div>
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}

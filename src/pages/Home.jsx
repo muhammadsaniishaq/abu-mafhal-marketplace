@@ -1,1503 +1,828 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import Navbar from '../components/common/Navbar';
+import Footer from '../components/common/Footer';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useComparison } from '../context/ComparisonContext';
 import {
-  Search, ShoppingCart, Heart, User, Check, Truck, ShieldCheck,
-  Star, Sparkles, ArrowRight, ChevronLeft, ChevronRight,
-  SlidersHorizontal, X, Store, ArrowUpRight, Zap, RefreshCw,
-  Package, CheckCircle2, PhoneCall, HelpCircle, Lock, Shield,
-  ChevronDown, ChevronUp, Award, Rocket, Globe, Clock, AlertCircle,
-  CreditCard, CheckCircle, ExternalLink, ShieldAlert
+  Search, ShoppingCart, Heart, ShieldCheck, Truck, Star,
+  Zap, ArrowRight, CheckCircle2, ChevronRight, Package,
+  Store, Clock, AlertCircle, RefreshCw, Eye, Sparkles,
+  Phone, HelpCircle, Lock, Award, Building2, MapPin,
+  Check, X, Scale
 } from 'lucide-react';
 
-const AM_LOGO = "/logo.png";
-
-// Helper for extracting clean image URL
-const getImg = (product) => {
-  if (!product) return null;
-  const img = product.image_url || product.thumbnail;
-  if (img) return img;
-  const imgs = product.images;
-  if (!imgs) return null;
-  if (typeof imgs === 'string') {
-    try {
-      const parsed = JSON.parse(imgs);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : parsed;
-    } catch {
-      return imgs;
-    }
-  }
-  if (Array.isArray(imgs) && imgs.length > 0) return imgs[0];
-  return null;
-};
-
-// Testimonials Data
-const TESTIMONIALS = [
-  {
-    quote: "The 100% Escrow Protection gave me complete peace of mind. The seller shipped my iPhone from Kano to Abuja in 24 hours, and funds were only released when I inspected and approved it!",
-    name: "Dr. Aliyu Garba",
-    role: "Verified Buyer (Abuja)",
-    initials: "AG",
-    color: "bg-blue-600",
-    rating: 5,
-    verified: true
-  },
-  {
-    quote: "Selling on Abu Mafhal transformed our electronics retail business. With verified payouts, instant notifications, and zero chargeback scams, our monthly sales tripled!",
-    name: "Hajiya Maryam Bello",
-    role: "Verified Gold Merchant",
-    initials: "MB",
-    color: "bg-amber-600",
-    rating: 5,
-    verified: true
-  },
-  {
-    quote: "Superb customer care and air cargo tracking. Ordered traditional textiles and smart gadgets; both arrived sealed with authenticity tags. 10/10 recommended.",
-    name: "Engr. Tukur Usman",
-    role: "Repeat Customer (Kaduna)",
-    initials: "TU",
-    color: "bg-emerald-600",
-    rating: 5,
-    verified: true
-  },
+// Nigerian Destination Delivery States
+const DELIVERY_STATES = [
+  { name: 'Abuja (FCT)', days: 'Same-day or 24-hr Air Express' },
+  { name: 'Lagos', days: '24 to 48-hr Express Cargo' },
+  { name: 'Kano', days: '24-hr Regional Transit' },
+  { name: 'Kaduna', days: '24-hr Direct Road Freight' },
+  { name: 'Port Harcourt', days: '48-hr Doorstep Cargo' },
+  { name: 'Ibadan', days: '24 to 48-hr Logistics' },
+  { name: 'Yobe / Damaturu', days: 'Same-day Local Dispatch' },
+  { name: 'Maiduguri', days: '24-hr Regional Transit' }
 ];
 
-// Ecosystem Cards
-const ECOSYSTEM = [
-  {
-    tag: "MARKETPLACE",
-    title: "100% Escrow Marketplace",
-    desc: "Shop over 15,000 authentic items with bank-grade 256-bit buyer protection and instant dispute refund safeguards.",
-    img: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=600&auto=format&fit=crop",
-    link: "/shop",
-    badge: "Escrow Protected",
-    badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-  },
-  {
-    tag: "LOGISTICS & CARGO",
-    title: "Nationwide Doorstep Dispatch",
-    desc: "Priority air & express interstate freight delivering safely to all 36 states and FCT with live GPS dispatch tracking.",
-    img: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=600&auto=format&fit=crop",
-    link: "/shop",
-    badge: "Live GPS Tracking",
-    badgeColor: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-  },
-  {
-    tag: "VERIFIED VENDORS",
-    title: "Vetted Merchant Network",
-    desc: "Every seller is KYC-verified with registered CAC credentials and strict product quality warranties before onboarding.",
-    img: "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?q=80&w=600&auto=format&fit=crop",
-    link: "/stores",
-    badge: "KYC & CAC Verified",
-    badgeColor: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
-  }
+// Market Categories
+const MARKET_CATEGORIES = [
+  { name: 'Phones & Tablets', count: '1,420+ items', icon: '📱', color: 'from-blue-500/10 to-indigo-500/10' },
+  { name: 'Electronics & Audio', count: '2,150+ items', icon: '🎧', color: 'from-teal-500/10 to-emerald-500/10' },
+  { name: 'Computing & Laptops', count: '980+ items', icon: '💻', color: 'from-purple-500/10 to-pink-500/10' },
+  { name: 'Fashion & Apparel', count: '3,840+ items', icon: '👔', color: 'from-amber-500/10 to-orange-500/10' },
+  { name: 'Beauty & Personal Care', count: '1,210+ items', icon: '✨', color: 'from-rose-500/10 to-pink-500/10' },
+  { name: 'Home & Kitchen', count: '2,630+ items', icon: '🍳', color: 'from-emerald-500/10 to-teal-500/10' },
+  { name: 'Groceries & Provisions', count: '1,890+ items', icon: '🥫', color: 'from-cyan-500/10 to-blue-500/10' },
+  { name: 'Automobiles & Spares', count: '740+ items', icon: '🚗', color: 'from-slate-500/10 to-slate-700/10' }
 ];
 
-// Frequently Asked Questions
-const FAQS = [
-  {
-    q: "How does the Abu Mafhal 100% Escrow Protection work?",
-    a: "When you place an order, your payment is held securely in an isolated, CBN-compliant escrow holding vault. The seller prepares and dispatches your order. Only after you receive the item, verify its authentic condition, and approve delivery will funds be released to the seller. If anything is wrong, you receive an immediate full refund."
-  },
-  {
-    q: "How are vendors verified on Abu Mafhal?",
-    a: "Every vendor undergoes rigorous multi-tier KYC verification including identity verification (NIN/BVN), physical business address confirmation, CAC business registration checks, and merchant inventory quality vetting."
-  },
-  {
-    q: "How fast is delivery across Nigeria?",
-    a: "Orders within major cities (Kano, Abuja, Kaduna, Lagos) arrive within 24 to 48 hours. Nationwide deliveries to other states arrive within 2 to 4 business days via verified priority courier partners with live SMS and tracking updates."
-  },
-  {
-    q: "Can I become a vendor and sell my products here?",
-    a: "Yes! Simply click 'Become a Verified Seller' or 'Sell on Abu Mafhal', complete the vendor application form, and our merchant onboarding committee will review and activate your digital storefront within 24 hours."
-  },
-  {
-    q: "What payment methods are supported?",
-    a: "We support ATM Debit Cards (Mastercard, Visa, Verve), Bank Transfers to dedicated virtual accounts, USSD, Apple Pay, and digital wallet balances, all secured with 256-bit bank encryption via Paystack and Flutterwave."
-  }
-];
-
-// Security Features Matrix
-const SECURITY_FEATURES = [
-  {
-    icon: Lock,
-    title: "256-Bit Bank Encryption",
-    desc: "All transaction traffic, payment tokens, and user credentials use enterprise-grade SSL and end-to-end cryptographic hashing.",
-    tag: "Bank-Grade SSL"
-  },
+// Why Choose Us Pillars
+const VALUE_PILLARS = [
   {
     icon: ShieldCheck,
-    title: "100% Escrow Protection",
-    desc: "Sellers are never paid until you physically receive and confirm your product meets all advertised specifications.",
-    tag: "Money-Back Guarantee"
+    title: '100% Escrow Protection Vault',
+    desc: 'Buyer funds remain locked in an independent banking escrow vault until you physically inspect and approve your order.',
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200'
   },
   {
-    icon: CheckCircle,
-    title: "Vetted KYC Sellers",
-    desc: "Zero tolerance for counterfeits. Every seller provides biometric NIN verification and verifiable physical business premises.",
-    tag: "CAC & NIN Verified"
+    icon: Award,
+    title: 'CAC & KYC Vetted Merchants',
+    desc: 'Every seller undergoes stringent background authentication via government CAC registration and physical inventory inspection.',
+    color: 'text-[#00BFA5]',
+    bg: 'bg-teal-50',
+    border: 'border-teal-200'
   },
   {
-    icon: ShieldAlert,
-    title: "Fraud Prevention Shield",
-    desc: "Continuous automated anomaly detection monitors suspicious transactions and prevents unauthorized account access.",
-    tag: "Active 24/7 Defense"
+    icon: Truck,
+    title: '36 States Doorstep Logistics',
+    desc: 'Priority air and road freight partners delivering to all 36 Nigerian states and FCT with live waypoint GPS tracking.',
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
+    border: 'border-blue-200'
+  },
+  {
+    icon: RefreshCw,
+    title: '7-Day Free Returns & Refunds',
+    desc: 'Dispute arbitration guarantees prompt reimbursement if goods arrive damaged, non-genuine, or delayed.',
+    color: 'text-[#D9A73A]',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200'
   }
 ];
 
-const DEFAULT_BRANDS = [
-  { name: "Apple", logo_url: "https://www.google.com/s2/favicons?domain=apple.com&sz=128" },
-  { name: "Samsung", logo_url: "https://www.google.com/s2/favicons?domain=samsung.com&sz=128" },
-  { name: "Sony", logo_url: "https://www.google.com/s2/favicons?domain=sony.com&sz=128" },
-  { name: "HP", logo_url: "https://www.google.com/s2/favicons?domain=hp.com&sz=128" },
-  { name: "Dell", logo_url: "https://www.google.com/s2/favicons?domain=dell.com&sz=128" },
-  { name: "Nike", logo_url: "https://www.google.com/s2/favicons?domain=nike.com&sz=128" },
-  { name: "Adidas", logo_url: "https://www.google.com/s2/favicons?domain=adidas.com&sz=128" },
-  { name: "Zara", logo_url: "https://www.google.com/s2/favicons?domain=zara.com&sz=128" },
-  { name: "Gucci", logo_url: "https://www.google.com/s2/favicons?domain=gucci.com&sz=128" },
-  { name: "Rolex", logo_url: "https://www.google.com/s2/favicons?domain=rolex.com&sz=128" },
-  { name: "LG", logo_url: "https://www.google.com/s2/favicons?domain=lg.com&sz=128" },
-  { name: "JBL", logo_url: "https://www.google.com/s2/favicons?domain=jbl.com&sz=128" }
+// Fallback Products
+const FALLBACK_POPULAR = [
+  {
+    id: 'p-1',
+    name: 'Apple iPhone 15 Pro Max 256GB Natural Titanium',
+    price: 1250000,
+    compare_at_price: 1450000,
+    category: 'Phones & Tablets',
+    rating: 4.9,
+    reviews_count: 88,
+    seller_name: 'Apex Digital Hub',
+    seller_state: 'Lagos',
+    image_url: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=500&auto=format&fit=crop'
+  },
+  {
+    id: 'p-2',
+    name: 'Sony WH-1000XM5 Wireless Noise Cancelling Headphones',
+    price: 360000,
+    compare_at_price: 420000,
+    category: 'Electronics & Audio',
+    rating: 4.8,
+    reviews_count: 64,
+    seller_name: 'SoundWave Electronics',
+    seller_state: 'Abuja',
+    image_url: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=500&auto=format&fit=crop'
+  },
+  {
+    id: 'p-3',
+    name: 'MacBook Air 15-inch M2 8-Core CPU 512GB SSD Midnight',
+    price: 1380000,
+    compare_at_price: 1550000,
+    category: 'Computing & Laptops',
+    rating: 5.0,
+    reviews_count: 42,
+    seller_name: 'Pro Gadget Store',
+    seller_state: 'Kano',
+    image_url: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500&auto=format&fit=crop'
+  },
+  {
+    id: 'p-4',
+    name: 'Nike Air Jordan 1 Retro High Chicago OG Edition',
+    price: 95000,
+    compare_at_price: 120000,
+    category: 'Fashion & Apparel',
+    rating: 4.7,
+    reviews_count: 110,
+    seller_name: 'Kano Sneaker Vault',
+    seller_state: 'Kano',
+    image_url: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?w=500&auto=format&fit=crop'
+  }
 ];
 
-const Home = () => {
+export default function Home() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { cartItems, addToCart } = useCart();
-  const { wishlistItems, addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const { addToCart } = useCart();
+  const { wishlistItems, addToWishlist, removeFromWishlist } = useWishlist();
+  const { comparisonItems, addToComparison } = useComparison ? useComparison() : { comparisonItems: [], addToComparison: () => {} };
 
-  // ── LIVE SUPABASE STATES ──
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [banners, setBanners] = useState([]);
-  const [brands, setBrands] = useState(DEFAULT_BRANDS);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [products, setProducts] = useState(FALLBACK_POPULAR);
+  const [flashDeals, setFlashDeals] = useState([]);
+  const [activeCategoryTab, setActiveCategoryTab] = useState('All');
+  const [selectedState, setSelectedState] = useState(DELIVERY_STATES[0]);
+  const [trackQuery, setTrackQuery] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
+  const [quickViewProduct, setQuickViewProduct] = useState(null);
 
-  // ── FILTER & SORT STATES ──
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [sortBy, setSortBy] = useState('featured');
+  // Policy Modal State
+  const [policyModal, setPolicyModal] = useState({ open: false, title: '', content: '' });
 
-  // ── UI INTERACTION STATES ──
-  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const [addedItemIds, setAddedItemIds] = useState({});
-  const [toastMessage, setToastMessage] = useState(null);
-  const [openFaqIndex, setOpenFaqIndex] = useState(0);
+  // Flash Sale Countdown Timer
+  const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 35, seconds: 20 });
 
-  // ── TYPED SEARCH HERO PLACEHOLDER ──
-  const [typedPlaceholder, setTypedPlaceholder] = useState('');
-  const searchPhrases = ['smartphones, laptops, & electronics...', 'modest fashion, abayas, & textiles...', 'solar power systems & batteries...', 'groceries & household essentials...'];
-  
-  useEffect(() => {
-    let phraseIdx = 0;
-    let charIdx = 0;
-    let isDeleting = false;
-    let timer;
-
-    const type = () => {
-      const current = searchPhrases[phraseIdx];
-      if (isDeleting) {
-        setTypedPlaceholder(current.substring(0, charIdx - 1));
-        charIdx--;
-      } else {
-        setTypedPlaceholder(current.substring(0, charIdx + 1));
-        charIdx++;
-      }
-
-      if (!isDeleting && charIdx === current.length) {
-        isDeleting = true;
-        timer = setTimeout(type, 2200);
-      } else if (isDeleting && charIdx === 0) {
-        isDeleting = false;
-        phraseIdx = (phraseIdx + 1) % searchPhrases.length;
-        timer = setTimeout(type, 400);
-      } else {
-        timer = setTimeout(type, isDeleting ? 40 : 80);
-      }
-    };
-
-    timer = setTimeout(type, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // ── FLASH SALE COUNTDOWN STATE ──
-  const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 42, seconds: 18 });
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0) return { ...prev, minutes: 59, seconds: 59 };
-        if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        return { hours: 23, minutes: 59, seconds: 59 };
+        if (prev.minutes > 0) return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
+        if (prev.hours > 0) return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
+        return { hours: 24, minutes: 0, seconds: 0 };
       });
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // ── AUTO-SCROLL FEATURED BRANDS (WEB) ──
-  const brandScrollContainerRef = useRef(null);
+  // Fetch live products
   useEffect(() => {
-    if (!brands || brands.length <= 4) return;
-    const interval = setInterval(() => {
-      if (brandScrollContainerRef.current) {
-        const el = brandScrollContainerRef.current;
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        if (el.scrollLeft >= maxScroll - 15) {
-          el.scrollTo({ left: 0, behavior: 'smooth' });
-        } else {
-          el.scrollBy({ left: 160, behavior: 'smooth' });
-        }
-      }
-    }, 2800);
-    return () => clearInterval(interval);
-  }, [brands]);
-
-  // 1. Fetch All Real Data from Supabase
-  const fetchLiveMarketplaceData = async () => {
-    try {
-      setLoading(true);
-
-      const [bannersRes, categoriesRes, productsRes, brandsRes] = await Promise.allSettled([
-        supabase
-          .from('banners')
-          .select('id, title, subtitle, image_url, action_link, section, display_order')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true }),
-        supabase
-          .from('categories')
-          .select('id, name, icon, image_url, display_order')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true }),
-        supabase
-          .from('products')
-          .select('*')
-          .eq('status', 'approved')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('brands')
-          .select('id, name, logo_url, is_featured')
-          .eq('is_featured', true)
-          .order('name', { ascending: true })
-      ]);
-
-      if (bannersRes.status === 'fulfilled' && bannersRes.value?.data?.length > 0) {
-        setBanners(bannersRes.value.data);
-      } else {
-        setBanners([
-          {
-            id: 'b-1',
-            title: 'Experience Premium Quality & Escrow Protection',
-            subtitle: 'Nigeria’s Most Trusted Marketplace for Authentic Electronics, Fashion & Home Living',
-            image_url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=1200&auto=format&fit=crop',
-            action_link: '/shop'
-          },
-          {
-            id: 'b-2',
-            title: 'Verified Sellers & Safe Doorstep Dispatch',
-            subtitle: 'Shop with 100% Peace of Mind — Direct Doorstep Dispatch Across All 36 States',
-            image_url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop',
-            action_link: '/shop'
-          }
-        ]);
-      }
-
-      if (categoriesRes.status === 'fulfilled' && categoriesRes.value?.data?.length > 0) {
-        setCategories(categoriesRes.value.data);
-      } else {
-        setCategories([
-          { id: '1', name: 'Phones & Tablets' },
-          { id: '2', name: 'Fashion & Apparel' },
-          { id: '3', name: 'Electronics & Computing' },
-          { id: '4', name: 'Shoes & Footwear' },
-          { id: '5', name: 'Beauty & Health' },
-          { id: '6', name: 'Home & Living' },
-        ]);
-      }
-
-      if (productsRes.status === 'fulfilled' && productsRes.value?.data?.length > 0) {
-        setProducts(productsRes.value.data);
-      }
-
-      // Synchronize brands with Admin configuration from app_settings
+    async function fetchProducts() {
       try {
-        const { data: setRes } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'marketplace_brands')
-          .maybeSingle();
+        const { data, error } = await supabase
+          .from('products')
+          .select('*, profiles:vendor_id(business_name, full_name, is_verified, state)')
+          .order('created_at', { ascending: false })
+          .limit(12);
 
-        if (setRes?.value) {
-          const parsed = typeof setRes.value === 'string' ? JSON.parse(setRes.value) : setRes.value;
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const featured = parsed.filter(b => b.is_featured === true);
-            if (featured.length > 0) {
-              setBrands(featured);
-            }
-          }
-        } else if (brandsRes.status === 'fulfilled' && brandsRes.value?.data?.length > 0) {
-          setBrands(brandsRes.value.data);
+        if (!error && data && data.length > 0) {
+          const mapped = data.map(p => ({
+            ...p,
+            seller_name: p.profiles?.business_name || p.profiles?.full_name || 'Verified Merchant',
+            seller_state: p.profiles?.state || 'Nigeria',
+            image_url: p.image_url || (Array.isArray(p.images) ? p.images[0] : null) || FALLBACK_POPULAR[0].image_url
+          }));
+          setProducts(mapped);
+          setFlashDeals(mapped.slice(0, 4));
         }
-      } catch (_) {
-        if (brandsRes.status === 'fulfilled' && brandsRes.value?.data?.length > 0) {
-          setBrands(brandsRes.value.data);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching live marketplace data:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      } catch (_) {}
     }
-  };
-
-  useEffect(() => {
-    fetchLiveMarketplaceData();
+    fetchProducts();
   }, []);
 
-  // Filter and Sort Products
-  const filteredProducts = useMemo(() => {
-    let list = [...products];
-
-    if (selectedCategory !== 'All') {
-      list = list.filter(
-        (p) => p.category?.toLowerCase() === selectedCategory.toLowerCase()
-      );
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
-        (p) =>
-          p.name?.toLowerCase().includes(q) ||
-          p.description?.toLowerCase().includes(q) ||
-          p.category?.toLowerCase().includes(q) ||
-          p.brand?.toLowerCase().includes(q)
-      );
-    }
-
-    if (sortBy === 'price-low') {
-      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
-    } else if (sortBy === 'price-high') {
-      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
-    } else if (sortBy === 'rating') {
-      list.sort((a, b) => Number(b.rating || b.average_rating || 0) - Number(a.rating || a.average_rating || 0));
-    }
-
-    return list;
-  }, [products, selectedCategory, searchQuery, sortBy]);
-
-  // Handle Quick Add to Cart
-  const handleAddToCart = (e, product) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    addToCart(product, 1);
-    setAddedItemIds((prev) => ({ ...prev, [product.id]: true }));
-    showToast(`"${product.name}" added to cart!`);
-
-    setTimeout(() => {
-      setAddedItemIds((prev) => ({ ...prev, [product.id]: false }));
-    }, 1800);
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 3000);
   };
 
-  // Handle Wishlist Toggle
-  const handleWishlistToggle = (e, product) => {
+  const handleTrackSubmit = (e) => {
     e.preventDefault();
-    e.stopPropagation();
+    if (!trackQuery.trim()) return;
+    navigate(`/track-order?ref=${encodeURIComponent(trackQuery.trim())}`);
+  };
 
-    if (isInWishlist(product.id)) {
-      removeFromWishlist(product.id);
+  const isWishlisted = (id) => (wishlistItems || []).some(w => w.id === id);
+
+  const toggleWishlistHandler = (p) => {
+    if (isWishlisted(p.id)) {
+      removeFromWishlist(p.id);
       showToast('Removed from wishlist');
     } else {
-      addToWishlist(product);
-      showToast('Saved to wishlist!');
+      addToWishlist(p);
+      showToast('Added to wishlist');
     }
   };
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 2500);
+  const filteredProducts = activeCategoryTab === 'All'
+    ? products
+    : products.filter(p => p.category?.toLowerCase().includes(activeCategoryTab.toLowerCase()));
+
+  const openPolicy = (type) => {
+    if (type === 'escrow') {
+      setPolicyModal({
+        open: true,
+        title: '100% Escrow Protection Protocol',
+        content: 'Every transaction on Abu Mafhal is safeguarded by bank-grade escrow. When you make a payment, the funds are held securely in a CBN-licensed account and are ONLY transferred to the seller after your package arrives, and you verify that items are in perfect condition.'
+      });
+    } else if (type === 'returns') {
+      setPolicyModal({
+        open: true,
+        title: '7-Day Return & Rapid Refund Guarantee',
+        content: 'If your purchase arrives damaged, incomplete, or significantly different from description, open a 1-click dispute on your dashboard. Our arbitration team reviews cases within 24 hours to issue instant refunds to your original payment method.'
+      });
+    } else if (type === 'merchants') {
+      setPolicyModal({
+        open: true,
+        title: 'Vetted & Verified Merchant Standards',
+        content: 'All sellers on Abu Mafhal submit government-issued identification (CAC certificate, NIN or BVN verification) and agree to our strict authenticity pledge before listing catalog items.'
+      });
+    }
   };
 
-  const totalCartCount = cartItems?.reduce((acc, item) => acc + (item.quantity || 1), 0) || 0;
-  const totalWishlistCount = wishlistItems?.length || 0;
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans flex flex-col selection:bg-amber-400 selection:text-slate-950">
-      
-      {/* ── TOAST NOTIFICATION ── */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#070F1E] text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-fade-in">
-          <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-xs">
-            ✓
-          </div>
-          <span className="text-xs font-semibold">{toastMessage}</span>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+      <Navbar />
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className="fixed bottom-16 sm:bottom-6 right-6 z-50 px-5 py-3 rounded-2xl bg-[#0A192F] text-white text-xs font-bold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-4 h-4 text-[#00BFA5]" />
+          <span>{toastMsg}</span>
         </div>
       )}
 
-      {/* ── TOP ANNOUNCEMENT & ESCROW SECURITY STRIP ── */}
-      <div className="bg-[#070F1E] text-slate-300 text-[11px] font-medium py-2 px-4 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 bg-emerald-950 text-emerald-400 border border-emerald-800/80 px-2.5 py-0.5 rounded-full font-black text-[10px]">
-              <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              100% ESCROW PROTECTED
-            </span>
-            <span className="hidden sm:inline text-slate-400">
-              Funds held securely until buyer verifies order satisfaction.
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-slate-400">
-            <Link to="/contact" className="hover:text-amber-400 transition-colors flex items-center gap-1 text-xs">
-              <PhoneCall className="w-3 h-3 text-amber-400" /> 24/7 Verified Support
-            </Link>
-            <span className="hidden sm:inline">•</span>
-            <Link to="/vendor-application" className="text-amber-400 font-black hover:underline hidden sm:inline text-xs">
-              Become a Verified Seller ➔
-            </Link>
-          </div>
-        </div>
-      </div>
+      {/* Quick View Modal */}
+      {quickViewProduct && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 relative shadow-2xl animate-in zoom-in-95">
+            <button
+              onClick={() => setQuickViewProduct(null)}
+              className="absolute top-5 right-5 p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-      {/* ── MAIN HEADER / NAVBAR ── */}
-      <header className="sticky top-0 z-40 bg-[#0A192F]/95 backdrop-blur-md text-white border-b border-slate-800 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
-          
-          {/* Logo & Brand Identity */}
-          <Link to="/" className="flex items-center gap-3 group flex-shrink-0">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-500 p-1.5 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
-              <img src={AM_LOGO} alt="Abu Mafhal" className="w-full h-full object-contain" onError={(e) => { e.target.src = "/logo.png"; }} />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-lg font-black tracking-wide text-white">ABU</span>
-                <span className="text-lg font-black text-amber-400">MAFHAL</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+              <div className="rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 aspect-square">
+                <img src={quickViewProduct.image_url} alt="" className="w-full h-full object-cover" />
               </div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                Marketplace
-              </p>
-            </div>
-          </Link>
-
-          {/* Search Bar with Instant Live Filter */}
-          <div className="flex-1 max-w-xl mx-2 hidden md:block">
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${typedPlaceholder}`}
-                className="w-full bg-slate-800/80 hover:bg-slate-800 focus:bg-white text-white focus:text-slate-900 placeholder-slate-400 text-xs sm:text-sm pl-11 pr-10 py-3 rounded-2xl border border-slate-700/80 focus:border-amber-400 focus:outline-none transition-all shadow-inner"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute left-4 pointer-events-none" />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 p-1 text-slate-400 hover:text-slate-200"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* User & Cart Navigation Actions */}
-          <div className="flex items-center gap-3 sm:gap-4">
-            
-            {/* Wishlist */}
-            <Link
-              to="/buyer/wishlist"
-              className="relative p-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
-              title="Saved Items"
-            >
-              <Heart className="w-5 h-5" />
-              {totalWishlistCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                  {totalWishlistCount}
+              <div className="space-y-3">
+                <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                  {quickViewProduct.category || 'General'}
                 </span>
-              )}
-            </Link>
-
-            {/* Cart Button */}
-            <Link
-              to="/cart"
-              className="relative flex items-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-4 py-2.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/15 transition-all"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              <span className="hidden sm:inline">Cart</span>
-              <span className="bg-slate-950 text-amber-400 text-[10px] font-black px-1.5 py-0.5 rounded-full ml-0.5">
-                {totalCartCount}
-              </span>
-            </Link>
-
-            {/* Profile / Auth */}
-            {currentUser ? (
-              <Link
-                to="/buyer/profile"
-                className="flex items-center gap-2.5 pl-2 border-l border-slate-800"
-              >
-                <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 text-amber-400 flex items-center justify-center font-bold text-xs uppercase">
-                  {currentUser?.name?.[0] || currentUser?.email?.[0] || 'U'}
+                <h3 className="text-lg font-extrabold text-[#0A192F]">{quickViewProduct.name}</h3>
+                <div className="flex items-center gap-2 text-xs text-amber-500 font-bold">
+                  <Star className="w-4 h-4 fill-current" />
+                  <span>{quickViewProduct.rating || 4.9}</span>
+                  <span className="text-slate-400 font-normal">({quickViewProduct.reviews_count || 12} reviews)</span>
                 </div>
-                <div className="hidden lg:block text-left">
-                  <p className="text-xs font-bold text-white leading-tight truncate max-w-[120px]">
-                    {currentUser?.name || currentUser?.full_name || 'My Account'}
-                  </p>
-                  <p className="text-[10px] text-slate-400 capitalize">
-                    {currentUser?.role || 'Customer'}
-                  </p>
+                <div className="pt-2">
+                  <p className="text-2xl font-black text-[#00BFA5]">₦{Number(quickViewProduct.price).toLocaleString()}</p>
+                  {quickViewProduct.compare_at_price && (
+                    <p className="text-xs text-slate-400 line-through">₦{Number(quickViewProduct.compare_at_price).toLocaleString()}</p>
+                  )}
                 </div>
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold border border-slate-700 transition-all"
-              >
-                <User className="w-4 h-4" />
-                <span>Sign In</span>
-              </Link>
-            )}
+                <div className="pt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      addToCart(quickViewProduct, 1);
+                      showToast('Added to cart!');
+                      setQuickViewProduct(null);
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold transition-all shadow-md"
+                  >
+                    Add to Cart
+                  </button>
+                  <Link
+                    to={`/product/${quickViewProduct.id}`}
+                    className="px-4 py-3 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold"
+                  >
+                    View Details
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Mobile Search Input */}
-        <div className="px-4 pb-3 md:hidden">
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search marketplace..."
-              className="w-full bg-slate-800 text-white text-xs pl-10 pr-8 py-2.5 rounded-xl border border-slate-700 focus:border-amber-400 focus:outline-none"
-            />
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5" />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 text-slate-400">
-                <X className="w-3.5 h-3.5" />
+      {/* Policy Modal */}
+      {policyModal.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-extrabold text-base text-[#0A192F]">{policyModal.title}</h3>
+              <button onClick={() => setPolicyModal({ open: false, title: '', content: '' })} className="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
               </button>
-            )}
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">{policyModal.content}</p>
+            <div className="pt-2 text-right">
+              <button
+                onClick={() => setPolicyModal({ open: false, title: '', content: '' })}
+                className="px-5 py-2 rounded-xl bg-[#0A192F] text-white text-xs font-bold"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
-      </header>
+      )}
 
-      {/* ── 1. RESTORED & MODERNIZED HERO SECTION ── */}
-      <section className="relative pt-12 pb-20 overflow-hidden bg-gradient-to-b from-[#0A192F] via-[#0E203C] to-[#0A192F] text-white">
-        {/* Glow ambient effects */}
-        <div className="absolute top-[10%] left-[-5%] w-96 h-96 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[10%] right-[-5%] w-[30rem] h-[30rem] rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+      {/* ─── 1. HERO SECTION WITH DELIVERY DESTINATION PICKER ─── */}
+      <section className="relative overflow-hidden bg-white border-b border-slate-200/90 py-12 lg:py-16">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-[#00BFA5]/10 via-amber-100/30 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-[#0A192F]/5 to-transparent rounded-full blur-2xl pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            
-            {/* Left Content Column */}
-            <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              {/* Trust Badge */}
-              <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/20 rounded-full px-4 py-1.5 text-xs font-bold text-amber-300">
-                <Sparkles className="w-4 h-4 text-amber-400 animate-spin" style={{ animationDuration: '6s' }} />
-                <span>Nigeria’s Premier Verified Multi-Vendor Ecosystem</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            {/* Left Content */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Delivery State Selector Strip */}
+              <div className="inline-flex items-center gap-2 p-1.5 pr-4 rounded-full bg-slate-100/90 border border-slate-200 text-xs">
+                <span className="w-6 h-6 rounded-full bg-[#00BFA5] text-white flex items-center justify-center text-xs">
+                  <MapPin className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-slate-500 font-semibold">Delivering to:</span>
+                <select
+                  value={selectedState.name}
+                  onChange={(e) => {
+                    const found = DELIVERY_STATES.find(s => s.name === e.target.value);
+                    if (found) setSelectedState(found);
+                  }}
+                  className="bg-transparent font-extrabold text-[#0A192F] outline-none cursor-pointer"
+                >
+                  {DELIVERY_STATES.map(s => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+                <span className="hidden sm:inline text-[11px] text-[#00BFA5] font-bold">
+                  ({selectedState.days})
+                </span>
               </div>
 
-              {/* Main Headline */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] text-white">
-                Shop Smart.<br />
-                Sell Fast.<br />
-                <span className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 bg-clip-text text-transparent">
-                  Grow Together.
-                </span>
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-[#0A192F] tracking-tight leading-[1.1]">
+                Buy Authentic Items with <span className="text-[#00BFA5]">100% Escrow</span> Vault.
               </h1>
 
-              {/* Subtitle */}
-              <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-normal max-w-xl mx-auto lg:mx-0">
-                Discover verified products direct from vetted Nigerian merchants. Enjoy 100% Escrow Protection, instant settlements, and nationwide doorstep dispatch you can trust.
+              <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-xl">
+                Explore 15,000+ verified items across Nigeria. Your money is secured in an independent CBN-regulated vault until your order arrives sealed and approved at your doorstep.
               </p>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap gap-4 items-center justify-center lg:justify-start pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Link
                   to="/shop"
-                  className="inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 shadow-xl shadow-amber-500/20 hover:-translate-y-0.5"
+                  className="px-7 py-4 rounded-2xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-[#00BFA5]/25 transition-all flex items-center gap-2"
                 >
-                  <span>Start Shopping</span>
-                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                  <span>Explore Marketplace</span>
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
-
                 <Link
-                  to="/vendor-application"
-                  className="inline-flex items-center justify-center gap-2 bg-slate-800/80 hover:bg-slate-700 text-white border border-slate-700 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 hover:-translate-y-0.5"
+                  to="/stores"
+                  className="px-6 py-4 rounded-2xl bg-[#0A192F] hover:bg-[#112240] text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2"
                 >
-                  <Store className="w-4 h-4 text-amber-400" />
-                  <span>Start Selling</span>
+                  <Store className="w-4 h-4 text-[#D9A73A]" />
+                  <span>Browse Stores</span>
                 </Link>
               </div>
 
-              {/* Security Pill Highlights */}
-              <div className="flex flex-wrap gap-5 pt-4 border-t border-slate-800/80 justify-center lg:justify-start">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-bold text-slate-300">256-Bit Escrow Vault</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                  <span className="text-xs font-bold text-slate-300">Nationwide Air & Express Cargo</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-                  <span className="text-xs font-bold text-slate-300">CAC & NIN Vetted Sellers</span>
-                </div>
+              {/* Live Metric Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-slate-100">
+                {[
+                  { label: 'Escrow Protected', val: '₦1.8B+', color: 'text-[#00BFA5]' },
+                  { label: 'Active Catalog', val: '15,000+', color: 'text-[#0A192F]' },
+                  { label: 'Vetted Merchants', val: '1,200+', color: 'text-indigo-600' },
+                  { label: 'States Covered', val: '36 + FCT', color: 'text-[#D9A73A]' }
+                ].map(m => (
+                  <div key={m.label} className="space-y-0.5">
+                    <p className={`text-xl sm:text-2xl font-black ${m.color}`}>{m.val}</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{m.label}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Right Interactive Device Showcase */}
-            <div className="lg:col-span-5 relative flex justify-center">
-              <div className="absolute -top-4 -left-4 w-[20rem] h-[28rem] border-2 border-dashed border-amber-400/20 rounded-[2.8rem] pointer-events-none hidden sm:block" />
-
-              <div className="w-[19rem] sm:w-[21rem] bg-[#070F1E] rounded-[2.8rem] border-[6px] border-slate-800 shadow-2xl p-4 flex flex-col justify-between transition-transform duration-500 hover:scale-[1.02]">
-                {/* Phone Speaker Notch */}
-                <div className="w-20 h-4 bg-slate-800 rounded-full mx-auto mb-3 flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-slate-900" />
+            {/* Right Card / Visual Showcase */}
+            <div className="lg:col-span-5 relative">
+              <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#0A192F] to-[#112240] p-6 sm:p-8 text-white shadow-2xl space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#00BFA5] animate-pulse" />
+                    <span className="text-xs font-bold tracking-wider uppercase text-[#00BFA5]">Verified Escrow Vault</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300">
+                    RC-1849204
+                  </span>
                 </div>
 
-                {/* Card Live Product Preview */}
-                <div className="space-y-3 bg-[#0A192F] p-4 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                      ESCROW PROTECTED
-                    </span>
-                    <span className="text-[10px] font-mono text-amber-400 font-bold">₦0 DEPOSIT RISK</span>
-                  </div>
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-[#D9A73A] uppercase tracking-widest">Featured Pick of the Week</span>
+                  <h3 className="text-2xl font-black text-white">{FALLBACK_POPULAR[0].name}</h3>
+                  <p className="text-xs text-slate-300">Sold by verified seller in {FALLBACK_POPULAR[0].seller_state}</p>
+                </div>
 
-                  <div className="w-full h-36 rounded-xl overflow-hidden bg-slate-900 relative">
-                    <img
-                      src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=400&auto=format&fit=crop"
-                      alt="Product Preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-2 right-2 bg-amber-400 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md">
-                      SAVE 25%
-                    </div>
-                  </div>
-
-                  <div>
-                    <h5 className="text-xs font-bold text-white">Apple iPhone 15 Pro Max (256GB)</h5>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-sm font-black text-amber-400">₦1,450,000</span>
-                      <span className="text-[10px] text-slate-400 line-through">₦1,950,000</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Delivery Status:</span>
-                    <span className="text-emerald-400 font-bold flex items-center gap-1">
-                      <Truck className="w-3 h-3" /> Dispatched via Air Cargo
-                    </span>
+                <div className="rounded-2xl overflow-hidden aspect-video bg-white/5 border border-white/10 relative">
+                  <img src={FALLBACK_POPULAR[0].image_url} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute bottom-3 left-3 bg-[#0A192F]/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20">
+                    <span className="text-lg font-black text-[#00BFA5]">₦{FALLBACK_POPULAR[0].price.toLocaleString()}</span>
                   </div>
                 </div>
 
-                {/* Instant Verification Banner */}
-                <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-emerald-950/60 to-slate-900 border border-emerald-500/30 flex items-center gap-2.5">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <p className="text-[10px] text-slate-300 leading-tight">
-                    Funds released only when buyer confirms order is 100% satisfactory.
-                  </p>
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-white/10">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <ShieldCheck className="w-4 h-4 text-[#00BFA5]" />
+                    Inspected before release
+                  </span>
+                  <Link
+                    to={`/product/${FALLBACK_POPULAR[0].id}`}
+                    className="font-bold text-[#00BFA5] hover:text-white transition-colors flex items-center gap-1"
+                  >
+                    View Specs <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </section>
 
-      {/* ── 2. VALUE PILLARS (Clean, Crisp & Trust-Building) ── */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 -mt-8 relative z-20">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-md flex items-center gap-3.5 hover:border-amber-400 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
-              <Truck className="w-5 h-5" />
+      {/* ─── 2. FLASH DEALS WITH LIVE COUNTDOWN ─── */}
+      <section className="py-10 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 text-rose-600 text-xs font-black uppercase tracking-widest">
+                <Zap className="w-4 h-4 fill-current animate-bounce" />
+                Limited-Time Flash Deals
+              </div>
+              <h2 className="text-2xl font-black text-[#0A192F]">Today&apos;s Super Discounts</h2>
             </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Nationwide Delivery</h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Doorstep dispatch to 36 states</p>
+
+            {/* Countdown Badge */}
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="text-xs text-slate-500 font-bold">Ends in:</span>
+              <div className="flex items-center gap-1.5 font-mono text-xs font-black">
+                <span className="px-2.5 py-1.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
+                  {String(timeLeft.hours).padStart(2, '0')}h
+                </span>
+                <span>:</span>
+                <span className="px-2.5 py-1.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
+                  {String(timeLeft.minutes).padStart(2, '0')}m
+                </span>
+                <span>:</span>
+                <span className="px-2.5 py-1.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
+                  {String(timeLeft.seconds).padStart(2, '0')}s
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-md flex items-center gap-3.5 hover:border-amber-400 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">100% Escrow Protected</h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Funds held safe until delivery</p>
-            </div>
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {flashDeals.map((item, idx) => (
+              <div key={item.id || idx} className="rounded-3xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-[#00BFA5]/50 transition-all p-4 space-y-3 shadow-2xs group flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="relative rounded-2xl overflow-hidden aspect-square bg-white border border-slate-200">
+                    <img src={item.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-black uppercase">
+                      Save 15%
+                    </span>
+                    <button
+                      onClick={() => toggleWishlistHandler(item)}
+                      className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center text-slate-400 hover:text-rose-500 shadow-sm ${
+                        isWishlisted(item.id) ? 'text-rose-600' : ''
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${isWishlisted(item.id) ? 'fill-current' : ''}`} />
+                    </button>
+                  </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-md flex items-center gap-3.5 hover:border-amber-400 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Verified KYC Sellers</h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Direct from vetted merchants</p>
-            </div>
-          </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">{item.category}</p>
+                    <h4 className="text-xs font-bold text-[#0A192F] line-clamp-2">{item.name}</h4>
+                  </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-md flex items-center gap-3.5 hover:border-amber-400 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
-              <PhoneCall className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">24/7 Verified Support</h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Real human help on demand</p>
-            </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-base font-black text-[#00BFA5]">₦{Number(item.price).toLocaleString()}</span>
+                    {item.compare_at_price && (
+                      <span className="text-[11px] text-slate-400 line-through">₦{Number(item.compare_at_price).toLocaleString()}</span>
+                    )}
+                  </div>
+
+                  {/* Stock Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                      <div className="bg-rose-500 h-1.5 rounded-full" style={{ width: `${60 + (idx * 10)}%` }} />
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-semibold block text-right">
+                      {60 + (idx * 10)}% claimed
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    addToCart(item, 1);
+                    showToast('Added to cart!');
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  Claim Deal
+                </button>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── MAIN CONTENT CONTAINER ── */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-10 space-y-12 flex-1">
-
-        {/* ── 🌟 OFFICIAL FEATURED BRANDS (STORY RINGS) ── */}
-        <section className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-4 bg-amber-500 rounded-full" />
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-wide">
-                Featured Brands
-              </h3>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
-                Official Stores
-              </span>
+      {/* ─── 3. CATEGORY SHOWCASE GRID ─── */}
+      <section className="py-12 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-extrabold uppercase text-[#00BFA5] tracking-wider">Browse by Department</span>
+              <h2 className="text-2xl font-black text-[#0A192F]">Curated Market Categories</h2>
             </div>
-            <Link
-              to="/stores"
-              className="text-xs font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 flex items-center gap-1 group"
-            >
-              <span>Explore All Official Stores</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:text-[#0A192F] flex items-center gap-1">
+              View All Categories <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          <div ref={brandScrollContainerRef} className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-2 scrollbar-none scroll-smooth">
-            {brands.map((brand, idx) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {MARKET_CATEGORIES.map(cat => (
               <Link
-                key={brand.id || idx}
-                to={`/shop?search=${encodeURIComponent(brand.name)}`}
-                className="flex flex-col items-center gap-2 shrink-0 group focus:outline-none"
+                key={cat.name}
+                to={`/shop?category=${encodeURIComponent(cat.name)}`}
+                className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#00BFA5] hover:shadow-md transition-all text-center space-y-2 group"
               >
-                <div className="relative p-0.5 rounded-full bg-gradient-to-tr from-amber-400 via-amber-500 to-amber-300 group-hover:scale-105 transition-all shadow-md shadow-amber-500/10">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white dark:bg-slate-950 p-2 flex items-center justify-center overflow-hidden border-2 border-white dark:border-slate-900">
-                    <img
-                      src={brand.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand.name)}&background=0A192F&color=D9A73A&bold=true&size=128`}
-                      alt={brand.name}
-                      className="w-10 h-10 object-contain group-hover:scale-110 transition-transform"
-                      onError={(e) => {
-                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(brand.name)}&background=0A192F&color=D9A73A&bold=true&size=128`;
-                      }}
-                    />
-                  </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#0A192F] text-amber-400 flex items-center justify-center border border-white dark:border-slate-800 shadow-sm">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                </div>
-                <span className="text-[11px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-amber-500 transition-colors text-center max-w-[72px] truncate">
-                  {brand.name}
-                </span>
+                <div className="text-3xl mb-1 group-hover:scale-110 transition-transform">{cat.icon}</div>
+                <h4 className="text-xs font-bold text-[#0A192F] leading-tight line-clamp-1">{cat.name}</h4>
+                <p className="text-[10px] text-slate-400 font-medium">{cat.count}</p>
               </Link>
             ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* ── 3. DEDICATED ESCROW & SECURITY VAULT SECTION ("ya kasance da tsaro") ── */}
-        <section className="bg-gradient-to-br from-[#070F1E] via-[#0A192F] to-[#070F1E] rounded-3xl p-6 sm:p-10 border border-slate-800 shadow-2xl text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Section Header */}
-          <div className="max-w-2xl space-y-3 mb-8">
-            <div className="inline-flex items-center gap-2 bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-xs font-black uppercase px-3 py-1 rounded-full">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Certified Bank-Grade Protection</span>
-            </div>
-            <h2 className="text-2xl sm:text-4xl font-black text-white leading-tight">
-              Your Money is 100% Protected in Escrow
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
-              We eliminated fraudulent merchants and delivery scams. On Abu Mafhal, your payment is held safely until you receive, examine, and confirm your items.
-            </p>
-          </div>
-
-          {/* 4-Step Escrow Timeline Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-            <div className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800 relative">
-              <span className="text-3xl font-black text-amber-400/30 absolute top-4 right-4">01</span>
-              <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center font-black text-sm mb-3">
-                <CreditCard className="w-4 h-4" />
-              </div>
-              <h4 className="text-sm font-bold text-white mb-1">1. Deposit into Escrow</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                You place an order and pay securely. Your money stays in our regulated escrow vault — the seller is NOT paid yet.
+      {/* ─── 4. PAY SMALL SMALL (PSS) BANNER ─── */}
+      <section className="py-8 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="relative rounded-3xl bg-gradient-to-r from-amber-500 via-[#D9A73A] to-amber-600 p-6 sm:p-10 text-slate-900 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden">
+            <div className="space-y-2 max-w-xl relative z-10">
+              <span className="inline-block px-3 py-1 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
+                Buy Now Pay Later (BNPL)
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-950">
+                Pay Small Small (PSS) — Zero Interest Installments
+              </h3>
+              <p className="text-xs sm:text-sm font-semibold text-slate-900/80">
+                Pay 25% down today on gadgets, phones, and fashion. Split the rest into 4 weekly payments. Escrow locks your item immediately!
               </p>
-            </div>
-
-            <div className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800 relative">
-              <span className="text-3xl font-black text-blue-400/30 absolute top-4 right-4">02</span>
-              <div className="w-9 h-9 rounded-xl bg-blue-400/20 text-blue-400 flex items-center justify-center font-black text-sm mb-3">
-                <Package className="w-4 h-4" />
-              </div>
-              <h4 className="text-sm font-bold text-white mb-1">2. Merchant Dispatches</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                The seller prepares authentic, inspected goods and dispatches via priority tracking cargo to your doorstep.
-              </p>
-            </div>
-
-            <div className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800 relative">
-              <span className="text-3xl font-black text-purple-400/30 absolute top-4 right-4">03</span>
-              <div className="w-9 h-9 rounded-xl bg-purple-400/20 text-purple-400 flex items-center justify-center font-black text-sm mb-3">
-                <Truck className="w-4 h-4" />
-              </div>
-              <h4 className="text-sm font-bold text-white mb-1">3. Inspect & Verify</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Receive the item at your door, open, inspect condition, and verify it matches what you ordered.
-              </p>
-            </div>
-
-            <div className="bg-slate-900/70 p-5 rounded-2xl border border-emerald-500/30 relative bg-emerald-950/20">
-              <span className="text-3xl font-black text-emerald-400/30 absolute top-4 right-4">04</span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-400/20 text-emerald-400 flex items-center justify-center font-black text-sm mb-3">
-                <CheckCircle className="w-4 h-4" />
-              </div>
-              <h4 className="text-sm font-bold text-white mb-1">4. Funds Released</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Once satisfied, confirm receipt in 1 tap and funds are transferred to seller. If not satisfied, receive a full refund.
-              </p>
-            </div>
-          </div>
-
-          {/* 4 Security Pillars */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6 border-t border-slate-800">
-            {SECURITY_FEATURES.map((sec, idx) => {
-              const IconComp = sec.icon;
-              return (
-                <div key={idx} className="flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-slate-800 text-amber-400 flex-shrink-0 mt-0.5">
-                    <IconComp className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-white">{sec.title}</h5>
-                    <p className="text-[11px] text-slate-400 leading-tight mt-0.5">{sec.desc}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 4. LIMITED FLASH SALE WITH LIVE COUNTDOWN ── */}
-        <section className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 rounded-3xl p-6 sm:p-8 text-slate-950 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-2 text-center md:text-left max-w-xl">
-            <div className="inline-flex items-center gap-1.5 bg-slate-950 text-amber-400 text-[10px] font-black uppercase px-3 py-1 rounded-full">
-              <Zap className="w-3.5 h-3.5 fill-amber-400 animate-pulse" />
-              <span>Limited Time Flash Sale</span>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-black leading-tight">
-              Up to 40% OFF Top Electronics & Fashion
-            </h3>
-            <p className="text-xs sm:text-sm font-semibold opacity-90">
-              Verified clearance products with 100% Escrow Protection. Grab deals before timer resets!
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            {/* Countdown Box */}
-            <div className="flex items-center gap-2">
-              <div className="bg-slate-950 text-white rounded-2xl px-3.5 py-2 text-center min-w-[54px] shadow-lg">
-                <span className="text-lg font-black font-mono">{String(timeLeft.hours).padStart(2, '0')}</span>
-                <span className="block text-[9px] text-slate-400 font-bold uppercase">HRS</span>
-              </div>
-              <span className="text-xl font-black text-slate-950">:</span>
-              <div className="bg-slate-950 text-white rounded-2xl px-3.5 py-2 text-center min-w-[54px] shadow-lg">
-                <span className="text-lg font-black font-mono">{String(timeLeft.minutes).padStart(2, '0')}</span>
-                <span className="block text-[9px] text-slate-400 font-bold uppercase">MIN</span>
-              </div>
-              <span className="text-xl font-black text-slate-950">:</span>
-              <div className="bg-slate-950 text-white rounded-2xl px-3.5 py-2 text-center min-w-[54px] shadow-lg">
-                <span className="text-lg font-black font-mono text-amber-400">{String(timeLeft.seconds).padStart(2, '0')}</span>
-                <span className="block text-[9px] text-slate-400 font-bold uppercase">SEC</span>
-              </div>
             </div>
 
             <Link
-              to="/shop"
-              className="bg-slate-950 hover:bg-slate-900 text-white font-black text-xs px-6 py-3.5 rounded-2xl shadow-xl transition-all hover:scale-105 flex items-center gap-2 whitespace-nowrap"
+              to="/pay-small-small"
+              className="px-6 py-3.5 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-extrabold text-xs sm:text-sm shrink-0 shadow-lg flex items-center justify-center gap-2"
             >
-              <span>Shop Deals Now</span>
-              <ArrowRight className="w-4 h-4 text-amber-400" />
+              <Zap className="w-4 h-4 text-[#D9A73A] fill-current" />
+              <span>Learn More & Calculate</span>
             </Link>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* ── 5. ECOSYSTEM SHOWCASE (Marketplace, Logistics, Verified Stores) ── */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
+      {/* ─── 5. POPULAR & TRENDING PRODUCTS ─── */}
+      <section className="py-12 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                The Abu Mafhal Ecosystem
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                An integrated platform built for retail shoppers, corporate merchants, and logistics
-              </p>
+              <span className="text-xs font-extrabold uppercase text-[#00BFA5] tracking-wider">Top Verified Catalog</span>
+              <h2 className="text-2xl font-black text-[#0A192F]">Trending Marketplace Items</h2>
             </div>
-            <Link to="/about" className="text-xs font-bold text-amber-600 hover:underline flex items-center gap-1">
-              <span>Learn More</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {ECOSYSTEM.map((eco, idx) => (
-              <div
-                key={idx}
-                className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
-              >
-                <div className="relative h-44 overflow-hidden bg-slate-900">
-                  <img
-                    src={eco.img}
-                    alt={eco.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute top-3 left-3">
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border backdrop-blur-md bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-white`}>
-                      {eco.tag}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-6 space-y-3 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h4 className="text-base font-black text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
-                      {eco.title}
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-                      {eco.desc}
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${eco.badgeColor}`}>
-                      {eco.badge}
-                    </span>
-                    <Link
-                      to={eco.link}
-                      className="text-xs font-black text-slate-900 dark:text-white hover:text-amber-500 flex items-center gap-1"
-                    >
-                      <span>Explore</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── 6. LIVE CATEGORIES SELECTOR (Filter Products Instantly) ── */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                Shop by Department
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Filter real inventory from vetted vendors</p>
-            </div>
-            <button
-              onClick={() => { setSelectedCategory('All'); setSearchQuery(''); }}
-              className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Reset Filters</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-            <button
-              onClick={() => setSelectedCategory('All')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                selectedCategory === 'All'
-                  ? 'bg-[#0A192F] text-white shadow-md'
-                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
-              }`}
-            >
-              <span>All Products</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-700/30 text-white font-black">
-                {products.length}
-              </span>
-            </button>
-
-            {categories.map((cat) => {
-              const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
-              const categoryCount = products.filter(
-                (p) => p.category?.toLowerCase() === cat.name.toLowerCase()
-              ).length;
-
-              return (
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto py-1">
+              {['All', 'Phones', 'Electronics', 'Computing', 'Fashion'].map(tab => (
                 <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.name)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                    isSelected
-                      ? 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/20'
-                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                  key={tab}
+                  onClick={() => setActiveCategoryTab(tab)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    activeCategoryTab === tab
+                      ? 'bg-[#0A192F] text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >
-                  <span>{cat.name}</span>
-                  {categoryCount > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-950/10 font-bold">
-                      {categoryCount}
-                    </span>
-                  )}
+                  {tab}
                 </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 7. LIVE PRODUCTS CATALOG (Real Supabase Data Only) ── */}
-        <section className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-            <div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                <span>{selectedCategory === 'All' ? 'Verified Marketplace Catalog' : selectedCategory}</span>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  {filteredProducts.length} items
-                </span>
-              </h3>
-              {searchQuery && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Showing results matching "<span className="text-amber-600 font-bold">{searchQuery}</span>"
-                </p>
-              )}
-            </div>
-
-            {/* Sort Dropdown */}
-            <div className="flex items-center gap-2 text-xs">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Sort by:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-400 cursor-pointer"
-              >
-                <option value="featured">Newest First</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="rating">Top Rated</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Loading Skeleton */}
-          {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                <div key={n} className="bg-white dark:bg-slate-900 rounded-3xl p-4 border border-slate-200/70 dark:border-slate-800 shadow-sm animate-pulse space-y-3">
-                  <div className="w-full h-44 bg-slate-200 dark:bg-slate-800 rounded-2xl" />
-                  <div className="w-2/3 h-4 bg-slate-200 dark:bg-slate-800 rounded" />
-                  <div className="w-1/3 h-3 bg-slate-200 dark:bg-slate-800 rounded" />
-                  <div className="w-1/2 h-5 bg-slate-200 dark:bg-slate-800 rounded" />
-                </div>
               ))}
             </div>
-          ) : filteredProducts.length === 0 ? (
-            /* Empty State */
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 max-w-md mx-auto my-8">
-              <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center mx-auto text-2xl">
-                <Package className="w-8 h-8" />
-              </div>
-              <h4 className="text-base font-black text-slate-900 dark:text-white">No Live Products Found</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {searchQuery
-                  ? `No products match your search "${searchQuery}". Try clearing filters.`
-                  : `There are currently no approved products listed under ${selectedCategory}.`}
-              </p>
-              <button
-                onClick={() => { setSelectedCategory('All'); setSearchQuery(''); }}
-                className="inline-flex items-center gap-2 bg-[#0A192F] hover:bg-slate-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-md cursor-pointer"
-              >
-                <span>View All Products</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            /* Live Product Grid */
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-              {filteredProducts.map((product) => {
-                const img = getImg(product);
-                const isItemInWishlist = isInWishlist(product.id);
-                const isJustAdded = addedItemIds[product.id];
-                const price = Number(product.price || 0);
-                const comparePrice = Number(product.compare_at_price || 0);
-                const hasDiscount = comparePrice > price;
-                const discountPct = hasDiscount ? Math.round(((comparePrice - price) / comparePrice) * 100) : 0;
-                const rating = Number(product.rating || product.average_rating || 5).toFixed(1);
-                const inStock = (product.stock_quantity ?? product.stock ?? 10) > 0;
-
-                return (
-                  <Link
-                    key={product.id}
-                    to={`/product/${product.id}`}
-                    className="bg-white dark:bg-slate-900 rounded-3xl p-3.5 sm:p-4 border border-slate-200/80 dark:border-slate-800 hover:border-amber-400 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
-                  >
-                    {/* Top Badges */}
-                    <div className="absolute top-5 left-5 z-10 flex flex-col gap-1.5">
-                      {hasDiscount && (
-                        <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow-sm">
-                          -{discountPct}%
-                        </span>
-                      )}
-                      {product.is_new && (
-                        <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm uppercase">
-                          New
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Wishlist Button */}
-                    <button
-                      onClick={(e) => handleWishlistToggle(e, product)}
-                      className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-white text-slate-400 hover:text-rose-500 flex items-center justify-center shadow-md transition-all cursor-pointer"
-                      title={isItemInWishlist ? "Remove from wishlist" : "Add to wishlist"}
-                    >
-                      <Heart
-                        className={`w-4 h-4 transition-colors ${
-                          isItemInWishlist ? 'fill-rose-500 text-rose-500' : ''
-                        }`}
-                      />
-                    </button>
-
-                    {/* Image Box */}
-                    <div className="w-full h-44 sm:h-48 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center p-3 mb-3 relative">
-                      {img ? (
-                        <img
-                          src={img}
-                          alt={product.name}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <Package className="w-12 h-12 text-slate-300" />
-                      )}
-                    </div>
-
-                    {/* Details */}
-                    <div className="space-y-1.5 flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                          <span className="font-bold uppercase tracking-wider truncate max-w-[120px]">
-                            {product.category || 'General'}
-                          </span>
-                          <div className="flex items-center gap-1 text-amber-500 font-black">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                            <span>{rating}</span>
-                            <span className="text-slate-400 font-normal text-[9px]">({product.reviews ?? product.reviews_count ?? 0})</span>
-                          </div>
-                        </div>
-
-                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-500 transition-colors line-clamp-2 leading-snug">
-                          {product.name}
-                        </h4>
-                      </div>
-
-                      {/* Stock & Escrow Protection Indicator */}
-                      <div className="pt-1 flex items-center justify-between">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold ${
-                            inStock ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${inStock ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                          {inStock ? 'In Stock' : 'Out of Stock'}
-                        </span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-                          <ShieldCheck className="w-3 h-3" /> Escrow
-                        </span>
-                      </div>
-
-                      {/* Price & Add to Cart Button */}
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 mt-2">
-                        <div>
-                          <p className="text-sm sm:text-base font-black text-slate-950 dark:text-white">
-                            ₦{price.toLocaleString()}
-                          </p>
-                          {hasDiscount && (
-                            <p className="text-[10px] text-slate-400 line-through">
-                              ₦{comparePrice.toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={(e) => handleAddToCart(e, product)}
-                          className={`px-3 py-2 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
-                            isJustAdded
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-[#0A192F] hover:bg-amber-400 hover:text-slate-950 text-white'
-                          }`}
-                          title="Add to Cart"
-                        >
-                          {isJustAdded ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Added</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShoppingCart className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Add</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* ── 8. GROWTH METRICS & MILESTONES ── */}
-        <section className="bg-slate-900 rounded-3xl p-8 sm:p-12 text-white border border-slate-800 text-center">
-          <div className="max-w-xl mx-auto space-y-2 mb-8">
-            <span className="text-xs font-black text-amber-400 uppercase tracking-widest">
-              PROVEN TRACK RECORD
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-black">
-              Trusted by Thousands Across Nigeria
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-400">
-              Numbers that reflect our dedication to speed, security, and authentic merchant trade.
-            </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-              <p className="text-3xl sm:text-4xl font-black text-amber-400 font-mono">50K+</p>
-              <p className="text-xs text-slate-400 font-bold uppercase mt-1">Verified Users</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-              <p className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono">₦2.5B+</p>
-              <p className="text-xs text-slate-400 font-bold uppercase mt-1">Volume Processed</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-              <p className="text-3xl sm:text-4xl font-black text-blue-400 font-mono">36</p>
-              <p className="text-xs text-slate-400 font-bold uppercase mt-1">States Covered</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-              <p className="text-3xl sm:text-4xl font-black text-purple-400 font-mono">99.9%</p>
-              <p className="text-xs text-slate-400 font-bold uppercase mt-1">Escrow Success</p>
-            </div>
-          </div>
-        </section>
-
-        {/* ── 9. VERIFIED CUSTOMER TESTIMONIALS ── */}
-        <section className="space-y-6">
-          <div className="text-center max-w-xl mx-auto space-y-2">
-            <span className="text-xs font-black text-amber-600 uppercase tracking-widest">
-              BUYER & SELLER REVIEWS
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              What Real Users Say
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Honest feedback from shoppers and business owners who rely on Abu Mafhal daily.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map((t, idx) => (
-              <div
-                key={idx}
-                className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between"
-              >
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {filteredProducts.map(p => (
+              <div key={p.id} className="rounded-3xl border border-slate-200 bg-white hover:shadow-md transition-all p-4 space-y-3 flex flex-col justify-between group">
                 <div className="space-y-3">
-                  <div className="flex items-center gap-1 text-amber-400">
-                    {[...Array(t.rating)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    ))}
+                  <div className="relative rounded-2xl overflow-hidden aspect-square bg-slate-100 border border-slate-100">
+                    <img src={p.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <button
+                      onClick={() => toggleWishlistHandler(p)}
+                      className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center text-slate-400 hover:text-rose-500 shadow-sm ${
+                        isWishlisted(p.id) ? 'text-rose-600' : ''
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${isWishlisted(p.id) ? 'fill-current' : ''}`} />
+                    </button>
+                    <button
+                      onClick={() => setQuickViewProduct(p)}
+                      className="absolute bottom-2.5 left-2.5 px-3 py-1 rounded-lg bg-[#0A192F]/80 hover:bg-[#0A192F] text-white text-[10px] font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
+                    >
+                      <Eye className="w-3 h-3" /> Quick View
+                    </button>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed italic">
-                    "{t.quote}"
-                  </p>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span className="font-bold uppercase">{p.category || 'Item'}</span>
+                      <span className="flex items-center gap-1 text-slate-600">
+                        <MapPin className="w-2.5 h-2.5 text-[#00BFA5]" />
+                        {p.seller_state}
+                      </span>
+                    </div>
+                    <Link to={`/product/${p.id}`} className="block text-xs font-bold text-[#0A192F] hover:text-[#00BFA5] transition-colors line-clamp-2">
+                      {p.name}
+                    </Link>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs text-amber-500 font-bold">
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    <span>{p.rating || 4.9}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({p.reviews_count || 34})</span>
+                  </div>
+
+                  <div className="flex items-baseline gap-2 pt-1">
+                    <span className="text-base font-black text-[#00BFA5]">₦{Number(p.price).toLocaleString()}</span>
+                    {p.compare_at_price && (
+                      <span className="text-xs text-slate-400 line-through">₦{Number(p.compare_at_price).toLocaleString()}</span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl ${t.color} text-white flex items-center justify-center font-bold text-xs`}>
-                    {t.initials}
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1">
-                      {t.name}
-                      {t.verified && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
-                    </h5>
-                    <p className="text-[11px] text-slate-400">{t.role}</p>
-                  </div>
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      addToCart(p, 1);
+                      showToast('Added to cart!');
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    Add to Cart
+                  </button>
+                  <button
+                    onClick={() => {
+                      addToComparison(p);
+                      showToast('Added to comparison');
+                    }}
+                    className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 cursor-pointer"
+                    title="Compare"
+                  >
+                    <Scale className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </section>
 
-        {/* ── 10. FREQUENTLY ASKED QUESTIONS (FAQ Accordion) ── */}
-        <section className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6">
-          <div className="text-center max-w-xl mx-auto space-y-2">
-            <span className="text-xs font-black text-amber-600 uppercase tracking-widest">
-              FREQUENTLY ASKED QUESTIONS
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              Got Questions? We Have Answers.
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Everything you need to know about shopping, escrow safety, and selling on Abu Mafhal.
-            </p>
-          </div>
-
-          <div className="max-w-3xl mx-auto space-y-3">
-            {FAQS.map((faq, idx) => {
-              const isOpen = openFaqIndex === idx;
-              return (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors"
-                >
-                  <button
-                    onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
-                    className="w-full p-4 sm:p-5 flex items-center justify-between text-left font-bold text-xs sm:text-sm text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  >
-                    <span>{faq.q}</span>
-                    {isOpen ? <ChevronUp className="w-4 h-4 text-amber-500" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-                  </button>
-
-                  {isOpen && (
-                    <div className="p-4 sm:p-5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 11. SELLER INVITATION BANNER (Verified Vendor Hub) ── */}
-        <section className="bg-gradient-to-r from-[#070F1E] via-[#0A192F] to-[#122A4E] rounded-3xl p-6 sm:p-10 text-white border border-slate-800 shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="relative z-10 max-w-xl space-y-3 text-center md:text-left">
-            <div className="inline-flex items-center gap-1.5 bg-amber-400/20 text-amber-400 border border-amber-400/30 text-[10px] font-black uppercase px-3 py-1 rounded-full">
-              <Store className="w-3 h-3" />
-              <span>Vendor Empowerment Program</span>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-black text-white leading-tight">
-              Start Selling Your Products on <span className="text-amber-400">Abu Mafhal</span>
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium">
-              Join Nigeria's fastest growing digital marketplace. Reach verified buyers nationwide with instant payments and low commission fees.
-            </p>
-          </div>
-
-          <div className="relative z-10 flex flex-col sm:flex-row items-center gap-3">
-            <Link
-              to="/vendor-application"
-              className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 whitespace-nowrap"
-            >
-              <span>Open Store Now</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </Link>
+          <div className="pt-6 text-center">
             <Link
               to="/shop"
-              className="bg-slate-800/80 hover:bg-slate-700 text-white px-5 py-3.5 rounded-2xl font-bold text-xs sm:text-sm border border-slate-700 transition-all whitespace-nowrap"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-900 font-extrabold text-xs shadow-xs transition-all"
             >
-              Browse Products
+              <span>Explore All 15,000+ Items in Shop</span>
+              <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-        </section>
+        </div>
+      </section>
 
-      </main>
-
-      {/* ── 12. COMPREHENSIVE SECURITY & LEGAL FOOTER ── */}
-      <footer className="bg-[#070F1E] text-slate-400 border-t border-slate-800/80 mt-12 py-12 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
-          
-          {/* Brand & Corporate Credentials */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-amber-400 p-1.5 flex items-center justify-center shadow-md">
-                <img src={AM_LOGO} alt="" className="w-full h-full object-contain" />
+      {/* ─── 6. INTERACTIVE CONSIGNMENT TRACKING WIDGET ─── */}
+      <section className="py-12 bg-white border-b border-slate-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="rounded-3xl bg-slate-50 border border-slate-200 p-6 sm:p-10 space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#00BFA5]/10 flex items-center justify-center text-[#00BFA5]">
+                <Truck className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-base font-black text-white">ABU MAFHAL</span>
-                <span className="block text-[9px] font-bold text-amber-400 uppercase tracking-widest">MARKETPLACE</span>
+                <h3 className="text-xl font-extrabold text-[#0A192F]">Live Consignment & Waybill Tracker</h3>
+                <p className="text-xs text-slate-500">Track shipments across Nigeria with real-time waypoint telemetry.</p>
               </div>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Nigeria’s trusted digital marketplace connecting buyers with verified sellers nationwide. Authentic products, 100% secured escrow payments, and swift delivery.
-            </p>
-            <div className="pt-2 text-[11px] text-slate-500 space-y-1">
-              <p>Registered Entity: <span className="text-slate-300 font-bold">ABU MAFHAL LTD</span></p>
-              <p>Corporate RC: <span className="text-slate-300 font-bold">RC-8979939</span></p>
-            </div>
-          </div>
 
-          {/* Quick Links */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-black uppercase text-white tracking-wider">Quick Navigation</h4>
-            <ul className="space-y-2 text-xs">
-              <li><Link to="/shop" className="hover:text-amber-400 transition-colors">Marketplace Catalog</Link></li>
-              <li><Link to="/stores" className="hover:text-amber-400 transition-colors">Verified Merchant Stores</Link></li>
-              <li><Link to="/buyer/orders" className="hover:text-amber-400 transition-colors">Track Active Orders</Link></li>
-              <li><Link to="/vendor-application" className="hover:text-amber-400 transition-colors">Become a Seller</Link></li>
-              <li><Link to="/cart" className="hover:text-amber-400 transition-colors">Shopping Cart</Link></li>
-            </ul>
-          </div>
+            <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={trackQuery}
+                onChange={(e) => setTrackQuery(e.target.value)}
+                placeholder="Enter Order ID or Consignment Number (e.g. ORD-981240)..."
+                className="flex-1 text-xs px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:border-[#00BFA5]"
+              />
+              <button
+                type="submit"
+                className="px-6 py-3 rounded-2xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+              >
+                Track Now
+              </button>
+            </form>
 
-          {/* Customer Care & Security */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-black uppercase text-white tracking-wider">Support & Safety</h4>
-            <ul className="space-y-2 text-xs">
-              <li><Link to="/contact" className="hover:text-amber-400 transition-colors">Help Center & Disputes</Link></li>
-              <li><Link to="/terms" className="hover:text-amber-400 transition-colors">Terms & Escrow Policy</Link></li>
-              <li><Link to="/privacy" className="hover:text-amber-400 transition-colors">NDPR Privacy Compliance</Link></li>
-              <li><Link to="/about" className="hover:text-amber-400 transition-colors">About Abu Mafhal</Link></li>
-            </ul>
-          </div>
-
-          {/* Verified Payment Partners & Badges */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-black uppercase text-white tracking-wider">Security & Guarantee</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              All transactions are secured with 256-bit bank encryption via CBN-licensed payment institutions.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <span className="px-2.5 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 rounded-lg border border-slate-700">Paystack Verified</span>
-              <span className="px-2.5 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 rounded-lg border border-slate-700">Flutterwave</span>
-              <span className="px-2.5 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 rounded-lg border border-slate-700">PCI-DSS Level 1</span>
-              <span className="px-2.5 py-1 bg-emerald-950 text-[10px] font-bold text-emerald-400 rounded-lg border border-emerald-800">100% Escrow</span>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-t border-slate-200/60">
+              <span className="flex items-center gap-1.5 font-semibold text-[#0A192F]">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Live GPS Milestones
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1.5 font-semibold text-[#0A192F]">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                Escrow Locked until Delivery
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1.5 font-semibold text-[#0A192F]">
+                <Phone className="w-4 h-4 text-amber-600" />
+                Dedicated Rider Dispatch
+              </span>
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="max-w-7xl mx-auto pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} Abu Mafhal Ltd. All rights reserved. Registered under Nigerian Corporate Law.</p>
-          <p className="text-[11px] text-amber-500 font-bold">Your Marketplace, Guaranteed Safe.</p>
+      {/* ─── 7. WHY CHOOSE ABU MAFHAL PILLARS ─── */}
+      <section className="py-14 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-10">
+          <div className="text-center space-y-2 max-w-xl mx-auto">
+            <span className="text-xs font-extrabold uppercase text-[#00BFA5] tracking-widest">Marketplace Standards</span>
+            <h2 className="text-3xl font-black text-[#0A192F]">Why Nigeria Trusts Abu Mafhal</h2>
+            <p className="text-xs text-slate-500">Built to eliminate online purchase fraud with bank-grade security protocols.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {VALUE_PILLARS.map(p => (
+              <div key={p.title} className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3">
+                <div className={`w-12 h-12 rounded-2xl ${p.bg} ${p.border} border flex items-center justify-center ${p.color}`}>
+                  <p.icon className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-extrabold text-[#0A192F]">{p.title}</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">{p.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-[#00BFA5]">
+            <button onClick={() => openPolicy('escrow')} className="hover:underline cursor-pointer">
+              Read 100% Escrow Policy →
+            </button>
+            <span>•</span>
+            <button onClick={() => openPolicy('returns')} className="hover:underline cursor-pointer">
+              Read 7-Day Refund Safe Harbor →
+            </button>
+            <span>•</span>
+            <button onClick={() => openPolicy('merchants')} className="hover:underline cursor-pointer">
+              Read Merchant Vetting Standards →
+            </button>
+          </div>
         </div>
-      </footer>
+      </section>
+
+      {/* ─── 8. BECOME A VENDOR PROMOTION ─── */}
+      <section className="py-12 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="rounded-3xl bg-gradient-to-br from-[#0A192F] to-[#112240] p-8 sm:p-12 text-white flex flex-col md:flex-row md:items-center justify-between gap-8 shadow-xl">
+            <div className="space-y-3 max-w-xl">
+              <span className="px-3 py-1 rounded-full bg-[#00BFA5]/20 text-[#00BFA5] text-[10px] font-black uppercase tracking-widest">
+                Merchant Opportunity
+              </span>
+              <h3 className="text-2xl sm:text-4xl font-black text-white leading-tight">
+                Sell to 50,000+ Verified Buyers Across Nigeria
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Open your verified online storefront on Abu Mafhal with zero setup fees. Enjoy automatic payouts, nationwide logistics dispatch, and fraud-free escrow settlements.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+              <Link
+                to="/vendor-application"
+                className="px-8 py-3.5 rounded-2xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-[#00BFA5]/25 transition-all text-center"
+              >
+                Apply as a Merchant
+              </Link>
+              <Link
+                to="/stores"
+                className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs sm:text-sm transition-all text-center"
+              >
+                View Active Stores
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Footer />
     </div>
   );
-};
-
-export default Home;
+}

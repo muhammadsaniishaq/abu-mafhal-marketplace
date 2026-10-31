@@ -26,6 +26,9 @@ import Notifications from './pages/Notifications';
 import AITest from './pages/AITest';
 import CheckoutPage from './pages/CheckoutPage';
 import Stores from './pages/Stores';
+import TrackOrder from './pages/TrackOrder';
+import PaySmallSmall from './pages/PaySmallSmall';
+import ProductComparison from './pages/ProductComparison';
 
 // ==================== DASHBOARD LAYOUTS ====================
 import AdminDashboard from './pages/AdminDashboard';
@@ -209,6 +212,9 @@ function App() {
                 <Route path="/ai-test" element={<AITest />} />
                 <Route path="/checkout" element={<CheckoutPage />} />
                 <Route path="/stores" element={<Stores />} />
+                <Route path="/track-order" element={<TrackOrder />} />
+                <Route path="/pay-small-small" element={<PaySmallSmall />} />
+                <Route path="/compare" element={<ProductComparison />} />
                 <Route
                   path="/notifications"
                   element={
