@@ -541,6 +541,49 @@ const ProfilePageInner = ({
             badge: 'ADMIN',
             badgeColor: '#D9A73A',
             action: handleOpenAdminConsole
+        }, {
+            icon: 'key-outline',
+            iconColor: '#0D9488',
+            iconBg: 'rgba(13, 148, 136, 0.15)',
+            label: 'Admin API Keys Manager',
+            subtitle: 'Review & approve vendor developer API requests',
+            badge: 'API',
+            badgeColor: '#0D9488',
+            action: () => {
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
+                        window.localStorage.setItem('@abumafhal_admin_tab', 'api_keys');
+                        if (window.history && window.history.replaceState) {
+                            window.history.replaceState(null, '', '/mobile#admin?tab=api_keys');
+                        }
+                    }
+                } catch (_) {}
+                if (typeof onOpenAdmin === 'function') onOpenAdmin('api_keys');
+                else if (typeof onNavigate === 'function') onNavigate('AdminDashboard', { tab: 'api_keys' });
+            }
+        }] : []),
+        ...(isVendor ? [{
+            icon: 'code-slash-outline',
+            iconColor: '#6366F1',
+            iconBg: 'rgba(99, 102, 241, 0.15)',
+            label: 'Vendor Developer API',
+            subtitle: 'Request API keys, webhooks & documentation',
+            badge: 'DEV',
+            badgeColor: '#6366F1',
+            action: () => {
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem('@abumafhal_last_screen', 'VendorDashboard');
+                        window.localStorage.setItem('@abumafhal_vendor_tab', 'developer_api');
+                        if (window.history && window.history.replaceState) {
+                            window.history.replaceState(null, '', '/mobile#vendor?tab=developer_api');
+                        }
+                    }
+                } catch (_) {}
+                if (typeof onOpenVendor === 'function') onOpenVendor('developer_api');
+                else if (typeof onNavigate === 'function') onNavigate('VendorDashboard', { tab: 'developer_api' });
+            }
         }] : []),
         {
             icon: 'settings-outline',
@@ -1151,54 +1194,80 @@ const ProfilePageInner = ({
                             </View>
                         </TouchableOpacity>
 
-                        {/* ── ADMIN QUICK SHORTCUTS: Coupons Direct Button ── */}
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        {/* ── ADMIN QUICK SHORTCUTS ── */}
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
                             <TouchableOpacity
                                 onPress={handleOpenAdminConsole}
                                 activeOpacity={0.82}
                                 style={{
-                                    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
                                     backgroundColor: 'rgba(217, 167, 58, 0.13)',
-                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 10,
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 6,
                                     borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.3)',
                                 }}
                             >
-                                <Ionicons name="grid-outline" size={14} color="#D4AF37" />
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0A192F' }}>Overview</Text>
+                                <Ionicons name="grid-outline" size={13} color="#D4AF37" />
+                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#0A192F' }}>Overview</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => {
                                     try {
                                         if (typeof window !== 'undefined' && window.localStorage) {
                                             window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
+                                            window.localStorage.setItem('@abumafhal_admin_tab', 'api_keys');
+                                            if (window.history && window.history.replaceState) {
+                                                window.history.replaceState(null, '', '/mobile#admin?tab=api_keys');
+                                            }
                                         }
                                     } catch (_) {}
-                                    if (typeof onOpenAdmin === 'function') onOpenAdmin();
-                                    else if (typeof onNavigate === 'function') onNavigate('AdminDashboard');
+                                    if (typeof onOpenAdmin === 'function') onOpenAdmin('api_keys');
+                                    else if (typeof onNavigate === 'function') onNavigate('AdminDashboard', { tab: 'api_keys' });
                                 }}
                                 activeOpacity={0.82}
                                 style={{
-                                    flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6,
-                                    backgroundColor: '#059669',
-                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 10,
+                                    flex: 1.2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                    backgroundColor: '#0D9488',
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 6,
                                 }}
                             >
-                                <Ionicons name="ticket" size={14} color="#FFFFFF" />
-                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFFFFF' }}>🎟️ Coupons</Text>
-                                <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="key" size={13} color="#FFFFFF" />
+                                <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#FFFFFF' }}>🔑 API Keys</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    try {
+                                        if (typeof window !== 'undefined' && window.localStorage) {
+                                            window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
+                                            window.localStorage.setItem('@abumafhal_admin_tab', 'coupons');
+                                            if (window.history && window.history.replaceState) {
+                                                window.history.replaceState(null, '', '/mobile#admin?tab=coupons');
+                                            }
+                                        }
+                                    } catch (_) {}
+                                    if (typeof onOpenAdmin === 'function') onOpenAdmin('coupons');
+                                    else if (typeof onNavigate === 'function') onNavigate('AdminDashboard', { tab: 'coupons' });
+                                }}
+                                activeOpacity={0.82}
+                                style={{
+                                    flex: 1.1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                    backgroundColor: '#059669',
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 6,
+                                }}
+                            >
+                                <Ionicons name="ticket" size={13} color="#FFFFFF" />
+                                <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#FFFFFF' }}>🎟️ Coupons</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => onNavigate && onNavigate('DriverDashboard')}
                                 activeOpacity={0.82}
                                 style={{
-                                    flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    flex: 1.1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
                                     backgroundColor: '#7C3AED',
-                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 10,
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 6,
                                 }}
                             >
-                                <Ionicons name="bicycle" size={14} color="#FFFFFF" />
-                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFFFFF' }}>🚚 Driver Portal</Text>
-                                <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="bicycle" size={13} color="#FFFFFF" />
+                                <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#FFFFFF' }}>🚚 Driver</Text>
                             </TouchableOpacity>
                         </View>
                         </React.Fragment>

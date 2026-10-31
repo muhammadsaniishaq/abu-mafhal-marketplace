@@ -323,11 +323,20 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                 <Text style={styles.lockNoteText}>&quot;{accessRequest.note}&quot;</Text>
                             </View>
                         ) : null}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="lock-closed" size={14} color="#D97706" />
-                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#B45309' }}>
-                                Awaiting Admin Approval
-                            </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="lock-closed" size={14} color="#D97706" />
+                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#B45309' }}>
+                                    Awaiting Admin Approval
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={loadApiKeys}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#D97706', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
+                            >
+                                <Ionicons name="refresh" size={12} color="#FFFFFF" />
+                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#FFFFFF' }}>Check Status</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 ) : accessStatus === 'rejected' ? (
@@ -391,9 +400,17 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                 </>
                             )}
                         </TouchableOpacity>
-                    </View>
-                ) : (
-                    <>
+                ) : null}
+            </View>
+
+            {accessStatus === 'approved' ? (
+                <>
+                    {/* Key Generator Card */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <Ionicons name="sparkles" size={18} color="#D9A73A" />
+                            <Text style={styles.cardTitle}>Generate API Key</Text>
+                        </View>
                         {/* Key Type Selector: Live vs Test */}
                         <View style={styles.modeSelectorRow}>
                             <TouchableOpacity
@@ -427,9 +444,7 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                                 </>
                             )}
                         </TouchableOpacity>
-                    </>
-                )}
-            </View>
+                    </View>
 
             {/* Keys Management Card */}
             <View style={styles.card}>
@@ -806,6 +821,8 @@ export const VendorApiKeys = ({ user, vendor, onBack }) => {
                     </View>
                 </View>
             </View>
+            </>
+            ) : null}
         </ScrollView>
     );
 };

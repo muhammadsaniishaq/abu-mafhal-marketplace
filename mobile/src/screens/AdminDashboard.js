@@ -39,6 +39,7 @@ import { AdminHomeSettings } from './admin/AdminHomeSettings';
 import { AdminShippingManagement } from './admin/AdminShippingManagement';
 import { AdminAIAssistantModal } from '../components/AdminAIAssistantModal';
 import { VendorStoreProfile } from './VendorStoreProfile';
+import { AdminApiManagement } from './admin/AdminApiManagement';
 
 // ─── NAVY & GOLD LIGHT PALETTE ───────────────────────────────────────────────
 const NAVY = '#0E1A2E';
@@ -62,6 +63,7 @@ const MODULE_SECTIONS = [
         items: [
             { id: 'users', title: 'Customers', desc: 'User accounts, wallets & activity', icon: 'people-outline', color: '#059669', bg: '#ECFDF5' },
             { id: 'vendors', title: 'Vendors', desc: 'Merchant stores & verifications', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'api_keys', title: 'Developer API Manager', desc: 'Approve vendor API access & revoke keys', icon: 'key-outline', color: '#0D9488', bg: '#CCFBF1' },
             { id: 'payouts', title: 'Vendor Payouts', desc: 'Settlements for vendors & riders', icon: 'wallet-outline', color: '#D97706', bg: '#FFFBEB' },
             { id: 'referrals', title: 'Referrals & Rewards', desc: 'Affiliates and reward point programs', icon: 'gift-outline', color: '#7C3AED', bg: '#F5F3FF' },
         ]
@@ -98,6 +100,7 @@ const MODULE_SECTIONS = [
             { id: 'shipping', title: 'Shipping & Distance Rates', desc: 'GPS routing, base fee, per-km rates & zones', icon: 'car-outline', color: '#0284C7', bg: '#F0F9FF' },
             { id: 'home_settings', title: 'Homepage Layout', desc: 'Configure homepage sections and widgets', icon: 'home-outline', color: '#4F46E5', bg: '#EEF2FF' },
             { id: 'cms', title: 'CMS Pages', desc: 'About Us, Terms & Conditions, Privacy Policy', icon: 'document-text-outline', color: '#475569', bg: '#F1F5F9' },
+            { id: 'api_keys', title: 'API Access & Gateway Keys', desc: 'Manage vendor REST endpoints & access requests', icon: 'key-outline', color: '#0D9488', bg: '#CCFBF1' },
             { id: 'settings', title: 'Global Platform Settings', desc: 'Shipping fees, app configs & payment gateways', icon: 'settings-outline', color: '#0E1A2E', bg: '#F8FAFC' },
         ]
     }
@@ -601,6 +604,7 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
                         {[
                             { id: 'products', label: '+ Add Product', icon: 'add-circle', bg: '#0E1A2E', text: '#D9A73A', border: '#D9A73A' },
+                            { id: 'api_keys', label: '🔑 API Manager', icon: 'key', bg: '#CCFBF1', text: '#0D9488', border: '#5EEAD4' },
                             { id: 'orders', label: 'PSS / POD Hub', icon: 'cart', bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' },
                             { id: 'coupons', label: 'New Voucher', icon: 'ticket', bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' },
                             { id: 'broadcast', label: 'Push Broadcast', icon: 'megaphone', bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' },
@@ -823,7 +827,7 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                 <View style={{ marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={{ fontSize: 12, fontWeight: '900', color: NAVY, letterSpacing: 0.3, paddingLeft: 2 }}>
-                            ADMIN DIRECTORY (26 MODULES)
+                            ADMIN DIRECTORY (27 MODULES)
                         </Text>
                         <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B' }}>
                             Tap to launch
@@ -845,7 +849,7 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     }}>
                         <Ionicons name="search" size={15} color="#94A3B8" />
                         <TextInput
-                            placeholder="Search 26 modules (Orders, Coupons, SEO...)..."
+                            placeholder="Search 27 modules (Orders, API Keys, Coupons...)..."
                             placeholderTextColor="#94A3B8"
                             value={dashboardSearch}
                             onChangeText={setDashboardSearch}
@@ -861,7 +865,7 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                     {/* Category Filter Pills */}
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
                         {[
-                            { id: 'all', label: 'All (26)' },
+                            { id: 'all', label: 'All (27)' },
                             { id: 'Commerce & Catalog', label: 'Commerce' },
                             { id: 'Users & Relationships', label: 'Users' },
                             { id: 'Marketing & Promotions', label: 'Marketing' },
@@ -1128,6 +1132,9 @@ export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
                 return <AdminUsers navigation={navigation} onBack={handleBack} />;
             case 'vendors':
                 return <AdminVendors navigation={navigation} onBack={handleBack} />;
+            case 'api_keys':
+            case 'api-keys':
+                return <AdminApiManagement navigation={navigation} onBack={handleBack} user={user} />;
             case 'payouts':
                 return <AdminPayouts navigation={navigation} onBack={handleBack} />;
             case 'referrals':

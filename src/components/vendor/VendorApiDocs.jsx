@@ -634,8 +634,16 @@ print("Sales:", data.get("sales_summary"))`
             </div>
             <div className="flex flex-col items-center gap-2 px-5 py-4 bg-amber-50/70 border border-amber-200 rounded-2xl shrink-0">
               <Lock className="w-5 h-5 text-amber-700" />
-              <span className="text-[11px] font-bold text-amber-900">Key Generation Locked</span>
+              <span className="text-[11px] font-bold text-amber-900">Developer Portal Locked</span>
               <span className="text-[10px] text-amber-700 text-center">Unlocks upon admin approval</span>
+              <button
+                type="button"
+                onClick={loadKeys}
+                className="mt-1 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Check Status</span>
+              </button>
             </div>
           </div>
         </div>
@@ -768,6 +776,7 @@ print("Sales:", data.get("sales_summary"))`
           </div>
         </div>
       ) : (
+        <>
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
             <div>
@@ -942,7 +951,6 @@ print("Sales:", data.get("sales_summary"))`
           )}
         </div>
       </div>
-      )}
 
       {/* ─── Interactive Live Playground (Products, Payments, Orders) ─── */}
       <div id="playground" className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
@@ -1582,6 +1590,8 @@ print("Sales:", data.get("sales_summary"))`
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

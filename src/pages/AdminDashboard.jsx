@@ -7,7 +7,7 @@ import {
   Bell, ChevronDown, Search, Shield, ChevronRight,
   ExternalLink, CheckCircle2, RefreshCw, ShieldCheck,
   CreditCard, Tag, Zap, DollarSign, AlertTriangle, Star,
-  Truck, ArrowRight, ChevronLeft, ChevronUp
+  Truck, ArrowRight, ChevronLeft, ChevronUp, Key
 } from 'lucide-react';
 import { supabase } from '../config/supabase';
 
@@ -92,6 +92,14 @@ const MODULE_SECTIONS = [
         icon: ShieldCheck, 
         color: 'text-indigo-600',
         badge: 'KYC'
+      },
+      { 
+        label: 'API Keys Management', 
+        subLabel: 'Vendor API Access & Approvals',
+        path: '/admin/api-keys', 
+        icon: Key, 
+        color: 'text-teal-600',
+        badge: 'Approvals'
       },
       { 
         label: 'Customer Accounts', 
@@ -518,6 +526,18 @@ const AdminDashboard = () => {
               <span className="hidden sm:inline">Ododi:</span>
               <span className="bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded-full text-[10px]">
                 {pendingOrdersCount}
+              </span>
+            </Link>
+
+            {/* Quick API Keys Governance Button */}
+            <Link
+              to="/admin/api-keys"
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-xl text-xs font-bold text-teal-900 transition-all shadow-xs"
+            >
+              <Key className="w-3.5 h-3.5 text-teal-600" />
+              <span className="hidden sm:inline">API Keys Manager</span>
+              <span className="bg-teal-600 text-white font-black px-1.5 py-0.2 rounded-full text-[9px] uppercase">
+                Approvals
               </span>
             </Link>
 
