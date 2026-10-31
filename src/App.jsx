@@ -29,6 +29,7 @@ import Stores from './pages/Stores';
 import TrackOrder from './pages/TrackOrder';
 import PaySmallSmall from './pages/PaySmallSmall';
 import ProductComparison from './pages/ProductComparison';
+import Profile from './pages/Profile';
 
 // ==================== DASHBOARD LAYOUTS ====================
 import AdminDashboard from './pages/AdminDashboard';
@@ -232,16 +233,11 @@ function App() {
                 {/* ==================== VENDOR APPLICATION & REGISTRATION ==================== */}
                 <Route path="/vendor-application" element={<VendorApplication />} />
                 <Route path="/vendor-register" element={<VendorApplication />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/orders" element={<Profile />} />
 
                 {/* ==================== CART & CHECKOUT ==================== */}
-                <Route
-                  path="/cart"
-                  element={
-                    <ProtectedRoute>
-                      <Cart />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/cart" element={<Cart />} />
 
                 {/* ==================== MESSAGES/CHAT ==================== */}
                 <Route

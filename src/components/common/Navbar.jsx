@@ -338,25 +338,36 @@ export default function Navbar() {
 
                       <div className="py-1">
                         <Link
+                          to="/profile"
+                          onClick={() => setUserDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0A192F]"
+                        >
+                          <User className="w-4 h-4 text-[#00BFA5]" />
+                          <span>My Profile & Hub</span>
+                        </Link>
+                        <Link
                           to={getDashboardPath()}
+                          onClick={() => setUserDropdownOpen(false)}
                           className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0A192F]"
                         >
                           <Layers className="w-4 h-4 text-slate-400" />
-                          Dashboard
+                          <span>{currentUser.role === 'admin' ? 'Admin Console' : currentUser.role === 'vendor' ? 'Vendor Hub' : 'Buyer Dashboard'}</span>
                         </Link>
                         <Link
-                          to="/buyer/orders"
+                          to="/profile?tab=orders"
+                          onClick={() => setUserDropdownOpen(false)}
                           className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0A192F]"
                         >
                           <Package className="w-4 h-4 text-slate-400" />
-                          My Orders
+                          <span>My Orders & Delivery</span>
                         </Link>
                         <Link
                           to="/buyer/wishlist"
+                          onClick={() => setUserDropdownOpen(false)}
                           className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0A192F]"
                         >
-                          <Heart className="w-4 h-4 text-slate-400" />
-                          My Wishlist ({totalWishlistCount})
+                          <Heart className="w-4 h-4 text-rose-500" />
+                          <span>Wishlist ({totalWishlistCount})</span>
                         </Link>
                       </div>
 
@@ -538,9 +549,9 @@ export default function Navbar() {
           </div>
           <span className="text-[10px] font-bold">Cart</span>
         </Link>
-        <Link to={currentUser ? getDashboardPath() : '/login'} className={`flex flex-col items-center gap-1 ${location.pathname.startsWith('/buyer') || location.pathname.startsWith('/vendor') || location.pathname.startsWith('/admin') ? 'text-[#00BFA5]' : 'text-slate-500'}`}>
+        <Link to={currentUser ? '/profile' : '/login'} className={`flex flex-col items-center gap-1 ${location.pathname === '/profile' || location.pathname.startsWith('/buyer') || location.pathname.startsWith('/vendor') || location.pathname.startsWith('/admin') ? 'text-[#00BFA5]' : 'text-slate-500'}`}>
           <User className="w-5 h-5" />
-          <span className="text-[10px] font-bold">{currentUser ? 'Account' : 'Login'}</span>
+          <span className="text-[10px] font-bold">{currentUser ? 'Profile' : 'Login'}</span>
         </Link>
       </div>
     </header>
