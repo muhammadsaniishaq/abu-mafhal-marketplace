@@ -324,191 +324,121 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── 1. ULTRA-MODERN LUXURY HERO SECTION WITH 3D AMBIENT LIGHTING ─── */}
-      <section className="relative overflow-hidden mesh-gradient-dark text-white border-b border-white/10 py-16 lg:py-24">
-        {/* Ambient Glow Orbs */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#00BFA5]/25 rounded-full blur-[128px] pointer-events-none animate-pulse-slow" />
-        <div className="absolute top-1/2 -right-32 w-[32rem] h-[32rem] bg-[#D9A73A]/20 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-blue-600/15 rounded-full blur-[110px] pointer-events-none" />
+      {/* ─── 1. CLEAN MODERN AIRY HERO ─── */}
+      <section className="relative overflow-hidden bg-white border-b border-slate-200/80 py-12 lg:py-16">
+        {/* Soft Modern Ambient Glows */}
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-[#00BFA5]/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-10 w-80 h-80 bg-amber-100/40 rounded-full blur-2xl pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             {/* Left Content */}
-            <div className="lg:col-span-7 space-y-7">
-              {/* Top Trust & Live Delivery Pill */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-white">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00BFA5] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00BFA5]"></span>
-                  </span>
-                  <span className="font-semibold text-slate-300">Live CBN Escrow Protection Active</span>
-                </div>
-
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs">
-                  <MapPin className="w-3.5 h-3.5 text-[#00BFA5]" />
-                  <span className="text-slate-300">Ship to:</span>
-                  <select
-                    value={selectedState.name}
-                    onChange={(e) => {
-                      const found = DELIVERY_STATES.find(s => s.name === e.target.value);
-                      if (found) setSelectedState(found);
-                    }}
-                    className="bg-transparent font-bold text-white outline-none cursor-pointer hover:text-[#00BFA5] transition-colors"
-                  >
-                    {DELIVERY_STATES.map(s => (
-                      <option key={s.name} value={s.name} className="bg-[#0A192F] text-white">{s.name}</option>
-                    ))}
-                  </select>
-                  <span className="hidden sm:inline text-[11px] text-[#00BFA5] font-semibold">
-                    ({selectedState.days})
-                  </span>
-                </div>
+            <div className="lg:col-span-7 space-y-6">
+              {/* Trust Badge */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 shadow-xs">
+                <ShieldCheck className="w-4 h-4 text-[#00BFA5]" />
+                <span>100% Verified Escrow Protected Marketplace</span>
               </div>
 
-              {/* Main Headline */}
+              {/* Headline */}
               <div className="space-y-3">
-                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.08]">
-                  The Future of <br className="hidden sm:block" />
-                  <span className="bg-gradient-to-r from-emerald-400 via-[#00BFA5] to-teal-200 bg-clip-text text-transparent">
-                    Zero-Risk Commerce
-                  </span>
-                  <br />
-                  in Nigeria.
+                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-[#0A192F] tracking-tight leading-[1.12]">
+                  Shop Authentic Items with <span className="text-[#00BFA5]">Zero Purchase Risk.</span>
                 </h1>
-                <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
-                  Shop over 15,000+ vetted electronics, fashion, and provisions. Your funds remain locked inside our automated banking escrow vault until your package arrives sealed and approved at your doorstep.
+                <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-xl font-normal">
+                  Discover thousands of genuine electronics, fashion, and provisions. Your funds are held securely in a regulated escrow vault and only released when you inspect and approve your order.
                 </p>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              {/* Clean Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Link
                   to="/shop"
-                  className="px-8 py-4 rounded-2xl bg-gradient-to-r from-[#00BFA5] to-[#00a896] hover:from-[#00a896] hover:to-[#008f80] text-white font-black text-sm shadow-xl shadow-[#00BFA5]/30 hover:shadow-[#00BFA5]/50 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2.5"
+                  className="px-8 py-3.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-sm shadow-md shadow-[#00BFA5]/20 hover:shadow-lg transition-all flex items-center gap-2"
                 >
-                  <Sparkles className="w-4 h-4 text-emerald-200" />
+                  <ShoppingCart className="w-4 h-4" />
                   <span>Start Shopping</span>
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </Link>
-                <Link
-                  to="/pay-small-small"
-                  className="px-6 py-4 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 text-white font-extrabold text-sm transition-all flex items-center gap-2 hover:border-[#D9A73A]/60"
-                >
-                  <Zap className="w-4 h-4 text-[#D9A73A] fill-current" />
-                  <span>Pay Small Small (BNPL)</span>
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   to="/stores"
-                  className="px-5 py-4 rounded-2xl bg-transparent hover:bg-white/5 text-slate-300 hover:text-white font-semibold text-sm transition-all flex items-center gap-2"
+                  className="px-6 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0A192F] font-bold text-sm transition-all flex items-center gap-2"
                 >
-                  <Store className="w-4 h-4 text-slate-400" />
-                  <span>Explore Stores</span>
+                  <Store className="w-4 h-4 text-[#D9A73A]" />
+                  <span>Browse Stores</span>
+                </Link>
+                <Link
+                  to="/pay-small-small"
+                  className="px-5 py-3.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold text-sm transition-all flex items-center gap-1.5"
+                >
+                  <Zap className="w-4 h-4 text-amber-600 fill-current" />
+                  <span>Pay Small Small (BNPL)</span>
                 </Link>
               </div>
 
-              {/* Live Metric Stats Cards with Glassmorphism */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-white/10">
-                {[
-                  { label: 'Escrow Vault Locked', val: '₦1.8B+', sub: 'Zero fraud rate', color: 'text-[#00BFA5]' },
-                  { label: 'Active Catalog', val: '15,000+', sub: '100% Genuine', color: 'text-white' },
-                  { label: 'Vetted Merchants', val: '1,200+', sub: 'CAC Verified', color: 'text-amber-400' },
-                  { label: 'Coverage', val: '36 States', sub: 'FCT Doorstep', color: 'text-teal-300' }
-                ].map(m => (
-                  <div key={m.label} className="p-3.5 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 space-y-0.5 hover:bg-white/10 transition-colors">
-                    <p className={`text-xl sm:text-2xl font-black ${m.color}`}>{m.val}</p>
-                    <p className="text-[11px] font-bold text-slate-200">{m.label}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">{m.sub}</p>
-                  </div>
-                ))}
+              {/* Streamlined Trust Indicators */}
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100 max-w-lg">
+                <div>
+                  <p className="text-xl font-black text-[#0A192F]">15,000+</p>
+                  <p className="text-xs text-slate-500 font-medium">Verified Items</p>
+                </div>
+                <div>
+                  <p className="text-xl font-black text-[#00BFA5]">100%</p>
+                  <p className="text-xs text-slate-500 font-medium">Escrow Protected</p>
+                </div>
+                <div>
+                  <p className="text-xl font-black text-[#D9A73A]">36 States</p>
+                  <p className="text-xs text-slate-500 font-medium">Doorstep Delivery</p>
+                </div>
               </div>
             </div>
 
-            {/* Right Showcase: 3D Holographic Escrow Showcase Card */}
-            <div className="lg:col-span-5 relative">
-              <div className="glow-card rounded-3xl bg-gradient-to-b from-white/10 to-white/[0.03] backdrop-blur-2xl border border-white/20 p-7 sm:p-8 space-y-6 shadow-2xl">
-                {/* Vault Status Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-white/10">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-[#00BFA5]/20 border border-[#00BFA5]/40 flex items-center justify-center text-[#00BFA5]">
-                      <ShieldCheck className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-wider text-white">Smart Escrow Vault</p>
-                      <p className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
-                        <CheckCircle2 className="w-3 h-3" /> 256-Bit Financial Encryption
-                      </p>
-                    </div>
+            {/* Right Showcase Card: Spotless Clean Product Spotlight */}
+            <div className="lg:col-span-5">
+              <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xl shadow-slate-200/50 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Spotlight Pick</span>
                   </div>
-                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-[#00BFA5]/15 text-[#00BFA5] border border-[#00BFA5]/30">
-                    ESCROW VERIFIED
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Escrow Verified
                   </span>
                 </div>
 
-                {/* Featured Pick Title */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[11px] font-extrabold text-[#D9A73A] uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> Prime Spotlight
-                    </span>
-                    <span className="text-[11px] text-slate-400">Direct from Lagos Hub</span>
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-black text-white">{FALLBACK_POPULAR[0].name}</h3>
-                </div>
-
-                {/* Visual Product Box with Ambient Shadow */}
-                <div className="rounded-2xl overflow-hidden aspect-video bg-black/40 border border-white/15 relative group">
+                <div className="rounded-2xl overflow-hidden aspect-video bg-slate-50 border border-slate-100 relative group">
                   <img
                     src={FALLBACK_POPULAR[0].image_url}
                     alt={FALLBACK_POPULAR[0].name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#07101E] via-transparent to-transparent opacity-80" />
-                  
-                  {/* Floating Price Tag */}
-                  <div className="absolute bottom-3 left-3 bg-[#0A192F]/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/20 shadow-lg">
-                    <p className="text-[10px] text-slate-300 font-medium">Vault Release Price</p>
-                    <p className="text-xl font-black text-[#00BFA5]">₦{FALLBACK_POPULAR[0].price.toLocaleString()}</p>
-                  </div>
-
-                  <div className="absolute top-3 right-3 bg-rose-500/90 backdrop-blur-md px-2.5 py-1 rounded-lg text-white text-[10px] font-black uppercase">
-                    Free Delivery
+                  <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                    <span className="text-base font-black text-[#00BFA5]">₦{FALLBACK_POPULAR[0].price.toLocaleString()}</span>
                   </div>
                 </div>
 
-                {/* Live Vault Progress Indicator */}
-                <div className="p-3.5 rounded-2xl bg-black/30 border border-white/10 space-y-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-300 font-semibold flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-[#00BFA5]" /> Buyer Protection Protocol
-                    </span>
-                    <span className="text-emerald-400 font-mono font-bold">100% Guaranteed</span>
-                  </div>
-                  <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-[#00BFA5] to-emerald-400 h-full w-full rounded-full" />
-                  </div>
-                  <p className="text-[10px] text-slate-400 leading-normal">
-                    Payment is released to vendor ONLY when you inspect and confirm receipt.
-                  </p>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-[#00BFA5]">{FALLBACK_POPULAR[0].category}</span>
+                  <h3 className="text-base font-extrabold text-[#0A192F] line-clamp-1">{FALLBACK_POPULAR[0].name}</h3>
+                  <p className="text-xs text-slate-500">Shipped with live waybill tracking from {FALLBACK_POPULAR[0].seller_state}</p>
                 </div>
 
-                {/* Card CTA */}
-                <div className="flex items-center gap-2 pt-1">
+                <div className="pt-2 flex items-center gap-2">
                   <button
                     onClick={() => {
                       addToCart(FALLBACK_POPULAR[0], 1);
-                      showToast('Item added to cart!');
+                      showToast('Added to cart!');
                     }}
-                    className="flex-1 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-black transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                    className="flex-1 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <ShoppingCart className="w-4 h-4" />
-                    Instant Secure Order
+                    Add to Cart
                   </button>
                   <Link
                     to={`/product/${FALLBACK_POPULAR[0].id}`}
-                    className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all"
+                    className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0A192F] text-xs font-bold transition-all"
                   >
-                    Details
+                    View Details
                   </Link>
                 </div>
               </div>
@@ -517,77 +447,94 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 2. FLASH DEALS WITH LIVE COUNTDOWN ─── */}
-      <section className="py-12 bg-white border-b border-slate-200 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-600 text-xs font-black uppercase tracking-widest">
-                <Zap className="w-3.5 h-3.5 fill-current animate-bounce" />
-                Limited-Time Flash Deals
+      {/* ─── 2. STREAMLINED ESSENTIAL CATEGORIES ─── */}
+      <section className="py-10 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-[#0A192F]">Explore Categories</h2>
+              <p className="text-xs text-slate-500">Quickly find what you need across our verified catalog</p>
+            </div>
+            <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:text-[#0A192F] flex items-center gap-1">
+              View All <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {MARKET_CATEGORIES.map(cat => (
+              <Link
+                key={cat.name}
+                to={`/shop?category=${encodeURIComponent(cat.name)}`}
+                className="p-3.5 rounded-2xl bg-white border border-slate-200/90 hover:border-[#00BFA5] hover:shadow-md transition-all text-center space-y-1.5 group"
+              >
+                <div className="text-2xl group-hover:scale-115 transition-transform">{cat.icon}</div>
+                <h4 className="text-xs font-bold text-[#0A192F] line-clamp-1">{cat.name}</h4>
+                <p className="text-[10px] text-slate-400 font-medium">{cat.count}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── 3. FLASH DEALS (CLEAR & FOCUSED) ─── */}
+      <section className="py-10 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="inline-flex items-center gap-1.5 text-rose-600 text-xs font-black uppercase tracking-wider">
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                Limited Time Deals
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-[#0A192F]">Today&apos;s Super Discounts</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">Discounted Offers</h2>
             </div>
 
-            {/* Countdown Badge */}
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <span className="text-xs text-slate-500 font-bold">Deal closes in:</span>
-              <div className="flex items-center gap-1.5 font-mono text-xs font-black">
-                <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-rose-400 border border-rose-500/30 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-bold">Ends in:</span>
+              <div className="flex items-center gap-1 font-mono text-xs font-black">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-rose-400">
                   {String(timeLeft.hours).padStart(2, '0')}h
                 </span>
-                <span className="text-slate-400 font-bold">:</span>
-                <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-rose-400 border border-rose-500/30 shadow-xs">
+                <span>:</span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-rose-400">
                   {String(timeLeft.minutes).padStart(2, '0')}m
                 </span>
-                <span className="text-slate-400 font-bold">:</span>
-                <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-rose-400 border border-rose-500/30 shadow-xs">
+                <span>:</span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-rose-400">
                   {String(timeLeft.seconds).padStart(2, '0')}s
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {flashDeals.map((item, idx) => (
-              <div key={item.id || idx} className="rounded-3xl border border-slate-200 bg-white hover:border-[#00BFA5]/60 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 p-4 space-y-3.5 flex flex-col justify-between group">
-                <div className="space-y-3">
-                  <div className="relative rounded-2xl overflow-hidden aspect-square bg-slate-100 border border-slate-100">
-                    <img src={item.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    <span className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-rose-600 to-rose-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+              <div key={item.id || idx} className="rounded-2xl border border-slate-200 bg-white hover:border-[#00BFA5] hover:shadow-lg transition-all p-3.5 space-y-3 flex flex-col justify-between group">
+                <div className="space-y-2.5">
+                  <div className="relative rounded-xl overflow-hidden aspect-square bg-slate-50 border border-slate-100">
+                    <img src={item.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black uppercase">
                       Save 15%
                     </span>
                     <button
                       onClick={() => toggleWishlistHandler(item)}
-                      className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/95 backdrop-blur-xs flex items-center justify-center text-slate-400 hover:text-rose-500 shadow-sm transition-transform active:scale-90 ${
+                      className={`absolute top-2 right-2 w-7 h-7 rounded-full bg-white/95 flex items-center justify-center text-slate-400 hover:text-rose-500 shadow-xs ${
                         isWishlisted(item.id) ? 'text-rose-600' : ''
                       }`}
                     >
-                      <Heart className={`w-4 h-4 ${isWishlisted(item.id) ? 'fill-current' : ''}`} />
+                      <Heart className={`w-3.5 h-3.5 ${isWishlisted(item.id) ? 'fill-current' : ''}`} />
                     </button>
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-[10px] font-extrabold text-[#00BFA5] uppercase tracking-wider">{item.category}</p>
-                    <h4 className="text-xs font-bold text-[#0A192F] line-clamp-2 group-hover:text-[#00BFA5] transition-colors">{item.name}</h4>
+                    <p className="text-[10px] font-bold text-[#00BFA5] uppercase">{item.category}</p>
+                    <h4 className="text-xs font-bold text-[#0A192F] line-clamp-2">{item.name}</h4>
                   </div>
 
                   <div className="flex items-baseline gap-2">
-                    <span className="text-base font-black text-[#0A192F]">₦{Number(item.price).toLocaleString()}</span>
+                    <span className="text-sm font-black text-[#0A192F]">₦{Number(item.price).toLocaleString()}</span>
                     {item.compare_at_price && (
                       <span className="text-[11px] text-slate-400 line-through">₦{Number(item.compare_at_price).toLocaleString()}</span>
                     )}
-                  </div>
-
-                  {/* Stock Progress Bar */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
-                      <div className="bg-gradient-to-r from-rose-500 to-amber-500 h-2 rounded-full" style={{ width: `${60 + (idx * 10)}%` }} />
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold">
-                      <span>Live Claim</span>
-                      <span className="text-rose-600 font-bold">{60 + (idx * 10)}% sold</span>
-                    </div>
                   </div>
                 </div>
 
@@ -596,10 +543,10 @@ export default function Home() {
                     addToCart(item, 1);
                     showToast('Added to cart!');
                   }}
-                  className="w-full py-3 rounded-xl bg-[#0A192F] hover:bg-[#00BFA5] text-white text-xs font-extrabold transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95"
+                  className="w-full py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#00BFA5] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
-                  Claim Deal Now
+                  Claim Deal
                 </button>
               </div>
             ))}
@@ -607,80 +554,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 3. CATEGORY SHOWCASE GRID ─── */}
-      <section className="py-12 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs font-extrabold uppercase text-[#00BFA5] tracking-wider">Browse by Department</span>
-              <h2 className="text-2xl font-black text-[#0A192F]">Curated Market Categories</h2>
-            </div>
-            <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:text-[#0A192F] flex items-center gap-1">
-              View All Categories <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3.5">
-            {MARKET_CATEGORIES.map(cat => (
-              <Link
-                key={cat.name}
-                to={`/shop?category=${encodeURIComponent(cat.name)}`}
-                className="p-4 rounded-2xl bg-white border border-slate-200/80 hover:border-[#00BFA5] hover:shadow-lg hover:-translate-y-1 transition-all text-center space-y-2 group"
-              >
-                <div className="text-3xl mb-1 group-hover:scale-125 transition-transform duration-300">{cat.icon}</div>
-                <h4 className="text-xs font-bold text-[#0A192F] leading-tight line-clamp-1">{cat.name}</h4>
-                <p className="text-[10px] text-slate-400 font-semibold">{cat.count}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 4. PAY SMALL SMALL (PSS) BANNER ─── */}
-      <section className="py-10 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="relative rounded-3xl bg-gradient-to-r from-amber-500 via-[#D9A73A] to-amber-600 p-8 sm:p-12 text-slate-950 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-8 overflow-hidden">
-            <div className="space-y-3 max-w-xl relative z-10">
-              <span className="inline-block px-3 py-1 rounded-full bg-slate-950 text-white text-[10px] font-black uppercase tracking-widest shadow-xs">
-                Buy Now Pay Later (BNPL)
-              </span>
-              <h3 className="text-2xl sm:text-4xl font-black text-slate-950 leading-tight">
-                Pay Small Small (PSS) — 0% Interest Installments
-              </h3>
-              <p className="text-xs sm:text-sm font-semibold text-slate-900/90 leading-relaxed">
-                Pay 25% down today on gadgets, laptops, phones, and fashion. Split the balance across 4 flexible weekly payouts with zero hidden charges. Item is reserved in escrow immediately!
-              </p>
-            </div>
-
-            <Link
-              to="/pay-small-small"
-              className="px-8 py-4 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-black text-xs sm:text-sm shrink-0 shadow-2xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Zap className="w-4 h-4 text-[#D9A73A] fill-current" />
-              <span>Calculate Payment Plan</span>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 5. POPULAR & TRENDING PRODUCTS ─── */}
+      {/* ─── 4. VERIFIED TRENDING PRODUCTS ─── */}
       <section className="py-12 bg-slate-50 border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <span className="text-xs font-extrabold uppercase text-[#00BFA5] tracking-wider">Top Verified Catalog</span>
-              <h2 className="text-2xl font-black text-[#0A192F]">Trending Marketplace Items</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">Trending Marketplace Items</h2>
+              <p className="text-xs text-slate-500">Live products authenticated by CAC & inventory inspection</p>
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto py-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
               {['All', 'Phones', 'Electronics', 'Computing', 'Fashion'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveCategoryTab(tab)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     activeCategoryTab === tab
-                      ? 'bg-[#0A192F] text-white shadow-sm'
+                      ? 'bg-[#00BFA5] text-white shadow-xs'
                       : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >
@@ -690,37 +581,34 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredProducts.map(p => (
-              <div key={p.id} className="rounded-3xl border border-slate-200/90 bg-white hover:border-[#00BFA5]/60 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 p-4 space-y-3.5 flex flex-col justify-between group">
-                <div className="space-y-3">
-                  <div className="relative rounded-2xl overflow-hidden aspect-square bg-slate-50 border border-slate-100">
-                    <img src={p.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <div key={p.id} className="rounded-2xl border border-slate-200 bg-white hover:border-[#00BFA5] hover:shadow-lg transition-all p-3.5 space-y-3 flex flex-col justify-between group">
+                <div className="space-y-2.5">
+                  <div className="relative rounded-xl overflow-hidden aspect-square bg-slate-50 border border-slate-100">
+                    <img src={p.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     <button
                       onClick={() => toggleWishlistHandler(p)}
-                      className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/95 backdrop-blur-xs flex items-center justify-center text-slate-400 hover:text-rose-500 shadow-sm transition-transform active:scale-90 ${
+                      className={`absolute top-2 right-2 w-7 h-7 rounded-full bg-white/95 flex items-center justify-center text-slate-400 hover:text-rose-500 shadow-xs ${
                         isWishlisted(p.id) ? 'text-rose-600' : ''
                       }`}
                     >
-                      <Heart className={`w-4 h-4 ${isWishlisted(p.id) ? 'fill-current' : ''}`} />
+                      <Heart className={`w-3.5 h-3.5 ${isWishlisted(p.id) ? 'fill-current' : ''}`} />
                     </button>
                     <button
                       onClick={() => setQuickViewProduct(p)}
-                      className="absolute bottom-2.5 left-2.5 px-3 py-1.5 rounded-xl bg-[#0A192F]/85 hover:bg-[#0A192F] text-white text-[10px] font-bold backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 shadow-md"
+                      className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-white/90 hover:bg-white text-[#0A192F] text-[10px] font-bold shadow-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
                     >
-                      <Eye className="w-3.5 h-3.5 text-[#00BFA5]" /> Quick Preview
+                      <Eye className="w-3 h-3 text-[#00BFA5]" /> Preview
                     </button>
                   </div>
 
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span className="font-extrabold text-[#00BFA5] uppercase tracking-wider">{p.category || 'Item'}</span>
-                      <span className="flex items-center gap-1 text-slate-500 font-medium">
-                        <MapPin className="w-2.5 h-2.5 text-[#00BFA5]" />
-                        {p.seller_state}
-                      </span>
+                      <span className="font-bold uppercase text-[#00BFA5]">{p.category || 'Item'}</span>
+                      <span className="text-slate-500">{p.seller_state}</span>
                     </div>
-                    <Link to={`/product/${p.id}`} className="block text-xs font-extrabold text-[#0A192F] hover:text-[#00BFA5] transition-colors line-clamp-2 leading-relaxed">
+                    <Link to={`/product/${p.id}`} className="block text-xs font-extrabold text-[#0A192F] hover:text-[#00BFA5] transition-colors line-clamp-2">
                       {p.name}
                     </Link>
                   </div>
@@ -728,7 +616,7 @@ export default function Home() {
                   <div className="flex items-center gap-1 text-xs text-amber-500 font-bold">
                     <Star className="w-3.5 h-3.5 fill-current" />
                     <span>{p.rating || 4.9}</span>
-                    <span className="text-[10px] text-slate-400 font-normal">({p.reviews_count || 34})</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({p.reviews_count || 18})</span>
                   </div>
 
                   <div className="flex items-baseline gap-2 pt-0.5">
@@ -739,13 +627,13 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="pt-2 flex items-center gap-2">
+                <div className="pt-1 flex items-center gap-2">
                   <button
                     onClick={() => {
                       addToCart(p, 1);
                       showToast('Added to cart!');
                     }}
-                    className="flex-1 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#00BFA5] text-white text-xs font-extrabold transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    className="flex-1 py-2.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
                     Add to Cart
@@ -758,140 +646,103 @@ export default function Home() {
                     className="p-2.5 rounded-xl border border-slate-200 hover:border-[#00BFA5] hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
                     title="Compare"
                   >
-                    <Scale className="w-4 h-4" />
+                    <Scale className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="pt-6 text-center">
+          <div className="pt-4 text-center">
             <Link
               to="/shop"
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-900 font-extrabold text-xs shadow-xs transition-all"
+              className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-extrabold text-xs shadow-xs transition-all"
             >
-              <span>Explore All 15,000+ Items in Shop</span>
+              <span>Explore All Products</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ─── 6. INTERACTIVE CONSIGNMENT TRACKING WIDGET ─── */}
-      <section className="py-12 bg-white border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="rounded-3xl bg-slate-50 border border-slate-200 p-6 sm:p-10 space-y-6">
+      {/* ─── 5. CLEAN ORDER TRACKER STRIP ─── */}
+      <section className="py-10 bg-white border-b border-slate-200">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <div className="rounded-2xl bg-slate-50 border border-slate-200 p-6 sm:p-8 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#00BFA5]/10 flex items-center justify-center text-[#00BFA5]">
-                <Truck className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-xl bg-[#00BFA5]/10 flex items-center justify-center text-[#00BFA5]">
+                <Truck className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-xl font-extrabold text-[#0A192F]">Live Consignment & Waybill Tracker</h3>
-                <p className="text-xs text-slate-500">Track shipments across Nigeria with real-time waypoint telemetry.</p>
+                <h3 className="text-base font-extrabold text-[#0A192F]">Track Your Shipment</h3>
+                <p className="text-xs text-slate-500">Live order status across 36 states with escrow lock.</p>
               </div>
             </div>
 
-            <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row gap-3">
+            <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row gap-2.5">
               <input
                 type="text"
                 value={trackQuery}
                 onChange={(e) => setTrackQuery(e.target.value)}
-                placeholder="Enter Order ID or Consignment Number (e.g. ORD-981240)..."
-                className="flex-1 text-xs px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:border-[#00BFA5]"
+                placeholder="Enter Order or Tracking ID (e.g. ORD-981240)..."
+                className="flex-1 text-xs px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#00BFA5]"
               />
               <button
                 type="submit"
-                className="px-6 py-3 rounded-2xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold transition-all cursor-pointer"
               >
                 Track Now
               </button>
             </form>
-
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-t border-slate-200/60">
-              <span className="flex items-center gap-1.5 font-semibold text-[#0A192F]">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Live GPS Milestones
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5 font-semibold text-[#0A192F]">
-                <ShieldCheck className="w-4 h-4 text-blue-600" />
-                Escrow Locked until Delivery
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5 font-semibold text-[#0A192F]">
-                <Phone className="w-4 h-4 text-amber-600" />
-                Dedicated Rider Dispatch
-              </span>
-            </div>
           </div>
         </div>
       </section>
 
-      {/* ─── 7. WHY CHOOSE ABU MAFHAL PILLARS ─── */}
-      <section className="py-14 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-10">
-          <div className="text-center space-y-2 max-w-xl mx-auto">
-            <span className="text-xs font-extrabold uppercase text-[#00BFA5] tracking-widest">Marketplace Standards</span>
-            <h2 className="text-3xl font-black text-[#0A192F]">Why Nigeria Trusts Abu Mafhal</h2>
-            <p className="text-xs text-slate-500">Built to eliminate online purchase fraud with bank-grade security protocols.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* ─── 6. ESSENTIAL VALUE PILLARS (NO CLUTTER) ─── */}
+      <section className="py-12 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {VALUE_PILLARS.map(p => (
-              <div key={p.title} className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3">
-                <div className={`w-12 h-12 rounded-2xl ${p.bg} ${p.border} border flex items-center justify-center ${p.color}`}>
-                  <p.icon className="w-6 h-6" />
+              <div key={p.title} className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
+                <div className={`w-10 h-10 rounded-xl ${p.bg} ${p.border} border flex items-center justify-center ${p.color}`}>
+                  <p.icon className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-extrabold text-[#0A192F]">{p.title}</h4>
+                <h4 className="text-xs font-extrabold text-[#0A192F]">{p.title}</h4>
                 <p className="text-xs text-slate-500 leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-[#00BFA5]">
-            <button onClick={() => openPolicy('escrow')} className="hover:underline cursor-pointer">
-              Read 100% Escrow Policy →
-            </button>
-            <span>•</span>
-            <button onClick={() => openPolicy('returns')} className="hover:underline cursor-pointer">
-              Read 7-Day Refund Safe Harbor →
-            </button>
-            <span>•</span>
-            <button onClick={() => openPolicy('merchants')} className="hover:underline cursor-pointer">
-              Read Merchant Vetting Standards →
-            </button>
-          </div>
         </div>
       </section>
 
-      {/* ─── 8. BECOME A VENDOR PROMOTION ─── */}
-      <section className="py-12 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="rounded-3xl bg-gradient-to-br from-[#0A192F] to-[#112240] p-8 sm:p-12 text-white flex flex-col md:flex-row md:items-center justify-between gap-8 shadow-xl">
-            <div className="space-y-3 max-w-xl">
-              <span className="px-3 py-1 rounded-full bg-[#00BFA5]/20 text-[#00BFA5] text-[10px] font-black uppercase tracking-widest">
-                Merchant Opportunity
+      {/* ─── 7. SIMPLE MERCHANT CALL TO ACTION ─── */}
+      <section className="py-10 bg-white border-b border-slate-200">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="rounded-3xl bg-slate-900 p-8 sm:p-10 text-white flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-lg">
+            <div className="space-y-2 max-w-lg">
+              <span className="px-3 py-1 rounded-full bg-[#00BFA5]/20 text-[#00BFA5] text-[10px] font-black uppercase tracking-wider">
+                Sell on Abu Mafhal
               </span>
-              <h3 className="text-2xl sm:text-4xl font-black text-white leading-tight">
-                Sell to 50,000+ Verified Buyers Across Nigeria
+              <h3 className="text-2xl font-black text-white">
+                Open Your Verified Merchant Store
               </h3>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Open your verified online storefront on Abu Mafhal with zero setup fees. Enjoy automatic payouts, nationwide logistics dispatch, and fraud-free escrow settlements.
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Reach active buyers across Nigeria with automated payouts and escrow protection.
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               <Link
                 to="/vendor-application"
-                className="px-8 py-3.5 rounded-2xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-[#00BFA5]/25 transition-all text-center"
+                className="px-6 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-xs shadow-md transition-all text-center"
               >
-                Apply as a Merchant
+                Apply as Merchant
               </Link>
               <Link
                 to="/stores"
-                className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs sm:text-sm transition-all text-center"
+                className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all text-center"
               >
-                View Active Stores
+                View Stores
               </Link>
             </div>
           </div>
