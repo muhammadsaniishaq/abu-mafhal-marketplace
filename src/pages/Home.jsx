@@ -324,168 +324,76 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── 1. CLEAN MODERN AIRY HERO ─── */}
-      <section className="relative overflow-hidden bg-white border-b border-slate-200/80 py-12 lg:py-16">
-        {/* Soft Modern Ambient Glows */}
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-[#00BFA5]/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-10 w-80 h-80 bg-amber-100/40 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            {/* Left Content */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* Trust Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 shadow-xs">
-                <ShieldCheck className="w-4 h-4 text-[#00BFA5]" />
-                <span>100% Verified Escrow Protected Marketplace</span>
-              </div>
-
-              {/* Headline */}
-              <div className="space-y-3">
-                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-[#0A192F] tracking-tight leading-[1.12]">
-                  Shop Authentic Items with <span className="text-[#00BFA5]">Zero Purchase Risk.</span>
-                </h1>
-                <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-xl font-normal">
-                  Discover thousands of genuine electronics, fashion, and provisions. Your funds are held securely in a regulated escrow vault and only released when you inspect and approve your order.
-                </p>
-              </div>
-
-              {/* Clean Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <Link
-                  to="/shop"
-                  className="px-8 py-3.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-sm shadow-md shadow-[#00BFA5]/20 hover:shadow-lg transition-all flex items-center gap-2"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  <span>Start Shopping</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                  to="/stores"
-                  className="px-6 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0A192F] font-bold text-sm transition-all flex items-center gap-2"
-                >
-                  <Store className="w-4 h-4 text-[#D9A73A]" />
-                  <span>Browse Stores</span>
-                </Link>
-                <Link
-                  to="/pay-small-small"
-                  className="px-5 py-3.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold text-sm transition-all flex items-center gap-1.5"
-                >
-                  <Zap className="w-4 h-4 text-amber-600 fill-current" />
-                  <span>Pay Small Small (BNPL)</span>
-                </Link>
-              </div>
-
-              {/* Streamlined Trust Indicators */}
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100 max-w-lg">
-                <div>
-                  <p className="text-xl font-black text-[#0A192F]">15,000+</p>
-                  <p className="text-xs text-slate-500 font-medium">Verified Items</p>
-                </div>
-                <div>
-                  <p className="text-xl font-black text-[#00BFA5]">100%</p>
-                  <p className="text-xs text-slate-500 font-medium">Escrow Protected</p>
-                </div>
-                <div>
-                  <p className="text-xl font-black text-[#D9A73A]">36 States</p>
-                  <p className="text-xs text-slate-500 font-medium">Doorstep Delivery</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Showcase Card: Spotless Clean Product Spotlight */}
-            <div className="lg:col-span-5">
-              <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xl shadow-slate-200/50 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Spotlight Pick</span>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Escrow Verified
-                  </span>
-                </div>
-
-                <div className="rounded-2xl overflow-hidden aspect-video bg-slate-50 border border-slate-100 relative group">
-                  <img
-                    src={FALLBACK_POPULAR[0].image_url}
-                    alt={FALLBACK_POPULAR[0].name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-                    <span className="text-base font-black text-[#00BFA5]">₦{FALLBACK_POPULAR[0].price.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-[#00BFA5]">{FALLBACK_POPULAR[0].category}</span>
-                  <h3 className="text-base font-extrabold text-[#0A192F] line-clamp-1">{FALLBACK_POPULAR[0].name}</h3>
-                  <p className="text-xs text-slate-500">Shipped with live waybill tracking from {FALLBACK_POPULAR[0].seller_state}</p>
-                </div>
-
-                <div className="pt-2 flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      addToCart(FALLBACK_POPULAR[0], 1);
-                      showToast('Added to cart!');
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    Add to Cart
-                  </button>
-                  <Link
-                    to={`/product/${FALLBACK_POPULAR[0].id}`}
-                    className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0A192F] text-xs font-bold transition-all"
-                  >
-                    View Details
-                  </Link>
-                </div>
-              </div>
-            </div>
+      {/* ─── 1. SPOTLESS MODERN HERO ─── */}
+      <section className="relative overflow-hidden bg-white border-b border-slate-100 py-12 lg:py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 text-center space-y-6 max-w-4xl">
+          {/* Escrow Pill */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-extrabold text-emerald-800 shadow-xs">
+            <ShieldCheck className="w-4 h-4 text-[#00BFA5]" />
+            <span>100% Escrow Protection • 36 States Express Delivery</span>
           </div>
-        </div>
-      </section>
 
-      {/* ─── 2. STREAMLINED ESSENTIAL CATEGORIES ─── */}
-      <section className="py-10 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black text-[#0A192F]">Explore Categories</h2>
-              <p className="text-xs text-slate-500">Quickly find what you need across our verified catalog</p>
-            </div>
-            <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:text-[#0A192F] flex items-center gap-1">
-              View All <ChevronRight className="w-3.5 h-3.5" />
+          {/* Clean Modern Headline */}
+          <h1 className="text-4xl sm:text-6xl font-black text-[#0A192F] tracking-tight leading-[1.1]">
+            The Modern Marketplace for <br className="hidden sm:inline" />
+            <span className="text-[#00BFA5]">Authentic Items</span> in Nigeria.
+          </h1>
+
+          <p className="text-sm sm:text-base text-slate-500 max-w-2xl mx-auto font-normal leading-relaxed">
+            Shop directly from verified merchants. Your money stays safely locked inside an escrow vault until your package arrives sealed and approved at your doorstep.
+          </p>
+
+          {/* Quick Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Link
+              to="/shop"
+              className="px-8 py-3.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-sm shadow-md shadow-[#00BFA5]/25 hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span>Explore Marketplace</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/stores"
+              className="px-6 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0A192F] font-bold text-sm transition-all"
+            >
+              Browse Verified Stores
+            </Link>
+            <Link
+              to="/pay-small-small"
+              className="px-5 py-3.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold text-sm transition-all flex items-center gap-1.5"
+            >
+              <Zap className="w-4 h-4 text-amber-600 fill-current" />
+              <span>Pay Small Small (BNPL)</span>
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {/* Category Chips Carousel */}
+          <div className="pt-8 flex items-center justify-center gap-2 overflow-x-auto py-2">
             {MARKET_CATEGORIES.map(cat => (
               <Link
                 key={cat.name}
                 to={`/shop?category=${encodeURIComponent(cat.name)}`}
-                className="p-3.5 rounded-2xl bg-white border border-slate-200/90 hover:border-[#00BFA5] hover:shadow-md transition-all text-center space-y-1.5 group"
+                className="px-4 py-2 rounded-xl bg-slate-50 hover:bg-white hover:border-[#00BFA5] border border-slate-200/80 text-xs font-bold text-slate-700 whitespace-nowrap transition-all shadow-2xs flex items-center gap-1.5"
               >
-                <div className="text-2xl group-hover:scale-115 transition-transform">{cat.icon}</div>
-                <h4 className="text-xs font-bold text-[#0A192F] line-clamp-1">{cat.name}</h4>
-                <p className="text-[10px] text-slate-400 font-medium">{cat.count}</p>
+                <span>{cat.icon}</span>
+                <span>{cat.name}</span>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── 3. FLASH DEALS (CLEAR & FOCUSED) ─── */}
-      <section className="py-10 bg-white border-b border-slate-200">
+      {/* ─── 2. LIMITED TIME FLASH DEALS ─── */}
+      <section className="py-10 bg-slate-50 border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-0.5">
               <div className="inline-flex items-center gap-1.5 text-rose-600 text-xs font-black uppercase tracking-wider">
                 <Zap className="w-3.5 h-3.5 fill-current" />
-                Limited Time Deals
+                Limited Super Deals
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">Discounted Offers</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">Flash Discounts</h2>
             </div>
 
             <div className="flex items-center gap-2">
@@ -554,13 +462,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 4. VERIFIED TRENDING PRODUCTS ─── */}
-      <section className="py-12 bg-slate-50 border-b border-slate-200">
+      {/* ─── 3. VERIFIED TRENDING PRODUCTS ─── */}
+      <section className="py-12 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">Trending Marketplace Items</h2>
-              <p className="text-xs text-slate-500">Live products authenticated by CAC & inventory inspection</p>
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">Marketplace Catalog</h2>
+              <p className="text-xs text-slate-500">Authenticated merchandise protected by buyer escrow</p>
             </div>
 
             {/* Filter Tabs */}
@@ -572,7 +480,7 @@ export default function Home() {
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     activeCategoryTab === tab
                       ? 'bg-[#00BFA5] text-white shadow-xs'
-                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   {tab}
@@ -656,96 +564,41 @@ export default function Home() {
           <div className="pt-4 text-center">
             <Link
               to="/shop"
-              className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-extrabold text-xs shadow-xs transition-all"
+              className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs transition-all"
             >
-              <span>Explore All Products</span>
+              <span>Explore All 15,000+ Items</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ─── 5. CLEAN ORDER TRACKER STRIP ─── */}
-      <section className="py-10 bg-white border-b border-slate-200">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
-          <div className="rounded-2xl bg-slate-50 border border-slate-200 p-6 sm:p-8 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#00BFA5]/10 flex items-center justify-center text-[#00BFA5]">
-                <Truck className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-[#0A192F]">Track Your Shipment</h3>
-                <p className="text-xs text-slate-500">Live order status across 36 states with escrow lock.</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row gap-2.5">
-              <input
-                type="text"
-                value={trackQuery}
-                onChange={(e) => setTrackQuery(e.target.value)}
-                placeholder="Enter Order or Tracking ID (e.g. ORD-981240)..."
-                className="flex-1 text-xs px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#00BFA5]"
-              />
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold transition-all cursor-pointer"
-              >
-                Track Now
-              </button>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 6. ESSENTIAL VALUE PILLARS (NO CLUTTER) ─── */}
+      {/* ─── 4. INSTANT ORDER TRACKER STRIP ─── */}
       <section className="py-12 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {VALUE_PILLARS.map(p => (
-              <div key={p.title} className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
-                <div className={`w-10 h-10 rounded-xl ${p.bg} ${p.border} border flex items-center justify-center ${p.color}`}>
-                  <p.icon className="w-5 h-5" />
-                </div>
-                <h4 className="text-xs font-extrabold text-[#0A192F]">{p.title}</h4>
-                <p className="text-xs text-slate-500 leading-relaxed">{p.desc}</p>
-              </div>
-            ))}
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#00BFA5]/10 text-[#00BFA5]">
+            <Truck className="w-6 h-6" />
           </div>
-        </div>
-      </section>
-
-      {/* ─── 7. SIMPLE MERCHANT CALL TO ACTION ─── */}
-      <section className="py-10 bg-white border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="rounded-3xl bg-slate-900 p-8 sm:p-10 text-white flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-lg">
-            <div className="space-y-2 max-w-lg">
-              <span className="px-3 py-1 rounded-full bg-[#00BFA5]/20 text-[#00BFA5] text-[10px] font-black uppercase tracking-wider">
-                Sell on Abu Mafhal
-              </span>
-              <h3 className="text-2xl font-black text-white">
-                Open Your Verified Merchant Store
-              </h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Reach active buyers across Nigeria with automated payouts and escrow protection.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <Link
-                to="/vendor-application"
-                className="px-6 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold text-xs shadow-md transition-all text-center"
-              >
-                Apply as Merchant
-              </Link>
-              <Link
-                to="/stores"
-                className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all text-center"
-              >
-                View Stores
-              </Link>
-            </div>
+          <div>
+            <h3 className="text-xl font-extrabold text-[#0A192F]">Track Your Shipment Status</h3>
+            <p className="text-xs text-slate-500 mt-1">Check real-time milestone dispatch across all 36 Nigerian states.</p>
           </div>
+
+          <form onSubmit={handleTrackSubmit} className="flex gap-2 max-w-lg mx-auto">
+            <input
+              type="text"
+              value={trackQuery}
+              onChange={(e) => setTrackQuery(e.target.value)}
+              placeholder="Enter Order ID (e.g. ORD-981240)..."
+              className="flex-1 text-xs px-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#00BFA5]"
+            />
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+            >
+              Track Order
+            </button>
+          </form>
         </div>
       </section>
 

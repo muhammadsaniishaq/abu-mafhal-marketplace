@@ -123,103 +123,76 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/90 font-sans shadow-xs">
-      {/* ─── 1. TOP ANNOUNCEMENT TICKER ─── */}
-      <div className="bg-[#0A192F] text-white text-[11px] font-medium py-1.5 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#00BFA5]/20 text-[#00BFA5] font-bold text-[10px] tracking-wide uppercase">
-              <ShieldCheck className="w-3 h-3" /> 100% Escrow Vault
-            </span>
-            <span className="text-slate-300 hidden sm:inline">
-              Nationwide Delivery Across all 36 States • 7-Day Free Returns • CBN-Licensed Channels
-            </span>
-            <span className="text-slate-300 sm:hidden">
-              Nationwide 36 States Express Delivery
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4 text-slate-300 shrink-0">
-            <Link to="/track-order" className="hover:text-[#00BFA5] transition-colors flex items-center gap-1 hidden md:flex">
-              <Truck className="w-3 h-3 text-[#00BFA5]" />
-              Track Order
-            </Link>
-            <Link to="/pay-small-small" className="hover:text-[#D9A73A] transition-colors flex items-center gap-1 hidden lg:flex font-semibold text-[#D9A73A]">
-              <Zap className="w-3 h-3 fill-current" />
-              Pay Small Small (PSS)
-            </Link>
-            <Link to="/vendor-application" className="hover:text-white transition-colors hidden sm:inline font-bold">
-              Become a Vendor
-            </Link>
-            <a href="tel:+2348145853539" className="hover:text-[#00BFA5] transition-colors flex items-center gap-1">
-              <Phone className="w-3 h-3 text-[#00BFA5]" />
-              <span className="hidden sm:inline">+234 814 585 3539</span>
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── 2. MAIN HEADER ─── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+      {/* ─── SINGLE UNIFIED HIGH-END HEADER ─── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5">
         <div className="flex items-center justify-between gap-4 lg:gap-8">
           {/* Brand Logo */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
-            <div className="relative">
-              <img
-                src="/logo.png"
-                alt="Abu Mafhal"
-                className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-xl drop-shadow-sm group-hover:scale-105 transition-transform"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Abu Mafhal"
+              className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-xl drop-shadow-sm group-hover:scale-105 transition-transform"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
             <div className="flex flex-col">
               <span className="text-lg sm:text-xl font-extrabold text-[#0A192F] tracking-tight leading-none group-hover:text-[#00BFA5] transition-colors">
                 ABU MAFHAL
               </span>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                 Marketplace
               </span>
             </div>
           </Link>
 
+          {/* Quick Nav Links (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-6 text-xs font-bold text-slate-600">
+            <Link
+              to="/shop"
+              className={`hover:text-[#00BFA5] transition-colors ${location.pathname === '/shop' ? 'text-[#00BFA5] font-extrabold' : ''}`}
+            >
+              Shop
+            </Link>
+            <Link
+              to="/stores"
+              className={`hover:text-[#00BFA5] transition-colors ${location.pathname === '/stores' ? 'text-[#00BFA5] font-extrabold' : ''}`}
+            >
+              Stores
+            </Link>
+            <Link
+              to="/pay-small-small"
+              className={`hover:text-amber-600 transition-colors flex items-center gap-1 ${location.pathname === '/pay-small-small' ? 'text-amber-600 font-extrabold' : ''}`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+              Pay Small Small
+            </Link>
+            <Link
+              to="/track-order"
+              className={`hover:text-[#00BFA5] transition-colors ${location.pathname === '/track-order' ? 'text-[#00BFA5] font-extrabold' : ''}`}
+            >
+              Track Order
+            </Link>
+          </nav>
+
           {/* Live Search Form (Desktop & Tablet) */}
-          <div ref={searchRef} className="hidden md:flex flex-1 max-w-2xl relative">
-            <form onSubmit={handleSearchSubmit} className="flex items-center w-full bg-slate-50 hover:bg-slate-100/80 focus-within:bg-white rounded-2xl border border-slate-200 focus-within:border-[#00BFA5] focus-within:ring-2 focus-within:ring-[#00BFA5]/20 transition-all overflow-hidden">
-              <select
-                value={selectedCat}
-                onChange={(e) => setSelectedCat(e.target.value)}
-                className="text-xs font-semibold text-slate-700 bg-slate-100/90 hover:bg-slate-200/80 py-2.5 px-3 border-r border-slate-200 outline-none cursor-pointer max-w-[140px] truncate"
-              >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-
-              <div className="relative flex-1 flex items-center">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search 15,000+ authentic items, gadgets, fashion, phones..."
-                  className="w-full text-xs text-slate-800 bg-transparent px-3 py-2.5 outline-none placeholder:text-slate-400 font-medium"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => { setSearchQuery(''); setSearchSuggestions([]); }}
-                    className="p-1 mr-1 text-slate-400 hover:text-slate-600 rounded-full"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="px-5 py-2.5 bg-[#00BFA5] hover:bg-[#00a896] text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-              >
-                <Search className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Search</span>
-              </button>
+          <div ref={searchRef} className="hidden md:flex flex-1 max-w-md relative">
+            <form onSubmit={handleSearchSubmit} className="flex items-center w-full bg-slate-50 hover:bg-slate-100/70 focus-within:bg-white rounded-xl border border-slate-200 focus-within:border-[#00BFA5] focus-within:ring-2 focus-within:ring-[#00BFA5]/20 transition-all overflow-hidden px-3 py-1.5">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search products, brands, gadgets..."
+                className="w-full text-xs text-slate-800 bg-transparent px-2.5 py-1 outline-none placeholder:text-slate-400 font-medium"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setSearchSuggestions([]); }}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </form>
 
             {/* Instant Suggestions Dropdown */}
@@ -236,52 +209,28 @@ export default function Navbar() {
                     onClick={() => setShowSuggestions(false)}
                     className="flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors"
                   >
-                    <img src={getImg(p)} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
+                    <img src={getImg(p)} alt="" className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-[#0A192F] truncate">{p.name}</p>
                       <p className="text-[11px] text-[#00BFA5] font-bold">₦{Number(p.price || 0).toLocaleString()}</p>
                     </div>
-                    <span className="text-[10px] font-medium text-slate-400 px-2 py-0.5 rounded bg-slate-100 shrink-0">
-                      {p.category || 'General'}
-                    </span>
                   </Link>
                 ))}
-                <button
-                  type="button"
-                  onClick={handleSearchSubmit}
-                  className="w-full text-center py-2.5 text-xs font-bold text-[#00BFA5] hover:bg-[#00BFA5]/5 transition-colors cursor-pointer"
-                >
-                  View all results for &quot;{searchQuery}&quot; →
-                </button>
               </div>
             )}
           </div>
 
           {/* Action Utilities */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Compare Products */}
-            <Link
-              to="/compare"
-              className="relative p-2.5 rounded-xl hover:bg-slate-100 text-slate-700 hover:text-[#0A192F] transition-colors hidden sm:flex items-center justify-center"
-              title="Compare Products"
-            >
-              <Scale className="w-5 h-5 text-slate-600" />
-              {totalCompareCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-extrabold flex items-center justify-center">
-                  {totalCompareCount}
-                </span>
-              )}
-            </Link>
-
             {/* Wishlist */}
             <Link
               to="/buyer/wishlist"
-              className="relative p-2.5 rounded-xl hover:bg-slate-100 text-slate-700 hover:text-[#0A192F] transition-colors hidden sm:flex items-center justify-center"
+              className="relative p-2 rounded-xl hover:bg-slate-100 text-slate-700 transition-colors hidden sm:flex items-center justify-center"
               title="Wishlist"
             >
               <Heart className="w-5 h-5 text-slate-600" />
               {totalWishlistCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
                   {totalWishlistCount}
                 </span>
               )}
@@ -290,7 +239,7 @@ export default function Navbar() {
             {/* Cart Drawer Button */}
             <Link
               to="/cart"
-              className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200/80 text-[#0A192F] transition-all relative"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-[#0A192F] transition-all relative"
             >
               <div className="relative">
                 <ShoppingCart className="w-5 h-5 text-[#0A192F]" />
@@ -312,9 +261,9 @@ export default function Navbar() {
                 <div>
                   <button
                     onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                    className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-2xl bg-[#0A192F] hover:bg-[#112240] text-white transition-all cursor-pointer"
+                    className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white transition-all cursor-pointer"
                   >
-                    <div className="w-7 h-7 rounded-xl bg-[#00BFA5] text-white font-bold text-xs flex items-center justify-center shrink-0 uppercase">
+                    <div className="w-7 h-7 rounded-lg bg-[#00BFA5] text-white font-bold text-xs flex items-center justify-center shrink-0 uppercase">
                       {currentUser.full_name ? currentUser.full_name[0] : (currentUser.email ? currentUser.email[0] : 'U')}
                     </div>
                     <span className="hidden md:inline text-xs font-bold max-w-[100px] truncate">
@@ -361,14 +310,6 @@ export default function Navbar() {
                           <Package className="w-4 h-4 text-slate-400" />
                           <span>My Orders & Delivery</span>
                         </Link>
-                        <Link
-                          to="/buyer/wishlist"
-                          onClick={() => setUserDropdownOpen(false)}
-                          className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0A192F]"
-                        >
-                          <Heart className="w-4 h-4 text-rose-500" />
-                          <span>Wishlist ({totalWishlistCount})</span>
-                        </Link>
                       </div>
 
                       <div className="pt-1">
@@ -387,13 +328,13 @@ export default function Navbar() {
                 <div className="flex items-center gap-2">
                   <Link
                     to="/login"
-                    className="px-3.5 py-2 text-xs font-bold text-[#0A192F] hover:text-[#00BFA5] transition-colors"
+                    className="px-3 py-1.5 text-xs font-bold text-[#0A192F] hover:text-[#00BFA5] transition-colors"
                   >
                     Sign In
                   </Link>
                   <Link
                     to="/register"
-                    className="hidden sm:inline-flex px-4 py-2 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold shadow-xs transition-all"
+                    className="px-4 py-2 rounded-xl bg-[#00BFA5] hover:bg-[#00a896] text-white text-xs font-bold shadow-xs transition-all"
                   >
                     Register
                   </Link>
@@ -425,54 +366,6 @@ export default function Navbar() {
           </form>
         </div>
       </div>
-
-      {/* ─── 3. SECONDARY CATEGORY / NAV STRIP ─── */}
-      <nav className="hidden md:block bg-slate-50 border-t border-slate-200/80 py-2 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs font-bold text-slate-700">
-          <div className="flex items-center gap-6 overflow-x-auto py-0.5">
-            <Link
-              to="/"
-              className={`hover:text-[#00BFA5] transition-colors whitespace-nowrap ${location.pathname === '/' ? 'text-[#00BFA5] font-extrabold' : ''}`}
-            >
-              Home
-            </Link>
-            <Link
-              to="/shop"
-              className={`hover:text-[#00BFA5] transition-colors whitespace-nowrap ${location.pathname === '/shop' ? 'text-[#00BFA5] font-extrabold' : ''}`}
-            >
-              All Products
-            </Link>
-            <Link
-              to="/stores"
-              className={`hover:text-[#00BFA5] transition-colors whitespace-nowrap flex items-center gap-1 ${location.pathname === '/stores' ? 'text-[#00BFA5] font-extrabold' : ''}`}
-            >
-              <Store className="w-3.5 h-3.5 text-[#D9A73A]" />
-              Verified Stores
-            </Link>
-            <Link
-              to="/pay-small-small"
-              className={`hover:text-[#D9A73A] transition-colors whitespace-nowrap flex items-center gap-1 text-slate-800 ${location.pathname === '/pay-small-small' ? 'text-[#D9A73A] font-extrabold' : ''}`}
-            >
-              <Zap className="w-3.5 h-3.5 text-[#D9A73A] fill-current" />
-              Pay Small Small
-            </Link>
-            <Link
-              to="/track-order"
-              className={`hover:text-[#00BFA5] transition-colors whitespace-nowrap flex items-center gap-1 ${location.pathname === '/track-order' ? 'text-[#00BFA5] font-extrabold' : ''}`}
-            >
-              <Truck className="w-3.5 h-3.5 text-blue-500" />
-              Live Order Tracker
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0 text-slate-500 text-[11px] font-semibold">
-            <span className="flex items-center gap-1 text-emerald-700 font-bold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              Inspected & Approved Before Payout
-            </span>
-          </div>
-        </div>
-      </nav>
 
       {/* ─── 4. MOBILE DRAWER ─── */}
       {mobileMenuOpen && (
