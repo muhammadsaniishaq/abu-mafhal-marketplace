@@ -138,6 +138,57 @@ html {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+/* ── Luxury & Futuristic Effects ── */
+.mesh-gradient-dark {
+  background: radial-gradient(circle at 15% 20%, rgba(0, 191, 165, 0.18) 0%, transparent 40%),
+              radial-gradient(circle at 85% 30%, rgba(217, 167, 58, 0.15) 0%, transparent 45%),
+              radial-gradient(circle at 50% 80%, rgba(14, 165, 233, 0.12) 0%, transparent 50%),
+              #07101E;
+}
+
+.mesh-gradient-light {
+  background: radial-gradient(circle at 20% 15%, rgba(0, 191, 165, 0.12) 0%, transparent 45%),
+              radial-gradient(circle at 80% 25%, rgba(217, 167, 58, 0.12) 0%, transparent 40%),
+              radial-gradient(circle at 50% 90%, rgba(99, 102, 241, 0.08) 0%, transparent 55%),
+              #f8fafc;
+}
+
+.glow-card {
+  position: relative;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glow-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 191, 165, 0.4), rgba(217, 167, 58, 0.3), transparent 70%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.glow-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 35px -10px rgba(0, 191, 165, 0.15);
+}
+
+.cyber-badge {
+  background: linear-gradient(135deg, rgba(0, 191, 165, 0.15), rgba(0, 191, 165, 0.05));
+  border: 1px solid rgba(0, 191, 165, 0.35);
+  box-shadow: 0 0 15px rgba(0, 191, 165, 0.2);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+.animate-pulse-ring {
+  animation: pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 /* ── STRICT ZERO MOBILE ZOOM RULES (OVERRIDING ALL UTILITIES) ── */
 html, body, #root {
   touch-action: pan-x pan-y !important;
