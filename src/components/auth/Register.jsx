@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { triggerWelcomeEmail } from '../../utils/emailTriggers';
 import {
   User, Mail, Phone, Lock, Eye, EyeOff, Loader2,
-  ArrowRight, ShieldCheck, Gift, CheckCircle2,
-  ShoppingBag, Store, Globe, Sparkles
+  ArrowRight, ShieldCheck, Gift, Globe, Sparkles
 } from 'lucide-react';
 
 const Register = () => {
@@ -14,7 +13,6 @@ const Register = () => {
   const [searchParams] = useSearchParams();
   const urlRefCode = searchParams.get('ref') || searchParams.get('code');
 
-  const [accountType, setAccountType] = useState('buyer'); // 'buyer' | 'vendor'
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -40,11 +38,6 @@ const Register = () => {
       joinSub: 'Create an account to shop from verified stores across Nigeria.',
       signIn: 'Sign In',
       createAccount: 'Create Account',
-      roleLabel: 'Select Your Marketplace Role',
-      buyerTitle: 'Buyer / Shopper',
-      buyerSub: 'Shop with escrow protection',
-      vendorTitle: 'Merchant / Seller',
-      vendorSub: 'Open store & receive payouts',
       fullName: 'Full Name',
       fullNamePlaceholder: 'e.g. Aminu Bello',
       emailLabel: 'Email Address',
@@ -70,11 +63,6 @@ const Register = () => {
       joinSub: 'Buɗe asusu don cinikin kaya daga masu sayarwa a faɗin Najeriya.',
       signIn: 'Shiga Ciki',
       createAccount: 'Buɗe Asusu',
-      roleLabel: 'Zaɓi Matsayinka a Kasuwa',
-      buyerTitle: 'Mai Siyayya (Buyer)',
-      buyerSub: 'Yi siyayya da kariyar Escrow',
-      vendorTitle: 'Mai Shago / Ɗan Kasuwa',
-      vendorSub: 'Buɗe shago ka sayar da kaya',
       fullName: 'Cikakken Suna',
       fullNamePlaceholder: 'Misali: Aminu Bello',
       emailLabel: 'Adireshin Email',
@@ -148,11 +136,11 @@ const Register = () => {
         return;
       }
 
-      // 2. Direct account creation via Supabase Auth
+      // 2. Direct account creation via Supabase Auth - strictly as Buyer
       const userCredential = await register(cleanEmail, formData.password, {
         name: cleanName,
         phone: cleanPhone,
-        role: accountType
+        role: 'buyer'
       });
 
       // 3. Send welcome email in background
@@ -181,12 +169,8 @@ const Register = () => {
         } catch (_) {}
       }
 
-      // 5. Successful registration routing
-      if (accountType === 'vendor') {
-        navigate('/vendor-application', { replace: true });
-      } else {
-        navigate('/profile', { replace: true });
-      }
+      // 5. Successful registration routing directly to user profile/dashboard
+      navigate('/profile', { replace: true });
     } catch (err) {
       setError(err.message || 'Failed to create your account. Please try again.');
     } finally {
@@ -285,52 +269,6 @@ const Register = () => {
               <Sparkles className="w-3.5 h-3.5 fill-current" />
               <span>{t.createAccount}</span>
             </button>
-          </div>
-
-          {/* ROLE SELECTOR (Mobile style clean cards) */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-extrabold text-slate-800">
-              {t.roleLabel}
-            </label>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setAccountType('buyer')}
-                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                  accountType === 'buyer'
-                    ? 'bg-amber-50/80 border-[#D9A73A] shadow-xs'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accountType === 'buyer' ? 'bg-[#0A192F] text-[#D9A73A]' : 'bg-slate-200 text-slate-500'}`}>
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                  </div>
-                  {accountType === 'buyer' && <CheckCircle2 className="w-4 h-4 text-[#D9A73A]" />}
-                </div>
-                <span className="text-xs font-black text-[#0A192F]">{t.buyerTitle}</span>
-                <span className="text-[10px] text-slate-500">{t.buyerSub}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAccountType('vendor')}
-                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                  accountType === 'vendor'
-                    ? 'bg-amber-50/80 border-[#D9A73A] shadow-xs'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accountType === 'vendor' ? 'bg-[#0A192F] text-[#D9A73A]' : 'bg-slate-200 text-slate-500'}`}>
-                    <Store className="w-3.5 h-3.5" />
-                  </div>
-                  {accountType === 'vendor' && <CheckCircle2 className="w-4 h-4 text-[#D9A73A]" />}
-                </div>
-                <span className="text-xs font-black text-[#0A192F]">{t.vendorTitle}</span>
-                <span className="text-[10px] text-slate-500">{t.vendorSub}</span>
-              </button>
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3 pt-1">
@@ -492,9 +430,7 @@ const Register = () => {
                 </>
               ) : (
                 <>
-                  <span>
-                    {accountType === 'vendor' ? 'Register Store & Start Selling' : t.createAccountBtn}
-                  </span>
+                  <span>{t.createAccountBtn}</span>
                   <ArrowRight className="w-4 h-4 text-[#0A192F]" />
                 </>
               )}
