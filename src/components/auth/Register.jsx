@@ -4,12 +4,13 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { triggerWelcomeEmail } from '../../utils/emailTriggers';
 import {
-  User, Mail, Phone, Lock, Eye, EyeOff,
-  Loader2, ArrowRight, ShieldCheck, Gift, CheckCircle2,
-  Store, ShoppingBag, Sparkles
+  User, Mail, Phone, Lock, Eye, EyeOff, Loader2,
+  ArrowRight, ShieldCheck, Gift, CheckCircle2,
+  ShoppingBag, Store, Globe, Sparkles
 } from 'lucide-react';
 
 const Register = () => {
+  const [lang, setLang] = useState('en'); // 'en' | 'ha'
   const [searchParams] = useSearchParams();
   const urlRefCode = searchParams.get('ref') || searchParams.get('code');
 
@@ -22,29 +23,79 @@ const Register = () => {
     password: '',
     confirmPassword: '',
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [settings, setSettings] = useState(null);
 
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const { data } = await supabase
-        .from('app_settings')
-        .select('*')
-        .single();
-      if (data) setSettings(data);
-    } catch (_) {}
-  };
+  // Translations matching mobile AuthPage
+  const t = {
+    en: {
+      joinUs: 'Join Abu Mafhal 🚀',
+      joinSub: 'Create an account to shop from verified stores across Nigeria.',
+      signIn: 'Sign In',
+      createAccount: 'Create Account',
+      roleLabel: 'Select Your Marketplace Role',
+      buyerTitle: 'Buyer / Shopper',
+      buyerSub: 'Shop with escrow protection',
+      vendorTitle: 'Merchant / Seller',
+      vendorSub: 'Open store & receive payouts',
+      fullName: 'Full Name',
+      fullNamePlaceholder: 'e.g. Aminu Bello',
+      emailLabel: 'Email Address',
+      emailPlaceholder: 'user@example.com',
+      phoneLabel: 'Phone Number (WhatsApp & SMS)',
+      phonePlaceholder: '08012345678',
+      passwordLabel: 'Password',
+      passwordPlaceholder: '••••••••',
+      confirmPasswordLabel: 'Confirm Password',
+      referralLabel: 'Referral Code (Optional)',
+      referralPlaceholder: 'e.g. ABU-12345',
+      referralReward: '🎁 ₦1,000 Welcome Voucher',
+      termsAgree: 'I agree to the Terms of Service & Escrow Policy',
+      createAccountBtn: 'Create Account',
+      creating: 'Creating Account...',
+      alreadyHaveAccount: 'Already have an account?',
+      loginNow: 'Sign In Now',
+      escrowSecured: '256-BIT SSL ENCRYPTED',
+      officialApp: 'OFFICIAL APP'
+    },
+    ha: {
+      joinUs: 'Shiga Abu Mafhal 🚀',
+      joinSub: 'Buɗe asusu don cinikin kaya daga masu sayarwa a faɗin Najeriya.',
+      signIn: 'Shiga Ciki',
+      createAccount: 'Buɗe Asusu',
+      roleLabel: 'Zaɓi Matsayinka a Kasuwa',
+      buyerTitle: 'Mai Siyayya (Buyer)',
+      buyerSub: 'Yi siyayya da kariyar Escrow',
+      vendorTitle: 'Mai Shago / Ɗan Kasuwa',
+      vendorSub: 'Buɗe shago ka sayar da kaya',
+      fullName: 'Cikakken Suna',
+      fullNamePlaceholder: 'Misali: Aminu Bello',
+      emailLabel: 'Adireshin Email',
+      emailPlaceholder: 'user@example.com',
+      phoneLabel: 'Lambar Waya (WhatsApp & SMS)',
+      phonePlaceholder: '08012345678',
+      passwordLabel: 'Kalmar Sirri',
+      passwordPlaceholder: '••••••••',
+      confirmPasswordLabel: 'Maimaita Kalmar Sirri',
+      referralLabel: 'Lambar Gayyata (Na Zaɓi)',
+      referralPlaceholder: 'Misali: ABU-12345',
+      referralReward: '🎁 Kyautar ₦1,000 Na Maraba',
+      termsAgree: "Na amince da Ƙa'idojin Sabis da Tsaron Escrow",
+      createAccountBtn: 'Buɗe Asusu',
+      creating: 'Ana ƙirƙirar asusunka...',
+      alreadyHaveAccount: 'Kana da asusu a baya?',
+      loginNow: 'Shiga Ciki Yanzu',
+      escrowSecured: 'TSARON 256-BIT SSL',
+      officialApp: 'KASUWA TA GASKIYA'
+    }
+  }[lang];
 
   const handleChange = (e) => {
     setFormData({
@@ -62,29 +113,29 @@ const Register = () => {
     const cleanPhone = (formData.phone || '').trim();
 
     if (!cleanName || !cleanEmail || !formData.password) {
-      setError('Please fill in all required fields.');
+      setError(lang === 'ha' ? 'Da fatan a cika dukkan bayanan da ake buƙata.' : 'Please fill in all required fields.');
       return;
     }
 
     if (formData.password.length < 6) {
-      setError('Password must contain at least 6 characters.');
+      setError(lang === 'ha' ? 'Kalmar sirri dole ta kasance aƙalla haruffa 6.' : 'Password must contain at least 6 characters.');
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match. Please verify.');
+      setError(lang === 'ha' ? 'Kalmomin sirri ba su yi daidai ba.' : 'Passwords do not match. Please verify.');
       return;
     }
 
     if (!agreedToTerms) {
-      setError('Please agree to the Terms of Service & Escrow Policy.');
+      setError(lang === 'ha' ? "Da fatan a amince da ƙa'idojin sabis." : 'Please agree to the Terms of Service & Escrow Policy.');
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. Check if email already exists in profiles
+      // 1. Check if email already exists
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('id')
@@ -92,7 +143,7 @@ const Register = () => {
         .maybeSingle();
 
       if (existingUser) {
-        setError('An account with this email address already exists. Please sign in instead.');
+        setError(lang === 'ha' ? 'Wannan email din yana da asusu a baya. Da fatan a shiga kawai.' : 'An account with this email address already exists. Please sign in instead.');
         setLoading(false);
         return;
       }
@@ -130,14 +181,13 @@ const Register = () => {
         } catch (_) {}
       }
 
-      // 5. Successful registration routing based on account type
+      // 5. Successful registration routing
       if (accountType === 'vendor') {
         navigate('/vendor-application', { replace: true });
       } else {
         navigate('/profile', { replace: true });
       }
     } catch (err) {
-      console.error('Registration failed:', err);
       setError(err.message || 'Failed to create your account. Please try again.');
     } finally {
       setLoading(false);
@@ -145,222 +195,247 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 relative overflow-hidden flex flex-col items-center justify-center px-4 py-12 selection:bg-[#00BFA5]/20 font-sans">
-      {/* Light modern ambient mesh gradients */}
-      <div className="absolute top-0 right-1/4 w-[550px] h-[550px] bg-gradient-to-b from-[#00BFA5]/10 via-teal-100/30 to-transparent rounded-full blur-3xl pointer-events-none animate-pulse-slow" />
-      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-gradient-to-t from-amber-100/40 to-transparent rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#070F1E] flex flex-col items-center justify-center px-4 py-8 selection:bg-[#D9A73A]/20 font-sans relative">
+      {/* Subtle Navy-Gold Ambient Glows */}
+      <div className="absolute top-0 right-1/4 w-[450px] h-[450px] bg-gradient-to-b from-[#D9A73A]/10 via-[#0E2A4D]/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-1/4 w-[450px] h-[450px] bg-gradient-to-t from-emerald-500/10 via-[#0A192F]/20 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-[500px] relative z-10">
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-3 mb-4 group">
-            <div className="w-13 h-13 rounded-2xl bg-white border border-slate-200/80 p-2.5 flex items-center justify-center shadow-lg shadow-slate-200/50 group-hover:border-[#00BFA5] transition-all">
-              <img
-                src={settings?.logo_url || "/logo.png"}
-                alt="Abu Mafhal"
-                className="w-full h-full object-contain"
-                onError={(e) => { e.target.src = "/logo.png"; }}
-              />
-            </div>
-            <div className="text-left">
-              <h2 className="text-xl font-black text-[#0A192F] tracking-wider flex items-center gap-1">
-                ABU <span className="text-[#00BFA5]">MAFHAL</span>
-              </h2>
-              <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
-                Zero-Risk Verified Marketplace
-              </p>
+      <div className="w-full max-w-[460px] relative z-10 flex flex-col">
+        {/* ── TOP NAV HEADER (MATCHING MOBILE TOP BAR) ── */}
+        <div className="flex items-center justify-between pb-4">
+          {/* Back to Home */}
+          <Link
+            to="/"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+            title="Back to Home"
+          >
+            ←
+          </Link>
+
+          {/* Central Compact Brand Badge (Fixed Compact Size matching mobile: 28-30px) */}
+          <Link to="/" className="flex items-center gap-2 group">
+            <img
+              src="/logo.png"
+              alt="Abu Mafhal"
+              className="w-7 h-7 object-contain rounded-lg group-hover:scale-105 transition-transform"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-black text-white tracking-wider leading-none">
+                ABU <span className="text-[#00D2FF]">MAFHAL</span>
+              </span>
+              <span className="text-[8px] font-bold text-white/50 uppercase tracking-widest mt-0.5">
+                MARKETPLACE
+              </span>
             </div>
           </Link>
 
-          <h1 className="text-2xl sm:text-3xl font-black text-[#0A192F] tracking-tight">
-            Create Your Account
+          {/* Language Switcher Badge */}
+          <button
+            onClick={() => setLang(l => l === 'en' ? 'ha' : 'en')}
+            className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#00D2FF]/10 border border-[#00D2FF]/30 text-[#00D2FF] text-[10px] font-black cursor-pointer hover:bg-[#00D2FF]/20 transition-all"
+          >
+            <Globe className="w-3 h-3 text-[#00D2FF]" />
+            <span>{lang === 'en' ? 'EN' : 'HA'}</span>
+          </button>
+        </div>
+
+        {/* ── HERO BANNER CARD (Identical to Mobile s.heroBanner) ── */}
+        <div className="rounded-2xl p-5 bg-gradient-to-br from-[#0A192F] via-[#0E2A4D] to-[#163E6D] border border-white/10 shadow-xl mb-4 text-white">
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10 text-[9px] font-black tracking-wider text-[#00BFA5]">
+              <ShieldCheck className="w-3 h-3" />
+              <span>{t.escrowSecured}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10 text-[9px] font-black tracking-wider text-[#F59E0B]">
+              <Sparkles className="w-3 h-3" />
+              <span>{t.officialApp}</span>
+            </div>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            {t.joinUs}
           </h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1.5 font-medium max-w-sm mx-auto">
-            Join 50,000+ shoppers and verified merchants across Nigeria
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed font-normal">
+            {t.joinSub}
           </p>
         </div>
 
-        {/* Card Container */}
-        <div className="bg-white/90 backdrop-blur-xl border border-slate-200/90 rounded-3xl p-6 sm:p-9 shadow-xl shadow-slate-200/60 relative">
-          {/* Sign In vs Register Switch */}
-          <div className="flex bg-slate-100/90 rounded-2xl p-1.5 mb-6 border border-slate-200/60">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* ── MAIN CARD CONTAINER (Matching Mobile s.cardContainer) ── */}
+        <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-xl border border-slate-200 space-y-4">
+          {/* SEGMENTED SWITCH: SIGN IN vs CREATE ACCOUNT (Mobile s.segmentedContainer) */}
+          <div className="flex bg-[#F1F5F9] rounded-xl p-1 border border-slate-200">
             <Link
               to="/login"
-              className="flex-1 py-2.5 text-xs font-bold text-center text-slate-500 hover:text-[#0A192F] rounded-xl transition-all"
+              className="flex-1 py-2.5 rounded-lg text-xs font-bold text-center text-slate-500 hover:text-[#0A192F] transition-all flex items-center justify-center gap-1.5"
             >
-              Sign In
+              <span>{t.signIn}</span>
             </Link>
             <button
               type="button"
-              className="flex-1 py-2.5 text-xs font-black rounded-xl bg-white text-[#0A192F] shadow-sm transition-all cursor-default flex items-center justify-center gap-1.5"
+              className="flex-1 py-2.5 rounded-lg text-xs font-black bg-[#D9A73A] text-[#0A192F] shadow-sm flex items-center justify-center gap-1.5 transition-all"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#00BFA5]" />
-              <span>Create Account</span>
+              <Sparkles className="w-3.5 h-3.5 fill-current" />
+              <span>{t.createAccount}</span>
             </button>
           </div>
 
-          {/* Account Type Selector (Modern Elevated Cards) */}
-          <div className="mb-6">
-            <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">
-              Select Your Marketplace Role
+          {/* ROLE SELECTOR (Mobile style clean cards) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-extrabold text-slate-800">
+              {t.roleLabel}
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setAccountType('buyer')}
-                className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer ${
+                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
                   accountType === 'buyer'
-                    ? 'bg-emerald-50/70 border-[#00BFA5] shadow-sm ring-2 ring-[#00BFA5]/20'
-                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100/60 text-slate-600'
+                    ? 'bg-amber-50/80 border-[#D9A73A] shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${accountType === 'buyer' ? 'bg-[#00BFA5] text-white' : 'bg-slate-200 text-slate-500'}`}>
-                    <ShoppingBag className="w-4 h-4" />
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accountType === 'buyer' ? 'bg-[#0A192F] text-[#D9A73A]' : 'bg-slate-200 text-slate-500'}`}>
+                    <ShoppingBag className="w-3.5 h-3.5" />
                   </div>
-                  {accountType === 'buyer' && <CheckCircle2 className="w-4 h-4 text-[#00BFA5]" />}
+                  {accountType === 'buyer' && <CheckCircle2 className="w-4 h-4 text-[#D9A73A]" />}
                 </div>
-                <div>
-                  <span className="text-xs font-black text-[#0A192F] block">Buyer / Shopper</span>
-                  <span className="text-[10px] text-slate-500 leading-tight block mt-0.5">Shop with escrow protection</span>
-                </div>
+                <span className="text-xs font-black text-[#0A192F]">{t.buyerTitle}</span>
+                <span className="text-[10px] text-slate-500">{t.buyerSub}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setAccountType('vendor')}
-                className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer ${
+                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
                   accountType === 'vendor'
-                    ? 'bg-amber-50/70 border-amber-500 shadow-sm ring-2 ring-amber-500/20'
-                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100/60 text-slate-600'
+                    ? 'bg-amber-50/80 border-[#D9A73A] shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${accountType === 'vendor' ? 'bg-amber-500 text-slate-950' : 'bg-slate-200 text-slate-500'}`}>
-                    <Store className="w-4 h-4" />
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${accountType === 'vendor' ? 'bg-[#0A192F] text-[#D9A73A]' : 'bg-slate-200 text-slate-500'}`}>
+                    <Store className="w-3.5 h-3.5" />
                   </div>
-                  {accountType === 'vendor' && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
+                  {accountType === 'vendor' && <CheckCircle2 className="w-4 h-4 text-[#D9A73A]" />}
                 </div>
-                <div>
-                  <span className="text-xs font-black text-[#0A192F] block">Merchant / Seller</span>
-                  <span className="text-[10px] text-slate-500 leading-tight block mt-0.5">Open store & receive payouts</span>
-                </div>
+                <span className="text-xs font-black text-[#0A192F]">{t.vendorTitle}</span>
+                <span className="text-[10px] text-slate-500">{t.vendorSub}</span>
               </button>
             </div>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="mb-5 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-semibold flex items-center gap-2.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-            {/* Full Name */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 ml-1">
-                Full Name
+          <form onSubmit={handleSubmit} className="space-y-3 pt-1">
+            {/* FULL NAME */}
+            <div className="space-y-1">
+              <label className="block text-xs font-extrabold text-slate-800">
+                {t.fullName}
               </label>
               <div className="relative flex items-center">
-                <User className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                <User className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  placeholder="e.g. Aminu Bello"
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#00BFA5] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#00BFA5]/10 transition-all font-medium"
+                  placeholder={t.fullNamePlaceholder}
+                  className="w-full bg-[#F8FAFC] border-1.5 border-slate-200 focus:border-[#D9A73A] focus:bg-white rounded-xl pl-9 pr-4 py-2.5 text-xs sm:text-sm text-[#0A192F] placeholder-slate-400 outline-none transition-all font-semibold"
                 />
               </div>
             </div>
 
-            {/* Email Address */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 ml-1">
-                Email Address
+            {/* EMAIL ADDRESS */}
+            <div className="space-y-1">
+              <label className="block text-xs font-extrabold text-slate-800">
+                {t.emailLabel}
               </label>
               <div className="relative flex items-center">
-                <Mail className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                <Mail className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  autoComplete="email"
-                  placeholder="user@example.com"
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#00BFA5] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#00BFA5]/10 transition-all font-medium"
+                  placeholder={t.emailPlaceholder}
+                  className="w-full bg-[#F8FAFC] border-1.5 border-slate-200 focus:border-[#D9A73A] focus:bg-white rounded-xl pl-9 pr-4 py-2.5 text-xs sm:text-sm text-[#0A192F] placeholder-slate-400 outline-none transition-all font-semibold"
                 />
               </div>
             </div>
 
-            {/* Phone Number */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 ml-1">
-                Phone Number (WhatsApp & SMS)
+            {/* PHONE NUMBER */}
+            <div className="space-y-1">
+              <label className="block text-xs font-extrabold text-slate-800">
+                {t.phoneLabel}
               </label>
               <div className="relative flex items-center">
-                <Phone className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                <Phone className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="08012345678"
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#00BFA5] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#00BFA5]/10 transition-all font-medium"
+                  placeholder={t.phonePlaceholder}
+                  className="w-full bg-[#F8FAFC] border-1.5 border-slate-200 focus:border-[#D9A73A] focus:bg-white rounded-xl pl-9 pr-4 py-2.5 text-xs sm:text-sm text-[#0A192F] placeholder-slate-400 outline-none transition-all font-semibold"
                 />
               </div>
             </div>
 
-            {/* Password */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 ml-1">
-                  Password
+            {/* PASSWORD & CONFIRM PASSWORD */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="space-y-1">
+                <label className="block text-xs font-extrabold text-slate-800">
+                  {t.passwordLabel}
                 </label>
                 <div className="relative flex items-center">
-                  <Lock className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <Lock className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
                     required
-                    placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#00BFA5] focus:bg-white rounded-xl pl-10 pr-10 py-2.5 text-sm text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#00BFA5]/10 transition-all font-medium"
+                    placeholder={t.passwordPlaceholder}
+                    className="w-full bg-[#F8FAFC] border-1.5 border-slate-200 focus:border-[#D9A73A] focus:bg-white rounded-xl pl-9 pr-9 py-2.5 text-xs text-[#0A192F] placeholder-slate-400 outline-none transition-all font-semibold"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
                   >
                     {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 ml-1">
-                  Confirm Password
+              <div className="space-y-1">
+                <label className="block text-xs font-extrabold text-slate-800">
+                  {t.confirmPasswordLabel}
                 </label>
                 <div className="relative flex items-center">
-                  <Lock className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <Lock className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     required
-                    placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#00BFA5] focus:bg-white rounded-xl pl-10 pr-10 py-2.5 text-sm text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#00BFA5]/10 transition-all font-medium"
+                    placeholder={t.passwordPlaceholder}
+                    className="w-full bg-[#F8FAFC] border-1.5 border-slate-200 focus:border-[#D9A73A] focus:bg-white rounded-xl pl-9 pr-9 py-2.5 text-xs text-[#0A192F] placeholder-slate-400 outline-none transition-all font-semibold"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
                   >
                     {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
@@ -368,83 +443,76 @@ const Register = () => {
               </div>
             </div>
 
-            {/* Referral Code (Optional) with Bonus Tag */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5 ml-1">
-                <label className="block text-xs font-bold text-slate-700">
-                  Referral Code (Optional)
+            {/* REFERRAL CODE (OPTIONAL) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-extrabold text-slate-800">
+                  {t.referralLabel}
                 </label>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
-                  <Gift className="w-3 h-3 text-emerald-600" /> ₦1,000 Welcome Reward
+                <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {t.referralReward}
                 </span>
               </div>
               <div className="relative flex items-center">
-                <Gift className="absolute left-3.5 w-4 h-4 text-amber-500 pointer-events-none" />
+                <Gift className="absolute left-3 w-4 h-4 text-amber-500 pointer-events-none" />
                 <input
                   type="text"
                   name="referralCode"
                   value={formData.referralCode}
                   onChange={handleChange}
-                  placeholder="e.g. ABU-88210"
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 transition-all font-medium uppercase"
+                  placeholder={t.referralPlaceholder}
+                  className="w-full bg-[#F8FAFC] border-1.5 border-slate-200 focus:border-[#D9A73A] focus:bg-white rounded-xl pl-9 pr-4 py-2.5 text-xs sm:text-sm text-[#0A192F] placeholder-slate-400 outline-none transition-all font-semibold uppercase"
                 />
               </div>
             </div>
 
-            {/* Terms Agreement */}
+            {/* TERMS AGREEMENT */}
             <div className="pt-1">
-              <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-600 hover:text-slate-900">
+              <label className="flex items-start gap-2 cursor-pointer text-xs text-slate-600 font-medium">
                 <input
                   type="checkbox"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#00BFA5] focus:ring-[#00BFA5] cursor-pointer shrink-0"
+                  className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#D9A73A] focus:ring-[#D9A73A] cursor-pointer"
                 />
-                <span>
-                  I agree to the{' '}
-                  <Link to="/terms" className="text-[#00BFA5] hover:underline font-bold">
-                    Terms of Service
-                  </Link>{' '}
-                  and 100% Escrow Protection Policy.
-                </span>
+                <span>{t.termsAgree}</span>
               </label>
             </div>
 
-            {/* Submit Button */}
+            {/* PRIMARY NAVY & GOLD ACTION BUTTON */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-3 flex items-center justify-center gap-2 bg-[#00BFA5] hover:bg-[#00a896] text-white font-extrabold py-3.5 rounded-xl transition-all shadow-lg shadow-[#00BFA5]/25 hover:shadow-[#00BFA5]/40 disabled:opacity-60 disabled:cursor-not-allowed transform active:scale-[0.98] cursor-pointer"
+              className="w-full mt-2 py-3.5 rounded-xl bg-[#D9A73A] hover:bg-[#c9952a] text-[#0A192F] font-black text-sm tracking-wide shadow-md shadow-amber-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
             >
               {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin h-5 w-5 text-white" />
-                  <span>Creating Your Account...</span>
-                </div>
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-[#0A192F]" />
+                  <span>{t.creating}</span>
+                </>
               ) : (
                 <>
                   <span>
-                    {accountType === 'vendor' ? 'Register Store & Start Selling' : 'Complete Registration'}
+                    {accountType === 'vendor' ? 'Register Store & Start Selling' : t.createAccountBtn}
                   </span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 text-[#0A192F]" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Security Guarantee Strip */}
-          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-semibold">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>256-Bit SSL Encrypted • CBN-Compliant Escrow Protection</span>
+          {/* Quick Footer Prompt */}
+          <div className="pt-2 text-center text-xs text-slate-500 font-medium">
+            <span>{t.alreadyHaveAccount} </span>
+            <Link to="/login" className="font-black text-[#D9A73A] hover:underline">
+              {t.loginNow}
+            </Link>
           </div>
         </div>
 
-        {/* Return to Marketplace */}
-        <div className="text-center mt-6">
-          <Link
-            to="/"
-            className="text-xs font-bold text-slate-500 hover:text-[#00BFA5] transition-colors inline-flex items-center gap-1.5"
-          >
+        {/* Back Link */}
+        <div className="text-center mt-5">
+          <Link to="/" className="text-xs font-bold text-slate-400 hover:text-white transition-colors">
             ← Return to Abu Mafhal Marketplace
           </Link>
         </div>
